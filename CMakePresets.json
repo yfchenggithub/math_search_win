@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msvc-debug",
+      "displayName": "MSVC Debug",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/out/build/msvc-debug",
+      "architecture": {
+        "value": "x64"
+      },
+      "toolset": {
+        "value": "host=x64"
+      },
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/msvc-debug",
+        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.0/msvc2022_64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc-debug"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+/build/
+/out/
+/cmake-build-*/
+/.vs/
+/.idea/
+
+*.user
+*.suo
+*.vcxproj.user
+
+/cache/
+/logs/
+
+.DS_Store
+Thumbs.db
