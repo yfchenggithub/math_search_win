@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
+include(CTest)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
@@ -71,3 +72,7 @@ endif()
 target_link_libraries(math_search_win PRIVATE
     Qt6::Widgets
 )
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

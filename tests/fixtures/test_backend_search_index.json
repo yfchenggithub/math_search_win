@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-19T12:00:00+08:00",
+  "stats": {
+    "documents": 8,
+    "terms": 7,
+    "prefixes": 10,
+    "suggestions": 0,
+    "modules": 3,
+    "moduleStats": [
+      {
+        "module": "algebra",
+        "scanned": 5,
+        "built": 5,
+        "filtered": 0,
+        "skipped": 0
+      },
+      {
+        "module": "geometry",
+        "scanned": 2,
+        "built": 2,
+        "filtered": 0,
+        "skipped": 0
+      },
+      {
+        "module": "calculus",
+        "scanned": 1,
+        "built": 1,
+        "filtered": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "buildOptions": {
+    "prefixDocLimit": 32,
+    "suggestionLimit": 64,
+    "targetModules": ["algebra", "geometry", "calculus"],
+    "targetItems": []
+  },
+  "fieldMaskLegend": {
+    "title": 1,
+    "alias": 2,
+    "keyword": 4,
+    "query_template": 32,
+    "tag": 256,
+    "formula": 1024,
+    "summary": 2048,
+    "pinyin": 32768,
+    "pinyin_abbr": 65536
+  },
+  "docs": {
+    "A001": {
+      "id": "A001",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "\u4e0d\u7b49\u5f0f\u57fa\u672c\u6027\u8d28",
+      "summary": "\u4e0d\u7b49\u5f0f\u7684\u57fa\u672c\u6027\u8d28\u4e0e\u8f6c\u5316\u3002",
+      "category": "inequality",
+      "tags": ["\u4e0d\u7b49\u5f0f", "\u57fa\u7840", "\u9898\u578b"],
+      "coreFormula": "a+b>=2sqrt(ab)",
+      "rank": 40,
+      "difficulty": 2.0,
+      "searchBoost": 0.20,
+      "hotScore": 50.0,
+      "examFrequency": 0.5,
+      "examScore": 5.0
+    },
+    "A002": {
+      "id": "A002",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "\u4e0d\u7b49\u5f0f\u8fdb\u9636\u6280\u5de7",
+      "summary": "\u4e0d\u7b49\u5f0f\u5e38\u7528\u653e\u7f29\u6280\u5de7\u3002",
+      "category": "inequality",
+      "tags": ["\u4e0d\u7b49\u5f0f", "\u6280\u5de7"],
+      "coreFormula": "x+y>=2sqrt(xy)",
+      "rank": 20,
+      "difficulty": 3.0,
+      "searchBoost": 0.15,
+      "hotScore": 45.0,
+      "examFrequency": 0.4,
+      "examScore": 4.0
+    },
+    "G001": {
+      "id": "G001",
+      "module": "geometry",
+      "moduleDir": "03_geometry",
+      "title": "\u4e09\u89d2\u5f62\u4e2d\u7684\u4e0d\u7b49\u5f0f",
+      "summary": "\u4e09\u89d2\u5f62\u7ed3\u8bba\u4e0e\u4e0d\u7b49\u5f0f\u7ed3\u5408\u3002",
+      "category": "triangle",
+      "tags": ["\u4e09\u89d2\u5f62", "\u4e0d\u7b49\u5f0f", "\u51e0\u4f55"],
+      "coreFormula": "a+b>c",
+      "rank": 25,
+      "difficulty": 2.0,
+      "searchBoost": 0.10,
+      "hotScore": 35.0,
+      "examFrequency": 0.3,
+      "examScore": 3.0
+    },
+    "A003": {
+      "id": "A003",
+      "module": "algebra",
+      "moduleDir": "05_function",
+      "title": "\u51fd\u6570\u5355\u8c03\u6027\u5224\u5b9a",
+      "summary": "\u51fd\u6570\u5355\u8c03\u6027\u4e0e\u6700\u503c\u95ee\u9898\u3002",
+      "category": "function",
+      "tags": ["\u51fd\u6570", "\u5355\u8c03\u6027"],
+      "coreFormula": "f'(x)>0",
+      "rank": 50,
+      "difficulty": 2.0,
+      "searchBoost": 0.30,
+      "hotScore": 60.0,
+      "examFrequency": 0.6,
+      "examScore": 6.0
+    },
+    "C001": {
+      "id": "C001",
+      "module": "calculus",
+      "moduleDir": "08_derivative",
+      "title": "\u5bfc\u6570\u6c42\u6700\u503c",
+      "summary": "\u5229\u7528\u5bfc\u6570\u6c42\u89e3\u51fd\u6570\u6700\u503c\u3002",
+      "category": "derivative",
+      "tags": ["\u5bfc\u6570", "\u6700\u503c"],
+      "coreFormula": "f'(x)=0",
+      "rank": 30,
+      "difficulty": 2.0,
+      "searchBoost": 0.12,
+      "hotScore": 55.0,
+      "examFrequency": 0.5,
+      "examScore": 5.0
+    },
+    "A004": {
+      "id": "A004",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "\u5747\u503c\u4e0d\u7b49\u5f0f AM-GM",
+      "summary": "\u5747\u503c\u4e0d\u7b49\u5f0f\u7684\u5e38\u89c1\u7528\u6cd5\u3002",
+      "category": "inequality",
+      "tags": ["\u5747\u503c\u4e0d\u7b49\u5f0f", "\u4e0d\u7b49\u5f0f"],
+      "coreFormula": "(a+b)/2>=sqrt(ab)",
+      "rank": 35,
+      "difficulty": 2.0,
+      "searchBoost": 0.18,
+      "hotScore": 48.0,
+      "examFrequency": 0.5,
+      "examScore": 5.0
+    },
+    "G002": {
+      "id": "G002",
+      "module": "geometry",
+      "moduleDir": "03_geometry",
+      "title": "\u5706\u7684\u5207\u7ebf\u6027\u8d28",
+      "summary": "\u5706\u4e0e\u5207\u7ebf\u7684\u7ecf\u5178\u7ed3\u8bba\u3002",
+      "category": "circle",
+      "tags": ["\u5706", "\u51e0\u4f55"],
+      "coreFormula": "OT\u22a5AT",
+      "rank": 10,
+      "difficulty": 1.0,
+      "searchBoost": 0.05,
+      "hotScore": 20.0,
+      "examFrequency": 0.2,
+      "examScore": 2.0
+    },
+    "A005": {
+      "id": "A005",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "\u4e0d\u7b49\u5f0f\u4e13\u9898\u6c47\u603b",
+      "summary": "\u4e13\u9898\u5316\u6574\u7406\u4e0d\u7b49\u5f0f\u5185\u5bb9\u3002",
+      "category": "inequality",
+      "tags": ["\u4e0d\u7b49\u5f0f", "\u4e13\u9898"],
+      "coreFormula": "special-inequality",
+      "rank": 15,
+      "difficulty": 2.0,
+      "searchBoost": 0.05,
+      "hotScore": 30.0,
+      "examFrequency": 0.3,
+      "examScore": 3.0
+    }
+  },
+  "termIndex": {
+    "\u4e0d\u7b49\u5f0f": [
+      ["A001", 10.0, 1],
+      ["A002", 8.0, 4],
+      ["G001", 6.0, 4],
+      ["A004", 9.0, 32]
+    ],
+    "\u5747\u503c\u4e0d\u7b49\u5f0f": [
+      ["A004", 10.0, 1],
+      ["A001", 2.0, 256]
+    ],
+    "\u51fd\u6570": [
+      ["A003", 9.0, 1]
+    ],
+    "\u5bfc\u6570": [
+      ["C001", 9.0, 1]
+    ],
+    "\u4e0d\u7b49\u5f0f\u6280\u5de7": [
+      ["A002", 7.0, 1]
+    ],
+    "\u4e0d\u7b49\u9898\u578b": [
+      ["A001", 5.0, 1]
+    ],
+    "\u4e0d\u7b49\u6280\u5de7": [
+      ["A001", 5.0, 256]
+    ]
+  },
+  "prefixIndex": {
+    "\u4e0d\u7b49": [
+      ["A001", 7.0, 1],
+      ["A002", 7.0, 4],
+      ["G001", 5.0, 4],
+      ["A004", 6.0, 32]
+    ],
+    "\u4e0d\u7b49\u5f0f": [
+      ["A001", 7.0, 1],
+      ["A002", 6.0, 4],
+      ["G001", 4.0, 4],
+      ["A004", 5.0, 32],
+      ["A005", 30.0, 1]
+    ],
+    "\u4e0d\u7b49\u5f0f\u6027\u8d28": [
+      ["A001", 8.0, 1]
+    ],
+    "\u4e0d\u7b49\u5f0f\u6280\u5de7": [
+      ["A002", 9.0, 1]
+    ],
+    "\u4e0d\u7b49\u9898\u578b": [
+      ["A001", 10.0, 1]
+    ],
+    "\u4e0d\u7b49\u6280\u5de7": [
+      ["A001", 10.0, 256]
+    ],
+    "\u5747\u503c\u4e0d\u7b49\u5f0f": [
+      ["A004", 9.0, 1]
+    ],
+    "\u51fd\u6570": [
+      ["A003", 8.0, 1]
+    ],
+    "\u5bfc\u6570": [
+      ["C001", 8.0, 1]
+    ],
+    "\u5706": [
+      ["G002", 8.0, 1]
+    ]
+  }
+}
