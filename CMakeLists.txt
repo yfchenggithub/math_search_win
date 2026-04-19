@@ -13,6 +13,18 @@ add_executable(math_search_win
     src/core/logging/log_categories.h
     src/core/logging/logger.h
     src/core/logging/logger.cpp
+    src/domain/models/render_section.h
+    src/domain/models/render_section.cpp
+    src/domain/models/conclusion_record.h
+    src/domain/models/conclusion_record.cpp
+    src/domain/adapters/conclusion_card_adapter.h
+    src/domain/adapters/conclusion_card_adapter.cpp
+    src/domain/adapters/conclusion_detail_adapter.h
+    src/domain/adapters/conclusion_detail_adapter.cpp
+    src/infrastructure/data/canonical_content_loader.h
+    src/infrastructure/data/canonical_content_loader.cpp
+    src/infrastructure/data/conclusion_content_repository.h
+    src/infrastructure/data/conclusion_content_repository.cpp
     src/shared/constants.h
     src/shared/paths.h
     src/shared/paths.cpp
