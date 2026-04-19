@@ -1,13 +1,17 @@
 #include <QApplication>
-#include <QLabel>
+#include <QCoreApplication>
+
+#include "ui/main_window.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("math_search"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("local.offline"));
+    QCoreApplication::setApplicationName(QStringLiteral("math_search_win"));
 
-    QLabel label("math_search_win bootstrap OK");
-    label.resize(320, 80);
-    label.show();
+    MainWindow window;
+    window.show();
 
     return app.exec();
 }
