@@ -1,6 +1,33 @@
 (function () {
   "use strict";
 
+  const SECTION_LABELS = Object.freeze({
+    statement: "结论",
+    intuition: "理解",
+    derivation: "推导",
+    proof: "证明",
+    pitfalls: "易错点",
+    usage: "用法",
+    summary: "总结",
+    notes: "备注"
+  });
+
+  const SECTION_CLASS_MAP = Object.freeze({
+    statement: "detail-section-statement",
+    intuition: "detail-section-intuition",
+    derivation: "detail-section-derivation",
+    proof: "detail-section-proof",
+    pitfalls: "detail-section-pitfall",
+    usage: "detail-section-usage",
+    summary: "detail-section-summary",
+    notes: "detail-section-note"
+  });
+
+  const COLLAPSIBLE_KEYS = new Set(["proof", "derivation"]);
+  const COLLAPSE_CHAR_THRESHOLD = 280;
+  const TOAST_DURATION_MS = 1400;
+  let toastTimerId = 0;
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -20,7 +47,10 @@
     if (!raw) {
       return "";
     }
-    const paragraphs = raw.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+    const paragraphs = raw
+      .split(/\n{2,}/)
+      .map((item) => item.trim())
+      .filter(Boolean);
     if (paragraphs.length === 0) {
       return "";
     }
@@ -56,7 +86,7 @@
     }
 
     if (state === "error" && errorText) {
-      errorText.textContent = message || "详情数据暂时不可用";
+      errorText.textContent = message || "详情数据暂时不可用。";
     }
     if (state === "empty" && emptyText && message) {
       emptyText.textContent = message;
@@ -76,6 +106,28 @@
       return kind;
     }
     return "normal";
+  }
+
+  function normalizeSectionKey(rawKey) {
+    const key = String(rawKey || "").trim().toLowerCase();
+    if (SECTION_CLASS_MAP[key]) {
+      return key;
+    }
+    if (key === "pitfall") {
+      return "pitfalls";
+    }
+    if (key === "note") {
+      return "notes";
+    }
+    return "notes";
+  }
+
+  function resolveSectionTitle(row, sectionKey) {
+    const explicitTitle = String((row && row.title) || "").trim();
+    if (explicitTitle) {
+      return explicitTitle;
+    }
+    return SECTION_LABELS[sectionKey] || SECTION_LABELS.notes;
   }
 
   function renderTags(tags) {
@@ -121,6 +173,159 @@
     }
   }
 
+  function ensureToast() {
+    let toast = byId("detailActionToast");
+    if (toast) {
+      return toast;
+    }
+    toast = document.createElement("div");
+    toast.id = "detailActionToast";
+    toast.className = "detail-copy-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.hidden = true;
+    document.body.appendChild(toast);
+    return toast;
+  }
+
+  function showToast(message, tone) {
+    const toast = ensureToast();
+    if (!toast) {
+      return;
+    }
+    toast.textContent = String(message || "").trim();
+    toast.classList.remove("detail-copy-toast-success", "detail-copy-toast-error");
+    toast.classList.add(tone === "error" ? "detail-copy-toast-error" : "detail-copy-toast-success");
+    toast.hidden = false;
+
+    if (toastTimerId) {
+      window.clearTimeout(toastTimerId);
+    }
+    toastTimerId = window.setTimeout(() => {
+      toast.hidden = true;
+      toast.textContent = "";
+    }, TOAST_DURATION_MS);
+  }
+
+  function buildSectionId(sectionKey, index) {
+    return "detail-section-" + sectionKey + "-" + String(index + 1);
+  }
+
+  function extractReadableTextFromHtml(html) {
+    const markup = String(html || "").trim();
+    if (!markup) {
+      return "";
+    }
+    const scratch = document.createElement("div");
+    scratch.innerHTML = markup;
+    return String(scratch.textContent || "").replace(/\u00a0/g, " ").trim();
+  }
+
+  function fallbackCopyText(text) {
+    const value = String(text || "").trim();
+    if (!value) {
+      return false;
+    }
+    try {
+      const helper = document.createElement("textarea");
+      helper.value = value;
+      helper.setAttribute("readonly", "readonly");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      helper.style.pointerEvents = "none";
+      helper.style.left = "-9999px";
+      document.body.appendChild(helper);
+      helper.select();
+      helper.setSelectionRange(0, helper.value.length);
+      const copied = document.execCommand("copy");
+      document.body.removeChild(helper);
+      return copied;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function writeTextToClipboard(text) {
+    const value = String(text || "").trim();
+    if (!value) {
+      return Promise.resolve(false);
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      return navigator.clipboard
+        .writeText(value)
+        .then(() => true)
+        .catch(() => fallbackCopyText(value));
+    }
+    return Promise.resolve(fallbackCopyText(value));
+  }
+
+  function composeSectionCopyText(title, content) {
+    const safeTitle = String(title || "").trim();
+    const safeContent = String(content || "").trim();
+    if (safeTitle && safeContent) {
+      return safeTitle + "\n\n" + safeContent;
+    }
+    return safeContent || safeTitle;
+  }
+
+  function shouldEnableCollapse(sectionKey, richNode) {
+    if (!COLLAPSIBLE_KEYS.has(sectionKey) || !richNode) {
+      return false;
+    }
+    const plainText = String(richNode.textContent || "").replace(/\s+/g, "");
+    const blockCount = richNode.querySelectorAll("p, li, .detail-math-block, blockquote").length;
+    return plainText.length >= COLLAPSE_CHAR_THRESHOLD || blockCount >= 8;
+  }
+
+  function setSectionExpanded(section, expanded) {
+    if (!section) {
+      return;
+    }
+    const body = section.querySelector(".detail-section-body");
+    const toggleButton = section.querySelector(".detail-section-toggle");
+    if (body) {
+      body.hidden = !expanded;
+    }
+    section.classList.toggle("is-collapsed", !expanded);
+    if (toggleButton) {
+      toggleButton.textContent = expanded ? "收起" : "展开";
+      toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+    }
+  }
+
+  function toggleSection(section) {
+    if (!section) {
+      return;
+    }
+    const willExpand = section.classList.contains("is-collapsed");
+    setSectionExpanded(section, willExpand);
+  }
+
+  function createActionButton(label, className, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "detail-section-action " + className;
+    button.textContent = label;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onClick();
+    });
+    return button;
+  }
+
+  function createActionLink(label, href, className, ariaLabel) {
+    const link = document.createElement("a");
+    link.className = "detail-section-action " + className;
+    link.href = href;
+    link.textContent = label;
+    if (ariaLabel) {
+      link.setAttribute("aria-label", ariaLabel);
+    }
+    return link;
+  }
+
   function renderSections(sections) {
     const container = byId("detailSections");
     if (!container) {
@@ -134,10 +339,9 @@
       if (!row || row.visible === false) {
         return false;
       }
-      const title = String(row.title || "").trim();
       const html = String(row.html || "").trim();
       const text = String(row.text || "").trim();
-      return !!title && (!!html || !!text);
+      return !!html || !!text;
     });
 
     if (visibleRows.length === 0) {
@@ -148,26 +352,32 @@
       return;
     }
 
-    visibleRows.forEach((row) => {
+    visibleRows.forEach((row, index) => {
       const section = document.createElement("section");
-      const kind = normalizeSectionKind(String(row.kind || "").trim().toLowerCase());
-      let className = "detail-section";
-      if (kind === "note") {
-        className += " detail-section-note";
-      } else if (kind === "pitfall") {
-        className += " detail-section-pitfall";
-      } else if (kind === "summary") {
-        className += " detail-section-summary";
+      const sectionKey = normalizeSectionKey(row.key);
+      const sectionKind = normalizeSectionKind(String(row.kind || "").trim().toLowerCase());
+      let sectionClass = SECTION_CLASS_MAP[sectionKey];
+      if (sectionKind === "pitfall") {
+        sectionClass = SECTION_CLASS_MAP.pitfalls;
+      } else if (sectionKind === "summary") {
+        sectionClass = SECTION_CLASS_MAP.summary;
       }
-      section.className = className;
-      section.dataset.sectionKey = String(row.key || "").trim();
+
+      section.className = "detail-section";
+      if (sectionClass) {
+        section.classList.add(sectionClass);
+      }
+      section.dataset.sectionKey = sectionKey;
+      section.dataset.sectionKind = sectionKind;
+      section.id = buildSectionId(sectionKey, index);
 
       const header = document.createElement("div");
       header.className = "detail-section-header";
 
       const title = document.createElement("h2");
       title.className = "detail-section-title";
-      title.textContent = String(row.title || "").trim() || "内容";
+      const sectionTitle = resolveSectionTitle(row, sectionKey);
+      title.textContent = sectionTitle || "内容";
       header.appendChild(title);
 
       const body = document.createElement("div");
@@ -183,18 +393,45 @@
         rich.innerHTML = htmlFromText(text);
       }
 
+      const copyContent = text || extractReadableTextFromHtml(html);
+      const sectionCopyText = composeSectionCopyText(sectionTitle, copyContent);
+
+      const actions = document.createElement("div");
+      actions.className = "detail-section-actions";
+
+      const anchorLink = createActionLink("定位", "#" + section.id, "detail-section-anchor", "定位到" + sectionTitle);
+      actions.appendChild(anchorLink);
+
+      const copyButton = createActionButton("复制", "detail-section-copy", () => {
+        writeTextToClipboard(sectionCopyText).then((copied) => {
+          showToast(copied ? "已复制当前分区" : "复制失败，请手动复制", copied ? "success" : "error");
+        });
+      });
+      actions.appendChild(copyButton);
+
+      if (shouldEnableCollapse(sectionKey, rich)) {
+        section.classList.add("is-collapsible");
+        const toggleButton = createActionButton("收起", "detail-section-toggle", () => toggleSection(section));
+        toggleButton.setAttribute("aria-expanded", "true");
+        actions.appendChild(toggleButton);
+      }
+
+      header.appendChild(actions);
       body.appendChild(rich);
       section.appendChild(header);
       section.appendChild(body);
       container.appendChild(section);
 
       renderMath(rich);
+      if (section.classList.contains("is-collapsible")) {
+        setSectionExpanded(section, true);
+      }
     });
   }
 
   function renderDetail(data) {
     if (!data || data.isValid === false) {
-      showErrorState((data && data.errorMessage) || "详情数据暂时不可用");
+      showErrorState((data && data.errorMessage) || "详情数据暂时不可用。");
       return;
     }
 
@@ -257,7 +494,8 @@
     renderDetail,
     renderTags,
     renderSections,
-    renderMath
+    renderMath,
+    toggleSection
   };
 
   if (document.readyState === "loading") {
