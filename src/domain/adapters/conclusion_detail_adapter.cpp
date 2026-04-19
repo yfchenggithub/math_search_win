@@ -1,66 +1,320 @@
 #include "domain/adapters/conclusion_detail_adapter.h"
 
+#include <QHash>
+#include <QStringList>
+
 namespace domain::adapters {
 namespace {
 
-QString pickSummary(const models::ConclusionRecord& record)
+QString firstNonEmpty(const QStringList& values)
 {
-    if (!record.meta.summary.trimmed().isEmpty()) {
-        return record.meta.summary.trimmed();
-    }
-    if (!record.content.plain.summary.trimmed().isEmpty()) {
-        return record.content.plain.summary.trimmed();
-    }
-    if (!record.content.plain.statement.trimmed().isEmpty()) {
-        return record.content.plain.statement.trimmed();
+    for (const QString& rawValue : values) {
+        const QString value = rawValue.trimmed();
+        if (!value.isEmpty()) {
+            return value;
+        }
     }
     return {};
 }
 
-QString pickPrimaryFormula(const models::ConclusionRecord& record)
+QString normalizeKey(const QString& key)
 {
-    if (!record.content.primaryFormula.trimmed().isEmpty()) {
-        return record.content.primaryFormula.trimmed();
+    return key.trimmed().toLower();
+}
+
+QString mapSourceSectionKeyToTarget(const QString& sourceKey)
+{
+    const QString key = normalizeKey(sourceKey);
+    if (key == QStringLiteral("statement") || key == QStringLiteral("core_formula")) {
+        return QStringLiteral("statement");
+    }
+    if (key == QStringLiteral("intuition") || key == QStringLiteral("explanation")) {
+        return QStringLiteral("intuition");
+    }
+    if (key == QStringLiteral("derivation")) {
+        return QStringLiteral("derivation");
+    }
+    if (key == QStringLiteral("proof")) {
+        return QStringLiteral("proof");
+    }
+    if (key == QStringLiteral("usage") || key == QStringLiteral("examples")) {
+        return QStringLiteral("usage");
+    }
+    if (key == QStringLiteral("pitfalls") || key == QStringLiteral("traps")) {
+        return QStringLiteral("pitfalls");
+    }
+    if (key == QStringLiteral("notes") || key == QStringLiteral("variables") || key == QStringLiteral("conditions")) {
+        return QStringLiteral("notes");
+    }
+    if (key == QStringLiteral("summary")) {
+        return QStringLiteral("summary");
+    }
+    return QStringLiteral("notes");
+}
+
+QString sectionTitleForKey(const QString& targetKey)
+{
+    if (targetKey == QStringLiteral("statement")) {
+        return QStringLiteral("结论");
+    }
+    if (targetKey == QStringLiteral("intuition")) {
+        return QStringLiteral("理解");
+    }
+    if (targetKey == QStringLiteral("derivation")) {
+        return QStringLiteral("推导");
+    }
+    if (targetKey == QStringLiteral("proof")) {
+        return QStringLiteral("证明");
+    }
+    if (targetKey == QStringLiteral("usage")) {
+        return QStringLiteral("用法");
+    }
+    if (targetKey == QStringLiteral("pitfalls")) {
+        return QStringLiteral("易错点");
+    }
+    if (targetKey == QStringLiteral("notes")) {
+        return QStringLiteral("备注");
+    }
+    if (targetKey == QStringLiteral("summary")) {
+        return QStringLiteral("总结");
+    }
+    return QStringLiteral("内容");
+}
+
+QString sectionKindForKey(const QString& targetKey)
+{
+    if (targetKey == QStringLiteral("notes")) {
+        return QStringLiteral("note");
+    }
+    if (targetKey == QStringLiteral("pitfalls")) {
+        return QStringLiteral("pitfall");
+    }
+    if (targetKey == QStringLiteral("summary")) {
+        return QStringLiteral("summary");
+    }
+    return QStringLiteral("normal");
+}
+
+QString normalizeSectionKind(const QString& kind)
+{
+    const QString normalized = kind.trimmed().toLower();
+    if (normalized == QStringLiteral("note") || normalized == QStringLiteral("pitfall") || normalized == QStringLiteral("summary")
+        || normalized == QStringLiteral("normal")) {
+        return normalized;
+    }
+    return QStringLiteral("normal");
+}
+
+QString renderTextWithLineBreaks(const QString& text)
+{
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return {};
+    }
+    return trimmed.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br/>"));
+}
+
+QString renderTokenToHtml(const models::RenderToken& token)
+{
+    if (token.knownType == models::RenderTokenKnownType::MathInline && !token.latex.trimmed().isEmpty()) {
+        return QStringLiteral("<span class=\"detail-math-inline\">\\(%1\\)</span>")
+            .arg(token.latex.trimmed().toHtmlEscaped());
     }
 
-    for (const models::RenderSection& section : record.content.sections) {
-        if (section.key.compare(QStringLiteral("core_formula"), Qt::CaseInsensitive) != 0) {
-            continue;
+    if (!token.text.trimmed().isEmpty()) {
+        return renderTextWithLineBreaks(token.text);
+    }
+
+    if (!token.latex.trimmed().isEmpty()) {
+        return QStringLiteral("<span class=\"detail-math-inline\">\\(%1\\)</span>")
+            .arg(token.latex.trimmed().toHtmlEscaped());
+    }
+
+    return {};
+}
+
+QString renderTokenListToHtml(const QVector<models::RenderToken>& tokens)
+{
+    QString rendered;
+    rendered.reserve(tokens.size() * 24);
+    for (const models::RenderToken& token : tokens) {
+        rendered += renderTokenToHtml(token);
+    }
+    return rendered.trimmed();
+}
+
+QString renderTheoremGroupItemToHtml(const models::TheoremGroupItem& item)
+{
+    QStringList htmlParts;
+
+    const QString itemTitle = item.title.trimmed();
+    if (!itemTitle.isEmpty()) {
+        htmlParts.push_back(QStringLiteral("<p><strong>%1</strong></p>").arg(itemTitle.toHtmlEscaped()));
+    }
+
+    const QString formula = item.formulaLatex.trimmed();
+    if (!formula.isEmpty()) {
+        htmlParts.push_back(QStringLiteral("<div class=\"detail-math-block\">$$%1$$</div>").arg(formula.toHtmlEscaped()));
+    }
+
+    const QString desc = renderTokenListToHtml(item.descTokens);
+    if (!desc.isEmpty()) {
+        htmlParts.push_back(QStringLiteral("<p>%1</p>").arg(desc));
+    }
+
+    return htmlParts.join(QString());
+}
+
+QString renderBlockToHtml(const models::RenderBlock& block)
+{
+    if (block.knownType == models::RenderBlockKnownType::MathBlock || normalizeKey(block.type) == QStringLiteral("math_block")) {
+        const QString latex = block.latex.trimmed();
+        if (latex.isEmpty()) {
+            return {};
         }
-        for (const models::RenderBlock& block : section.blocks) {
-            if (!block.latex.trimmed().isEmpty()) {
-                return block.latex.trimmed();
+        return QStringLiteral("<div class=\"detail-math-block\">$$%1$$</div>").arg(latex.toHtmlEscaped());
+    }
+
+    if (block.knownType == models::RenderBlockKnownType::TheoremGroup || normalizeKey(block.type) == QStringLiteral("theorem_group")) {
+        QStringList htmlParts;
+        for (const models::TheoremGroupItem& item : block.items) {
+            const QString itemHtml = renderTheoremGroupItemToHtml(item);
+            if (!itemHtml.isEmpty()) {
+                htmlParts.push_back(itemHtml);
             }
         }
+        return htmlParts.join(QString());
     }
+
+    const QString tokenHtml = renderTokenListToHtml(block.tokens);
+    if (!tokenHtml.isEmpty()) {
+        return QStringLiteral("<p>%1</p>").arg(tokenHtml);
+    }
+
+    if (!block.latex.trimmed().isEmpty()) {
+        return QStringLiteral("<div class=\"detail-math-block\">$$%1$$</div>").arg(block.latex.trimmed().toHtmlEscaped());
+    }
+
     return {};
 }
 
-QVector<DetailSectionViewData> buildSectionViews(const models::ConclusionRecord& record)
+QString renderSectionBlocksToHtml(const models::RenderSection& section)
 {
-    QVector<DetailSectionViewData> sectionViews;
-    sectionViews.reserve(record.content.sections.size());
-
-    for (const models::RenderSection& section : record.content.sections) {
-        DetailSectionViewData sectionView;
-        sectionView.key = section.key;
-        sectionView.title = section.title;
-        sectionView.blockType = section.blockType;
-        sectionView.sourceSection = &section;
-
-        sectionView.blocks.reserve(section.blocks.size());
-        for (const models::RenderBlock& block : section.blocks) {
-            DetailBlockViewData blockView;
-            blockView.type = block.type;
-            blockView.knownType = block.knownType;
-            blockView.sourceBlock = &block;
-            sectionView.blocks.push_back(blockView);
+    QStringList blockHtmlList;
+    blockHtmlList.reserve(section.blocks.size());
+    for (const models::RenderBlock& block : section.blocks) {
+        const QString blockHtml = renderBlockToHtml(block).trimmed();
+        if (!blockHtml.isEmpty()) {
+            blockHtmlList.push_back(blockHtml);
         }
+    }
+    return blockHtmlList.join(QString());
+}
 
-        sectionViews.push_back(std::move(sectionView));
+QStringList trimAndFilterList(const QStringList& input)
+{
+    QStringList output;
+    output.reserve(input.size());
+    for (const QString& rawValue : input) {
+        const QString value = rawValue.trimmed();
+        if (!value.isEmpty()) {
+            output.push_back(value);
+        }
+    }
+    return output;
+}
+
+struct SectionAccumulator {
+    QString key;
+    QString title;
+    QString kind;
+    QStringList htmlParts;
+    QStringList textParts;
+};
+
+QVector<DetailSectionViewData> buildSections(const models::ConclusionRecord& record, const QString& pageSummary)
+{
+    const QStringList orderedKeys = {
+        QStringLiteral("statement"),
+        QStringLiteral("intuition"),
+        QStringLiteral("derivation"),
+        QStringLiteral("proof"),
+        QStringLiteral("usage"),
+        QStringLiteral("pitfalls"),
+        QStringLiteral("notes"),
+        QStringLiteral("summary"),
+    };
+
+    QHash<QString, SectionAccumulator> accumulators;
+    for (const QString& key : orderedKeys) {
+        SectionAccumulator accumulator;
+        accumulator.key = key;
+        accumulator.title = sectionTitleForKey(key);
+        accumulator.kind = sectionKindForKey(key);
+        accumulators.insert(key, std::move(accumulator));
     }
 
-    return sectionViews;
+    for (const models::RenderSection& rawSection : record.content.sections) {
+        const QString targetKey = mapSourceSectionKeyToTarget(rawSection.key);
+        auto it = accumulators.find(targetKey);
+        if (it == accumulators.end()) {
+            continue;
+        }
+
+        const QString sectionHtml = renderSectionBlocksToHtml(rawSection).trimmed();
+        if (sectionHtml.isEmpty()) {
+            continue;
+        }
+
+        const bool mappedFromAnotherKey = normalizeKey(rawSection.key) != targetKey;
+        const QString sourceTitle = rawSection.title.trimmed();
+        if (mappedFromAnotherKey && !sourceTitle.isEmpty() && targetKey == QStringLiteral("notes")) {
+            it->htmlParts.push_back(QStringLiteral("<p><strong>%1</strong></p>").arg(sourceTitle.toHtmlEscaped()));
+        }
+        it->htmlParts.push_back(sectionHtml);
+    }
+
+    auto appendTextFallback = [&accumulators](const QString& key, const QString& text) {
+        auto it = accumulators.find(key);
+        if (it == accumulators.end()) {
+            return;
+        }
+        const QString normalized = text.trimmed();
+        if (!normalized.isEmpty()) {
+            it->textParts.push_back(normalized);
+        }
+    };
+
+    appendTextFallback(QStringLiteral("statement"), record.content.plain.statement);
+    appendTextFallback(QStringLiteral("intuition"), record.content.plain.explanation);
+    appendTextFallback(QStringLiteral("proof"), record.content.plain.proof);
+    appendTextFallback(QStringLiteral("usage"), record.content.plain.examples);
+    appendTextFallback(QStringLiteral("pitfalls"), record.content.plain.traps);
+    if (record.content.plain.summary.trimmed() != pageSummary.trimmed()) {
+        appendTextFallback(QStringLiteral("summary"), record.content.plain.summary);
+    }
+
+    QVector<DetailSectionViewData> sections;
+    sections.reserve(orderedKeys.size());
+    for (const QString& key : orderedKeys) {
+        const auto it = accumulators.constFind(key);
+        if (it == accumulators.constEnd()) {
+            continue;
+        }
+
+        DetailSectionViewData section;
+        section.key = it->key;
+        section.title = it->title;
+        section.kind = normalizeSectionKind(it->kind);
+        section.html = it->htmlParts.join(QString()).trimmed();
+        section.text = it->textParts.join(QStringLiteral("\n\n")).trimmed();
+        section.visible = !(section.html.isEmpty() && section.text.isEmpty());
+        if (section.visible) {
+            sections.push_back(std::move(section));
+        }
+    }
+
+    return sections;
 }
 
 }  // namespace
@@ -68,39 +322,21 @@ QVector<DetailSectionViewData> buildSectionViews(const models::ConclusionRecord&
 ConclusionDetailViewData ConclusionDetailAdapter::toViewData(const models::ConclusionRecord& record)
 {
     ConclusionDetailViewData viewData;
-    viewData.id = record.id;
-    viewData.title = record.meta.title;
-    viewData.module = record.identity.module;
-    viewData.knowledgeNode = record.identity.knowledgeNode;
-    viewData.altNodes = record.identity.altNodes;
-    viewData.difficulty = record.meta.difficulty;
-    viewData.category = record.meta.category;
-    viewData.tags = record.meta.tags;
-    viewData.aliases = record.meta.aliases;
-    viewData.summary = pickSummary(record);
-    viewData.primaryFormula = pickPrimaryFormula(record);
-
-    viewData.variables = &record.content.variables;
-    viewData.conditions = &record.content.conditions;
-    viewData.conclusions = &record.content.conclusions;
-    viewData.rawSections = &record.content.sections;
-    viewData.sections = buildSectionViews(record);
-
-    // plain_* fields stay flattened for fallback rendering paths when structured sections are incomplete.
-    viewData.plainStatement = record.content.plain.statement;
-    viewData.plainExplanation = record.content.plain.explanation;
-    viewData.plainProof = record.content.plain.proof;
-    viewData.plainExamples = record.content.plain.examples;
-    viewData.plainTraps = record.content.plain.traps;
-    viewData.plainSummary = record.content.plain.summary;
-
-    viewData.assets = &record.assets;
-    viewData.relations = &record.ext.relations;
-    viewData.shareInfo = &record.ext.share;
-    viewData.examInfo = &record.ext.exam;
-    viewData.isPro = record.meta.isPro;
+    viewData.title = firstNonEmpty({record.meta.title, record.id, QStringLiteral("未命名结论")});
+    viewData.conclusionId = record.id.trimmed();
+    viewData.module = firstNonEmpty({record.identity.module, QStringLiteral("未知模块")});
+    viewData.moduleKey = record.identity.module.trimmed();
+    viewData.tags = trimAndFilterList(record.meta.tags);
+    viewData.summary =
+        firstNonEmpty({record.meta.summary, record.content.plain.summary, record.content.plain.statement});
+    viewData.sections = buildSections(record, viewData.summary);
+    viewData.isValid = !viewData.title.trimmed().isEmpty()
+                       && (!viewData.summary.trimmed().isEmpty() || !viewData.sections.isEmpty()
+                           || !viewData.tags.isEmpty() || !viewData.conclusionId.trimmed().isEmpty());
+    if (!viewData.isValid) {
+        viewData.errorMessage = QStringLiteral("详情数据暂时不可用");
+    }
     return viewData;
 }
 
 }  // namespace domain::adapters
-

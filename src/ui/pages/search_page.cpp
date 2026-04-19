@@ -1,4 +1,4 @@
-#include "ui/pages/search_page.h"
+﻿#include "ui/pages/search_page.h"
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
@@ -8,6 +8,7 @@
 #include "domain/services/suggest_service.h"
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "ui/detail/detail_html_renderer.h"
 
 #include <QComboBox>
 #include <QElapsedTimer>
@@ -23,6 +24,7 @@
 #include <QSplitter>
 #include <QTextBrowser>
 #include <QVBoxLayout>
+#include <QWebEngineView>
 
 #include <algorithm>
 #include <cmath>
@@ -79,6 +81,7 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
 {
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
+    detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();
 
     LOG_INFO(LogCategory::SearchEngine,
              QStringLiteral("SearchPage constructed searchServiceNull=%1 suggestServiceNull=%2")
@@ -107,14 +110,14 @@ void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
 
     if (!indexReady_) {
         updateStatusLine(QStringLiteral("索引未就绪，当前无法搜索。"),
-                         QStringLiteral("请检查 data/backend_search_index.json 加载日志。"));
-        showDetailPlaceholder(QStringLiteral("索引未加载，无法展示搜索结果。"));
+                         QStringLiteral("请检查 data/backend_search_index.json 的加载日志。"));
+        showDetailError(QStringLiteral("索引未加载，当前无法显示搜索详情。"));
         return;
     }
 
     if (!contentReady_) {
-        updateStatusLine(QStringLiteral("内容库未就绪，搜索可用但详情可能缺失。"));
-        showDetailPlaceholder(QStringLiteral("内容库未加载，选中结果时可能无法渲染详情。"));
+        updateStatusLine(QStringLiteral("内容仓库未就绪，搜索可用但详情可能缺失。"));
+        showDetailError(QStringLiteral("内容仓库未加载，选中结果后无法展示详情。"));
         return;
     }
 
@@ -251,7 +254,7 @@ void SearchPage::onResultSelectionChanged()
     const QString docId = currentItem->data(kResultItemDocIdRole).toString().trimmed();
     if (docId.isEmpty()) {
         LOG_WARN(LogCategory::DetailRender, QStringLiteral("result item missing doc id"));
-        showDetailPlaceholder(QStringLiteral("当前结果缺少结论 ID，无法渲染详情。"));
+        showDetailError(QStringLiteral("当前结果缺少结论 ID，无法显示详情。"));
         return;
     }
 
@@ -387,10 +390,29 @@ void SearchPage::buildUi()
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(8);
 
-    rightLayout->addWidget(new QLabel(QStringLiteral("详情（QTextBrowser 降级渲染）"), rightPanel));
+    rightLayout->addWidget(new QLabel(QStringLiteral("详情"), rightPanel));
+    detailWebView_ = new QWebEngineView(rightPanel);
+    detailWebView_->setVisible(false);
+    rightLayout->addWidget(detailWebView_, 1);
+
     detailBrowser_ = new QTextBrowser(rightPanel);
     detailBrowser_->setOpenExternalLinks(false);
+    detailBrowser_->setVisible(false);
     rightLayout->addWidget(detailBrowser_, 1);
+
+    webDetailEnabled_ = detailHtmlRenderer_ != nullptr && detailHtmlRenderer_->isReady();
+    if (webDetailEnabled_) {
+        detailWebView_->setVisible(true);
+        LOG_INFO(LogCategory::WebViewKatex,
+                 QStringLiteral("SearchPage detail web mode enabled detailDir=%1")
+                     .arg(detailHtmlRenderer_->detailDirectory()));
+    } else {
+        detailBrowser_->setVisible(true);
+        LOG_WARN(LogCategory::WebViewKatex,
+                 QStringLiteral("SearchPage detail web mode disabled reason=%1")
+                     .arg(detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
+                                                         : detailHtmlRenderer_->lastError()));
+    }
 
     splitter->addWidget(leftPanel);
     splitter->addWidget(rightPanel);
@@ -417,6 +439,16 @@ void SearchPage::connectSignals()
     connect(tagFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
+
+    if (detailWebView_ != nullptr) {
+        connect(detailWebView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
+            if (ok) {
+                return;
+            }
+            LOG_WARN(LogCategory::WebViewKatex, QStringLiteral("detail webview loadFinished(false), fallback to QTextBrowser"));
+            activateTextFallbackMode(QStringLiteral("QWebEngineView failed to load detail html"));
+        });
+    }
 }
 
 void SearchPage::rebuildFilterOptions()
@@ -569,7 +601,7 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     if (!indexReady_ || searchService_ == nullptr) {
         updateStatusLine(QStringLiteral("索引未就绪，无法执行搜索。"),
                          QStringLiteral("请检查索引加载日志。"));
-        showDetailPlaceholder(QStringLiteral("索引未就绪，当前无法展示结果详情。"));
+        showDetailError(QStringLiteral("索引未就绪，当前无法展示结果详情。"));
         LOG_ERROR(LogCategory::SearchEngine,
                   QStringLiteral("runSearch failed due to missing search backend query=%1").arg(normalizedQuery));
         return;
@@ -700,12 +732,12 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
 void SearchPage::renderDetailForDocId(const QString& docId)
 {
     if (docId.trimmed().isEmpty()) {
-        showDetailPlaceholder(QStringLiteral("当前结果缺少结论 ID，无法渲染详情。"));
+        showDetailError(QStringLiteral("当前结果缺少结论 ID，无法显示详情。"));
         return;
     }
 
     if (!contentReady_ || contentRepository_ == nullptr) {
-        showDetailPlaceholder(QStringLiteral("内容库未就绪，无法渲染详情。"));
+        showDetailError(QStringLiteral("内容仓库未就绪，无法显示详情。"));
         LOG_WARN(LogCategory::DetailRender,
                  QStringLiteral("detail skipped because content repo unavailable docId=%1").arg(docId));
         return;
@@ -713,77 +745,181 @@ void SearchPage::renderDetailForDocId(const QString& docId)
 
     const auto* record = contentRepository_->getById(docId);
     if (record == nullptr) {
-        showDetailPlaceholder(QStringLiteral("内容库中不存在该结论 ID：%1").arg(docId));
+        showDetailError(QStringLiteral("内容仓库中未找到结论 ID: %1").arg(docId));
         LOG_WARN(LogCategory::DetailRender, QStringLiteral("content record not found docId=%1").arg(docId));
         return;
     }
 
-    const domain::adapters::ConclusionDetailViewData detailView =
-        domain::adapters::ConclusionDetailAdapter::toViewData(*record);
-    const domain::adapters::ConclusionCardViewData cardView = domain::adapters::ConclusionCardAdapter::toViewData(*record);
-
-    const QString effectiveTitle = firstNonEmpty({detailView.title, cardView.title, docId});
-    const QString effectiveSummary =
-        firstNonEmpty({detailView.summary, detailView.plainSummary, detailView.plainStatement, cardView.summaryPlain});
-
-    QStringList html;
-    html.push_back(QStringLiteral("<h2>%1</h2>").arg(effectiveTitle.toHtmlEscaped()));
-    html.push_back(QStringLiteral("<p><b>ID:</b> %1<br/><b>模块:</b> %2<br/><b>分类:</b> %3<br/><b>难度:</b> %4</p>")
-                       .arg(detailView.id.toHtmlEscaped(),
-                            detailView.module.toHtmlEscaped(),
-                            detailView.category.toHtmlEscaped(),
-                            QString::number(detailView.difficulty)));
-
-    if (!detailView.tags.isEmpty()) {
-        html.push_back(QStringLiteral("<p><b>标签:</b> %1</p>").arg(detailView.tags.join(QStringLiteral(" / ")).toHtmlEscaped()));
-    }
-    if (!detailView.aliases.isEmpty()) {
-        html.push_back(QStringLiteral("<p><b>别名:</b> %1</p>").arg(detailView.aliases.join(QStringLiteral(" / ")).toHtmlEscaped()));
+    const domain::adapters::ConclusionDetailViewData detailView = domain::adapters::ConclusionDetailAdapter::toViewData(*record);
+    if (!detailView.isValid) {
+        const QString errorMessage = detailView.errorMessage.trimmed().isEmpty()
+                                         ? QStringLiteral("详情数据暂时不可用")
+                                         : detailView.errorMessage.trimmed();
+        showDetailError(errorMessage);
+        LOG_WARN(LogCategory::DetailRender,
+                 QStringLiteral("detail adapter returned invalid viewData docId=%1 error=%2")
+                     .arg(docId, errorMessage));
+        return;
     }
 
-    if (!effectiveSummary.isEmpty()) {
-        html.push_back(QStringLiteral("<h3>摘要</h3>"));
-        html.push_back(toHtmlParagraph(effectiveSummary));
-    }
+    LOG_DEBUG(LogCategory::DetailRender,
+              QStringLiteral("detail refresh begin docId=%1 sections=%2")
+                  .arg(docId)
+                  .arg(detailView.sections.size()));
 
-    if (!detailView.primaryFormula.trimmed().isEmpty()) {
-        html.push_back(QStringLiteral("<h3>核心公式（文本）</h3>"));
-        html.push_back(QStringLiteral("<pre>%1</pre>").arg(detailView.primaryFormula.toHtmlEscaped()));
-    }
-
-    const QString plainStatement =
-        firstNonEmpty({detailView.plainStatement, detailView.plainExplanation, detailView.plainProof, detailView.plainExamples});
-    if (!plainStatement.isEmpty()) {
-        html.push_back(QStringLiteral("<h3>内容摘录</h3>"));
-        html.push_back(toHtmlParagraph(plainStatement));
-    }
-
-    if (!detailView.sections.isEmpty()) {
-        html.push_back(QStringLiteral("<h3>结构化章节</h3>"));
-        html.push_back(QStringLiteral("<ul>"));
-        for (const domain::adapters::DetailSectionViewData& section : detailView.sections) {
-            const QString sectionTitle = firstNonEmpty({section.title, section.key, QStringLiteral("未命名章节")});
-            html.push_back(QStringLiteral("<li>%1（blocks=%2）</li>")
-                               .arg(sectionTitle.toHtmlEscaped())
-                               .arg(section.blocks.size()));
+    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
+        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderContent(detailView);
+        if (loadDetailHtmlIntoWebView(renderResult)) {
+            LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail rendered via webengine docId=%1").arg(docId));
+            return;
         }
-        html.push_back(QStringLiteral("</ul>"));
+
+        LOG_WARN(LogCategory::WebViewKatex,
+                 QStringLiteral("detail web render failed docId=%1 error=%2")
+                     .arg(docId, renderResult.errorMessage));
+        activateTextFallbackMode(renderResult.errorMessage);
     }
 
-    html.push_back(QStringLiteral("<hr/><p><i>当前为 QTextBrowser 降级渲染，后续可替换为 WebEngine 正式渲染。</i></p>"));
-
-    detailBrowser_->setHtml(html.join(QString()));
-    LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail rendered docId=%1").arg(docId));
+    renderDetailInFallbackBrowser(detailView);
+    LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail rendered via QTextBrowser fallback docId=%1").arg(docId));
 }
 
-void SearchPage::showDetailPlaceholder(const QString& message)
+void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView)
 {
     if (detailBrowser_ == nullptr) {
         return;
     }
 
-    detailBrowser_->setHtml(
-        QStringLiteral("<p style=\"color:#666;\">%1</p>").arg(message.trimmed().toHtmlEscaped()));
+    QStringList html;
+    html.push_back(QStringLiteral("<h2>%1</h2>").arg(detailView.title.trimmed().toHtmlEscaped()));
+    html.push_back(QStringLiteral("<p><b>ID:</b> %1<br/><b>模块:</b> %2</p>")
+                       .arg(detailView.conclusionId.toHtmlEscaped(),
+                            detailView.module.toHtmlEscaped()));
+
+    if (!detailView.tags.isEmpty()) {
+        html.push_back(QStringLiteral("<p><b>标签:</b> %1</p>").arg(detailView.tags.join(QStringLiteral(" / ")).toHtmlEscaped()));
+    }
+    if (!detailView.summary.trimmed().isEmpty()) {
+        html.push_back(QStringLiteral("<h3>摘要</h3>"));
+        html.push_back(toHtmlParagraph(detailView.summary));
+    }
+
+    if (!detailView.sections.isEmpty()) {
+        html.push_back(QStringLiteral("<h3>正文</h3>"));
+        for (const domain::adapters::DetailSectionViewData& section : detailView.sections) {
+            if (!section.visible) {
+                continue;
+            }
+            const QString title = firstNonEmpty({section.title, section.key, QStringLiteral("内容")});
+            html.push_back(QStringLiteral("<h4>%1</h4>").arg(title.toHtmlEscaped()));
+            if (!section.html.trimmed().isEmpty()) {
+                html.push_back(section.html);
+            } else if (!section.text.trimmed().isEmpty()) {
+                html.push_back(toHtmlParagraph(section.text));
+            }
+        }
+    } else {
+        html.push_back(QStringLiteral("<p style=\"color:#666;\">暂无更多内容。</p>"));
+    }
+
+    detailBrowser_->setHtml(html.join(QString()));
+    detailBrowser_->setVisible(true);
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
+}
+
+void SearchPage::showDetailPlaceholder(const QString& message)
+{
+    const QString fallbackMessage = message.trimmed().isEmpty()
+                                        ? QStringLiteral("请选择一条结果查看详情。")
+                                        : message.trimmed();
+
+    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
+        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderEmptyState(fallbackMessage);
+        if (loadDetailHtmlIntoWebView(renderResult)) {
+            LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail empty state rendered via webengine"));
+            return;
+        }
+        LOG_WARN(LogCategory::WebViewKatex,
+                 QStringLiteral("detail empty state render failed, fallback reason=%1").arg(renderResult.errorMessage));
+        activateTextFallbackMode(renderResult.errorMessage);
+    }
+
+    if (detailBrowser_ == nullptr) {
+        return;
+    }
+
+    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#666;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    detailBrowser_->setVisible(true);
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
+}
+
+void SearchPage::showDetailError(const QString& message)
+{
+    const QString fallbackMessage = message.trimmed().isEmpty()
+                                        ? QStringLiteral("详情暂时无法显示。")
+                                        : message.trimmed();
+
+    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
+        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderErrorState(fallbackMessage);
+        if (loadDetailHtmlIntoWebView(renderResult)) {
+            LOG_WARN(LogCategory::DetailRender, QStringLiteral("detail error state rendered via webengine message=%1").arg(fallbackMessage));
+            return;
+        }
+        LOG_WARN(LogCategory::WebViewKatex,
+                 QStringLiteral("detail error state render failed, fallback reason=%1").arg(renderResult.errorMessage));
+        activateTextFallbackMode(renderResult.errorMessage);
+    }
+
+    if (detailBrowser_ == nullptr) {
+        return;
+    }
+
+    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#9a3412;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    detailBrowser_->setVisible(true);
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
+}
+
+bool SearchPage::loadDetailHtmlIntoWebView(const ui::detail::DetailHtmlRenderResult& renderResult)
+{
+    if (!webDetailEnabled_ || detailWebView_ == nullptr) {
+        return false;
+    }
+    if (!renderResult.success) {
+        return false;
+    }
+
+    detailWebView_->setHtml(renderResult.html, renderResult.baseUrl);
+    detailWebView_->setVisible(true);
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setVisible(false);
+    }
+    LOG_DEBUG(LogCategory::WebViewKatex,
+              QStringLiteral("detail html loaded into webview baseUrl=%1").arg(renderResult.baseUrl.toString()));
+    return true;
+}
+
+void SearchPage::activateTextFallbackMode(const QString& reason)
+{
+    if (!webDetailEnabled_) {
+        return;
+    }
+
+    webDetailEnabled_ = false;
+    LOG_ERROR(LogCategory::WebViewKatex,
+              QStringLiteral("disable web detail mode and fallback to QTextBrowser reason=%1")
+                  .arg(reason.trimmed().isEmpty() ? QStringLiteral("unknown") : reason.trimmed()));
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setVisible(true);
+    }
 }
 
 void SearchPage::applySort(QVector<domain::models::SearchHit>* hits) const

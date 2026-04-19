@@ -4,6 +4,7 @@
 
 #include <QString>
 #include <QWidget>
+#include <memory>
 
 class QComboBox;
 class QLabel;
@@ -12,6 +13,7 @@ class QListWidget;
 class QListWidgetItem;
 class QPushButton;
 class QTextBrowser;
+class QWebEngineView;
 
 namespace domain::services {
 class SearchService;
@@ -21,6 +23,15 @@ class SuggestService;
 namespace infrastructure::data {
 class ConclusionContentRepository;
 class ConclusionIndexRepository;
+}
+
+namespace domain::adapters {
+struct ConclusionDetailViewData;
+}
+
+namespace ui::detail {
+class DetailHtmlRenderer;
+struct DetailHtmlRenderResult;
 }
 
 class SearchPage : public QWidget {
@@ -67,7 +78,11 @@ private:
     void clearSuggestions();
     void renderResults(const QVector<domain::models::SearchHit>& hits);
     void renderDetailForDocId(const QString& docId);
+    void renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView);
     void showDetailPlaceholder(const QString& message);
+    void showDetailError(const QString& message);
+    bool loadDetailHtmlIntoWebView(const ui::detail::DetailHtmlRenderResult& renderResult);
+    void activateTextFallbackMode(const QString& reason);
     void applySort(QVector<domain::models::SearchHit>* hits) const;
     SortMode currentSortMode() const;
 
@@ -91,6 +106,7 @@ private:
     bool indexReady_ = false;
     bool contentReady_ = false;
     bool suppressSuggestRefresh_ = false;
+    bool webDetailEnabled_ = false;
 
     QString lastSuggestSignature_;
     QString lastSearchSignature_;
@@ -107,5 +123,7 @@ private:
     QComboBox* sortCombo_ = nullptr;
     QPushButton* clearFiltersButton_ = nullptr;
     QListWidget* resultList_ = nullptr;
+    QWebEngineView* detailWebView_ = nullptr;
     QTextBrowser* detailBrowser_ = nullptr;
+    std::unique_ptr<ui::detail::DetailHtmlRenderer> detailHtmlRenderer_;
 };

@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include(CTest)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets)
 
 add_executable(math_search_win
     src/main.cpp
@@ -61,6 +61,8 @@ add_executable(math_search_win
     src/ui/pages/settings_page.cpp
     src/ui/pages/activation_page.h
     src/ui/pages/activation_page.cpp
+    src/ui/detail/detail_html_renderer.h
+    src/ui/detail/detail_html_renderer.cpp
 )
 
 target_include_directories(math_search_win PRIVATE src)
@@ -71,6 +73,7 @@ endif()
 
 target_link_libraries(math_search_win PRIVATE
     Qt6::Widgets
+    Qt6::WebEngineWidgets
 )
 
 if(BUILD_TESTING)

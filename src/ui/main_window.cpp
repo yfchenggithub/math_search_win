@@ -245,7 +245,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageHome:
         return QStringLiteral("欢迎使用本地离线版骨架");
     case UiConstants::kPageSearch:
-        return QStringLiteral("本页已接入本地检索与详情降级渲染");
+        return QStringLiteral("本页已接入本地检索与 WebEngine 详情渲染");
     case UiConstants::kPageFavorites:
         return QStringLiteral("收藏列表静态占位");
     case UiConstants::kPageRecentSearches:
