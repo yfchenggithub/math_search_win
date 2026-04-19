@@ -1,5 +1,8 @@
 #include "ui/pages/search_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QFrame>
 #include <QGroupBox>
 #include <QLabel>
@@ -11,6 +14,10 @@
 
 SearchPage::SearchPage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::SearchEngine, QStringLiteral("SearchPage constructed"));
+    LOG_INFO(LogCategory::SearchIndex, QStringLiteral("search index loading is not connected yet (MVP static shell)"));
+    LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail render is placeholder (WebEngine/KaTeX not connected yet)"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -78,4 +85,3 @@ SearchPage::SearchPage(QWidget* parent) : QWidget(parent)
 
     mainLayout->addWidget(splitter, 1);
 }
-

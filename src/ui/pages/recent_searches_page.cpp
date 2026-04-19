@@ -1,5 +1,8 @@
 #include "ui/pages/recent_searches_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -8,6 +11,8 @@
 
 RecentSearchesPage::RecentSearchesPage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("RecentSearchesPage constructed (history persistence not wired yet)"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -25,4 +30,3 @@ RecentSearchesPage::RecentSearchesPage(QWidget* parent) : QWidget(parent)
 
     mainLayout->addWidget(new QLabel(QStringLiteral("说明：本轮不做历史持久化，仅静态占位。"), this));
 }
-

@@ -1,5 +1,8 @@
 #include "ui/pages/favorites_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
@@ -8,6 +11,8 @@
 
 FavoritesPage::FavoritesPage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("FavoritesPage constructed (static MVP placeholder)"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -28,4 +33,3 @@ FavoritesPage::FavoritesPage(QWidget* parent) : QWidget(parent)
     emptyStateLayout->addWidget(new QLabel(QStringLiteral("空状态占位：暂无收藏内容"), emptyStateFrame));
     mainLayout->addWidget(emptyStateFrame);
 }
-

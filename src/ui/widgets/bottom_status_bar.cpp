@@ -1,5 +1,7 @@
 #include "ui/widgets/bottom_status_bar.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
 #include "shared/constants.h"
 
 #include <QHBoxLayout>
@@ -7,6 +9,8 @@
 
 BottomStatusBar::BottomStatusBar(QWidget* parent) : QWidget(parent)
 {
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("BottomStatusBar constructor begin"));
+
     setFixedHeight(UiConstants::kBottomBarHeight);
 
     auto* layout = new QHBoxLayout(this);
@@ -17,5 +21,6 @@ BottomStatusBar::BottomStatusBar(QWidget* parent) : QWidget(parent)
     layout->addWidget(new QLabel(UiConstants::kStatusData, this));
     layout->addWidget(new QLabel(UiConstants::kStatusVersion, this));
     layout->addStretch();
-}
 
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("BottomStatusBar constructor complete"));
+}

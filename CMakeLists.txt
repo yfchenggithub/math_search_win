@@ -10,6 +10,9 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 add_executable(math_search_win
     src/main.cpp
+    src/core/logging/log_categories.h
+    src/core/logging/logger.h
+    src/core/logging/logger.cpp
     src/shared/constants.h
     src/shared/paths.h
     src/shared/paths.cpp

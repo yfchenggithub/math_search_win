@@ -1,5 +1,8 @@
 #include "ui/pages/home_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,6 +14,8 @@
 
 HomePage::HomePage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("HomePage constructed (static MVP placeholder)"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -47,4 +52,3 @@ HomePage::HomePage(QWidget* parent) : QWidget(parent)
 
     mainLayout->addStretch();
 }
-

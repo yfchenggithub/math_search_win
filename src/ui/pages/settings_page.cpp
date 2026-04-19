@@ -1,11 +1,17 @@
 #include "ui/pages/settings_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QGroupBox>
 #include <QLabel>
 #include <QVBoxLayout>
 
 SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::Config, QStringLiteral("SettingsPage constructed"));
+    LOG_INFO(LogCategory::DataLoader, QStringLiteral("data loader integration is pending in MVP shell stage"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -36,4 +42,3 @@ SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
 
     mainLayout->addStretch();
 }
-

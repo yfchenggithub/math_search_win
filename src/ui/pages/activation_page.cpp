@@ -1,5 +1,8 @@
 #include "ui/pages/activation_page.h"
 
+#include "core/logging/log_categories.h"
+#include "core/logging/logger.h"
+
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -9,6 +12,8 @@
 
 ActivationPage::ActivationPage(QWidget* parent) : QWidget(parent)
 {
+    LOG_INFO(LogCategory::Config, QStringLiteral("ActivationPage constructed (license workflow placeholder)"));
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
@@ -50,4 +55,3 @@ ActivationPage::ActivationPage(QWidget* parent) : QWidget(parent)
 
     mainLayout->addStretch();
 }
-
