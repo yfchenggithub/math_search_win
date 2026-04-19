@@ -17,14 +17,26 @@ add_executable(math_search_win
     src/domain/models/render_section.cpp
     src/domain/models/conclusion_record.h
     src/domain/models/conclusion_record.cpp
+    src/domain/models/search_index_models.h
+    src/domain/models/search_index_models.cpp
+    src/domain/models/search_result_models.h
+    src/domain/models/search_result_models.cpp
     src/domain/adapters/conclusion_card_adapter.h
     src/domain/adapters/conclusion_card_adapter.cpp
     src/domain/adapters/conclusion_detail_adapter.h
     src/domain/adapters/conclusion_detail_adapter.cpp
+    src/domain/services/search_service.h
+    src/domain/services/search_service.cpp
+    src/domain/services/suggest_service.h
+    src/domain/services/suggest_service.cpp
     src/infrastructure/data/canonical_content_loader.h
     src/infrastructure/data/canonical_content_loader.cpp
     src/infrastructure/data/conclusion_content_repository.h
     src/infrastructure/data/conclusion_content_repository.cpp
+    src/infrastructure/data/backend_search_index_loader.h
+    src/infrastructure/data/backend_search_index_loader.cpp
+    src/infrastructure/data/conclusion_index_repository.h
+    src/infrastructure/data/conclusion_index_repository.cpp
     src/shared/constants.h
     src/shared/paths.h
     src/shared/paths.cpp
