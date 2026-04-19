@@ -17,10 +17,30 @@ BottomStatusBar::BottomStatusBar(QWidget* parent) : QWidget(parent)
     layout->setContentsMargins(12, 6, 12, 6);
     layout->setSpacing(12);
 
-    layout->addWidget(new QLabel(UiConstants::kStatusOffline, this));
-    layout->addWidget(new QLabel(UiConstants::kStatusData, this));
-    layout->addWidget(new QLabel(UiConstants::kStatusVersion, this));
+    modeLabel_ = new QLabel(UiConstants::kStatusOffline, this);
+    dataStatusLabel_ = new QLabel(UiConstants::kStatusData, this);
+    versionStatusLabel_ = new QLabel(UiConstants::kStatusVersion, this);
+
+    layout->addWidget(modeLabel_);
+    layout->addWidget(dataStatusLabel_);
+    layout->addWidget(versionStatusLabel_);
     layout->addStretch();
 
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("BottomStatusBar constructor complete"));
+}
+
+void BottomStatusBar::setDataStatusText(const QString& text)
+{
+    if (dataStatusLabel_ == nullptr) {
+        return;
+    }
+    dataStatusLabel_->setText(text.trimmed().isEmpty() ? UiConstants::kStatusData : text.trimmed());
+}
+
+void BottomStatusBar::setVersionStatusText(const QString& text)
+{
+    if (versionStatusLabel_ == nullptr) {
+        return;
+    }
+    versionStatusLabel_->setText(text.trimmed().isEmpty() ? UiConstants::kStatusVersion : text.trimmed());
 }

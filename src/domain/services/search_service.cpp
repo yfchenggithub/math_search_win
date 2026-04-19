@@ -19,6 +19,8 @@ using domain::models::SearchHit;
 using domain::models::SearchOptions;
 using domain::models::SearchResult;
 
+// 把一个 QString 里的连续空白字符压缩成一个普通空格，并去掉首尾空白
+// "  hello   world \n\t Qt  "--> "hello world Qt"
 QString collapseWhitespace(const QString& input)
 {
     QString output;
@@ -59,6 +61,20 @@ bool matchesOptionalFilter(const QString& value, const QSet<QString>& filter)
         return true;
     }
     return filter.contains(value.trimmed().toLower());
+}
+
+bool matchesOptionalTagFilter(const QStringList& tags, const QSet<QString>& tagFilter)
+{
+    if (tagFilter.isEmpty()) {
+        return true;
+    }
+
+    for (const QString& tag : tags) {
+        if (tagFilter.contains(tag.trimmed().toLower())) {
+            return true;
+        }
+    }
+    return false;
 }
 
 double fieldMaskWeight(quint32 fieldMask, const FieldMaskLegend& legend)
@@ -111,6 +127,7 @@ void applyPostingBatch(const QVector<domain::models::PostingEntry>& postings,
                        bool fromTerm,
                        const QSet<QString>& moduleFilter,
                        const QSet<QString>& categoryFilter,
+                       const QSet<QString>& tagFilter,
                        const infrastructure::data::ConclusionIndexRepository& repository,
                        QHash<QString, ScoreAccumulator>* accumulators)
 {
@@ -126,7 +143,9 @@ void applyPostingBatch(const QVector<domain::models::PostingEntry>& postings,
         if (doc == nullptr) {
             continue;
         }
-        if (!matchesOptionalFilter(doc->module, moduleFilter) || !matchesOptionalFilter(doc->category, categoryFilter)) {
+        if (!matchesOptionalFilter(doc->module, moduleFilter)
+            || !matchesOptionalFilter(doc->category, categoryFilter)
+            || !matchesOptionalTagFilter(doc->tags, tagFilter)) {
             continue;
         }
 
@@ -180,6 +199,7 @@ SearchResult SearchService::search(const QString& query, const SearchOptions& op
 
     const QSet<QString> moduleFilter = toLowerSet(options.moduleFilter);
     const QSet<QString> categoryFilter = toLowerSet(options.categoryFilter);
+    const QSet<QString> tagFilter = toLowerSet(options.tagFilter);
 
     QHash<QString, ScoreAccumulator> accumulators;
     for (const QString& key : queryKeys) {
@@ -190,6 +210,7 @@ SearchResult SearchService::search(const QString& query, const SearchOptions& op
                                   true,
                                   moduleFilter,
                                   categoryFilter,
+                                  tagFilter,
                                   *repository_,
                                   &accumulators);
             }
@@ -202,6 +223,7 @@ SearchResult SearchService::search(const QString& query, const SearchOptions& op
                                   false,
                                   moduleFilter,
                                   categoryFilter,
+                                  tagFilter,
                                   *repository_,
                                   &accumulators);
             }

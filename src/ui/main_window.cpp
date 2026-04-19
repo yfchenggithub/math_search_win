@@ -1,4 +1,4 @@
-#include "ui/main_window.h"
+﻿#include "ui/main_window.h"
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
@@ -17,17 +17,25 @@
 #include <QDir>
 #include <QHBoxLayout>
 #include <QStackedWidget>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <QWidget>
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent), searchService_(&indexRepository_), suggestService_(&indexRepository_)
 {
     LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("MainWindow constructor begin"));
 
     resize(UiConstants::kDefaultWindowWidth, UiConstants::kDefaultWindowHeight);
     setWindowTitle(UiConstants::kAppTitle);
 
+    loadSearchData();
     setupUi();
+    updateBottomStatusBar();
+
+    if (searchPage_ != nullptr) {
+        searchPage_->setBackendStatus(indexLoaded_, contentLoaded_);
+    }
 
     connect(navigationSidebar_, &NavigationSidebar::pageRequested, this, &MainWindow::switchPage);
     switchPage(UiConstants::kPageHome);
@@ -95,8 +103,15 @@ void MainWindow::setupPages()
 
     pageStack_->addWidget(new HomePage(pageStack_));
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("registered page index=%1 name=home").arg(UiConstants::kPageHome));
-    pageStack_->addWidget(new SearchPage(pageStack_));
+
+    searchPage_ = new SearchPage(&searchService_,
+                                 &suggestService_,
+                                 &contentRepository_,
+                                 &indexRepository_,
+                                 pageStack_);
+    pageStack_->addWidget(searchPage_);
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("registered page index=%1 name=search").arg(UiConstants::kPageSearch));
+
     pageStack_->addWidget(new FavoritesPage(pageStack_));
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=favorites").arg(UiConstants::kPageFavorites));
@@ -111,6 +126,79 @@ void MainWindow::setupPages()
               QStringLiteral("registered page index=%1 name=activation").arg(UiConstants::kPageActivation));
 
     LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("setupPages complete pageCount=%1").arg(pageStack_->count()));
+}
+
+void MainWindow::loadSearchData()
+{
+    indexLoaded_ = indexRepository_.loadFromFile();
+    contentLoaded_ = contentRepository_.loadFromFile();
+
+    if (indexLoaded_) {
+        LOG_INFO(LogCategory::SearchIndex,
+                 QStringLiteral("index loaded docs=%1 terms=%2 prefixes=%3 modules=%4 path=%5")
+                     .arg(indexRepository_.docCount())
+                     .arg(indexRepository_.termCount())
+                     .arg(indexRepository_.prefixCount())
+                     .arg(indexRepository_.modules().size())
+                     .arg(indexRepository_.activeIndexPath()));
+    } else {
+        const auto& diagnostics = indexRepository_.diagnostics();
+        LOG_ERROR(LogCategory::SearchIndex,
+                  QStringLiteral("index load failed fatal=%1 warnings=%2")
+                      .arg(diagnostics.fatalError, QString::number(diagnostics.warnings.size())));
+    }
+
+    if (contentLoaded_) {
+        LOG_INFO(LogCategory::DataLoader,
+                 QStringLiteral("content loaded records=%1 modules=%2 tags=%3 path=%4")
+                     .arg(contentRepository_.size())
+                     .arg(contentRepository_.modules().size())
+                     .arg(contentRepository_.tags().size())
+                     .arg(contentRepository_.activeContentPath()));
+    } else {
+        const auto& diagnostics = contentRepository_.diagnostics();
+        LOG_ERROR(LogCategory::DataLoader,
+                  QStringLiteral("content load failed fatal=%1 warnings=%2 skipped=%3")
+                      .arg(diagnostics.fatalError)
+                      .arg(diagnostics.warnings.size())
+                      .arg(diagnostics.skippedCount));
+    }
+
+    if (indexLoaded_ && contentLoaded_) {
+        startupStatusLine_ =
+            QStringLiteral("数据已加载 content=%1 index=%2 modules=%3")
+                .arg(contentRepository_.size())
+                .arg(indexRepository_.docCount())
+                .arg(indexRepository_.modules().size());
+        return;
+    }
+
+    QStringList errorParts;
+    if (!indexLoaded_) {
+        const QString indexReason = indexRepository_.diagnostics().fatalError.trimmed();
+        errorParts.push_back(indexReason.isEmpty() ? QStringLiteral("索引加载失败")
+                                                   : QStringLiteral("索引失败: %1").arg(indexReason));
+    }
+    if (!contentLoaded_) {
+        const QString contentReason = contentRepository_.diagnostics().fatalError.trimmed();
+        errorParts.push_back(contentReason.isEmpty() ? QStringLiteral("内容加载失败")
+                                                     : QStringLiteral("内容失败: %1").arg(contentReason));
+    }
+    startupStatusLine_ = errorParts.join(QStringLiteral(" | "));
+}
+
+void MainWindow::updateBottomStatusBar() const
+{
+    if (bottomStatusBar_ == nullptr) {
+        return;
+    }
+
+    bottomStatusBar_->setDataStatusText(startupStatusLine_);
+    if (indexLoaded_ && contentLoaded_) {
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据就绪"));
+    } else {
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据异常"));
+    }
 }
 
 void MainWindow::switchPage(int pageIndex)
@@ -157,7 +245,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageHome:
         return QStringLiteral("欢迎使用本地离线版骨架");
     case UiConstants::kPageSearch:
-        return QStringLiteral("搜索流程静态占位，下一轮接入真实检索");
+        return QStringLiteral("本页已接入本地检索与详情降级渲染");
     case UiConstants::kPageFavorites:
         return QStringLiteral("收藏列表静态占位");
     case UiConstants::kPageRecentSearches:

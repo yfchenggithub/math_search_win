@@ -15,6 +15,7 @@ struct SearchOptions {
     bool enableDebug = false;
     QStringList moduleFilter;
     QStringList categoryFilter;
+    QStringList tagFilter;
 };
 
 struct SearchHit {
@@ -45,6 +46,7 @@ struct SuggestOptions {
     bool enableDebug = false;
     QStringList moduleFilter;
     QStringList categoryFilter;
+    QStringList tagFilter;
 };
 
 struct SuggestionItem {
@@ -67,4 +69,3 @@ struct SuggestionResult {
 QString normalizeQueryText(const QString& rawQuery);
 
 }  // namespace domain::models
-

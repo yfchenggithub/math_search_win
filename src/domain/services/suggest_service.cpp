@@ -59,6 +59,20 @@ bool matchesOptionalFilter(const QString& value, const QSet<QString>& filter)
     return filter.contains(value.trimmed().toLower());
 }
 
+bool matchesOptionalTagFilter(const QStringList& tags, const QSet<QString>& tagFilter)
+{
+    if (tagFilter.isEmpty()) {
+        return true;
+    }
+
+    for (const QString& tag : tags) {
+        if (tagFilter.contains(tag.trimmed().toLower())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool matchesAnyPrefix(const QString& text, const QStringList& queryKeys)
 {
     for (const QString& key : queryKeys) {
@@ -90,7 +104,8 @@ struct PostingSignal {
 PostingSignal collectPostingSignal(const QVector<domain::models::PostingEntry>& postings,
                                    const infrastructure::data::ConclusionIndexRepository& repository,
                                    const QSet<QString>& moduleFilter,
-                                   const QSet<QString>& categoryFilter)
+                                   const QSet<QString>& categoryFilter,
+                                   const QSet<QString>& tagFilter)
 {
     PostingSignal signal;
     QSet<QString> dedupeDocIds;
@@ -103,7 +118,9 @@ PostingSignal collectPostingSignal(const QVector<domain::models::PostingEntry>& 
         if (doc == nullptr) {
             continue;
         }
-        if (!matchesOptionalFilter(doc->module, moduleFilter) || !matchesOptionalFilter(doc->category, categoryFilter)) {
+        if (!matchesOptionalFilter(doc->module, moduleFilter)
+            || !matchesOptionalFilter(doc->category, categoryFilter)
+            || !matchesOptionalTagFilter(doc->tags, tagFilter)) {
             continue;
         }
 
@@ -249,6 +266,7 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
 
     const QSet<QString> moduleFilter = toLowerSet(options.moduleFilter);
     const QSet<QString> categoryFilter = toLowerSet(options.categoryFilter);
+    const QSet<QString> tagFilter = toLowerSet(options.tagFilter);
     const FieldMaskLegend& legend = repository_->fieldMaskLegend();
     const QString scoringQuery = result.normalizedQuery.isEmpty() ? compactRawQuery : result.normalizedQuery;
 
@@ -289,7 +307,8 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
                 return;
             }
 
-            const PostingSignal signal = collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter);
+            const PostingSignal signal =
+                collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter, tagFilter);
             if (!signal.hasAnyDoc) {
                 return;
             }
@@ -331,7 +350,7 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
             return;
         }
 
-        const PostingSignal signal = collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter);
+        const PostingSignal signal = collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter, tagFilter);
         if (!signal.hasAnyDoc) {
             return;
         }
@@ -397,4 +416,3 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
 }
 
 }  // namespace domain::services
-
