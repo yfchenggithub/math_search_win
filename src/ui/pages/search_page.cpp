@@ -226,6 +226,75 @@ void SearchPage::triggerSearchFromRecent(const QString& query, const QString& mo
     setInitialQuery(query);
 }
 
+void SearchPage::openConclusionById(const QString& conclusionId)
+{
+    const QString normalizedId = conclusionId.trimmed();
+    if (normalizedId.isEmpty()) {
+        return;
+    }
+
+    if (!indexReady_ || indexRepository_ == nullptr) {
+        updateStatusLine(QStringLiteral("索引未就绪，无法打开收藏详情。"),
+                         QStringLiteral("请检查 data/backend_search_index.json 加载日志。"));
+        showDetailError(QStringLiteral("索引未就绪，当前无法打开该收藏。"));
+        return;
+    }
+
+    const auto* doc = indexRepository_->getDocById(normalizedId);
+    if (doc == nullptr) {
+        updateStatusLine(QStringLiteral("未找到对应收藏结论。"), QStringLiteral("conclusionId=%1").arg(normalizedId));
+        showDetailError(QStringLiteral("未找到结论 ID: %1").arg(normalizedId));
+        return;
+    }
+
+    if (moduleFilterCombo_ != nullptr && categoryFilterCombo_ != nullptr && tagFilterCombo_ != nullptr) {
+        QSignalBlocker moduleBlocker(moduleFilterCombo_);
+        QSignalBlocker categoryBlocker(categoryFilterCombo_);
+        QSignalBlocker tagBlocker(tagFilterCombo_);
+        moduleFilterCombo_->setCurrentIndex(0);
+        categoryFilterCombo_->setCurrentIndex(0);
+        tagFilterCombo_->setCurrentIndex(0);
+    }
+
+    lastSuggestSignature_.clear();
+    lastSearchSignature_.clear();
+    clearSuggestions();
+
+    if (queryInput_ != nullptr) {
+        QSignalBlocker blocker(queryInput_);
+        queryInput_->setText(doc->title.trimmed().isEmpty() ? normalizedId : doc->title.trimmed());
+    }
+
+    domain::models::SearchHit hit;
+    hit.docId = doc->id;
+    hit.title = doc->title;
+    hit.module = doc->module;
+    hit.category = doc->category;
+    hit.difficulty = doc->difficulty;
+    hit.tags = doc->tags;
+    hit.summary = doc->summary;
+    hit.coreFormula = doc->coreFormula;
+    hit.score = doc->searchBoost;
+
+    currentHits_.clear();
+    currentHits_.push_back(std::move(hit));
+    renderResults(currentHits_);
+
+    if (resultList_ != nullptr && resultList_->count() > 0) {
+        resultList_->setCurrentRow(0);
+    } else {
+        enqueueDetailRenderRequest(normalizedId);
+    }
+
+    const QString moduleText = doc->module.trimmed().isEmpty() ? QStringLiteral("-") : doc->module.trimmed();
+    updateStatusLine(QStringLiteral("已打开收藏结论。"),
+                     QStringLiteral("conclusionId=%1 | module=%2").arg(normalizedId, moduleText));
+
+    LOG_INFO(LogCategory::SearchEngine,
+             QStringLiteral("open conclusion from favorites doc_id=%1 title=%2")
+                 .arg(normalizedId, doc->title.trimmed()));
+}
+
 void SearchPage::onQueryTextChanged(const QString& text)
 {
     if (suppressSuggestRefresh_) {

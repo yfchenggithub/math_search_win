@@ -9,6 +9,7 @@
 #include <QMainWindow>
 
 class BottomStatusBar;
+class FavoritesPage;
 class NavigationSidebar;
 class QStackedWidget;
 class RecentSearchesPage;
@@ -53,5 +54,6 @@ private:
     QStackedWidget* pageStack_ = nullptr;
     BottomStatusBar* bottomStatusBar_ = nullptr;
     SearchPage* searchPage_ = nullptr;
+    FavoritesPage* favoritesPage_ = nullptr;
     RecentSearchesPage* recentSearchesPage_ = nullptr;
 };

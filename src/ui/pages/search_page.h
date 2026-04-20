@@ -56,6 +56,7 @@ public:
     void setInitialQuery(const QString& query);
     void setInitialModule(const QString& module);
     void triggerSearchFromRecent(const QString& query, const QString& module = QString());
+    void openConclusionById(const QString& conclusionId);
 
 private slots:
     void onQueryTextChanged(const QString& text);
