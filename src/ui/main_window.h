@@ -15,6 +15,7 @@ class NavigationSidebar;
 class QStackedWidget;
 class RecentSearchesPage;
 class SearchPage;
+class SettingsPage;
 class TopBar;
 
 class MainWindow : public QMainWindow {
@@ -58,4 +59,5 @@ private:
     SearchPage* searchPage_ = nullptr;
     FavoritesPage* favoritesPage_ = nullptr;
     RecentSearchesPage* recentSearchesPage_ = nullptr;
+    SettingsPage* settingsPage_ = nullptr;
 };

@@ -127,7 +127,9 @@ void MainWindow::setupPages()
     pageStack_->addWidget(recentSearchesPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=recent_searches").arg(UiConstants::kPageRecentSearches));
-    pageStack_->addWidget(new SettingsPage(pageStack_));
+    settingsPage_ =
+        new SettingsPage(&indexRepository_, &contentRepository_, indexLoaded_, contentLoaded_, pageStack_);
+    pageStack_->addWidget(settingsPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=settings").arg(UiConstants::kPageSettings));
     pageStack_->addWidget(new ActivationPage(pageStack_));
@@ -327,6 +329,9 @@ void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
     if (pageIndex == UiConstants::kPageHome && homePage_ != nullptr) {
         homePage_->reloadData();
     }
+    if (pageIndex == UiConstants::kPageSettings && settingsPage_ != nullptr) {
+        settingsPage_->reloadData();
+    }
 
     const QString triggerText = trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed();
     const QString message = QStringLiteral("page switched from=%1 to=%2 trigger=%3")
@@ -390,7 +395,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageRecentSearches:
         return QStringLiteral("快速回访近期检索内容");
     case UiConstants::kPageSettings:
-        return QStringLiteral("设置与帮助信息占位");
+        return QStringLiteral("管理应用信息、数据状态与帮助入口");
     case UiConstants::kPageActivation:
         return QStringLiteral("激活与升级入口占位");
     default:

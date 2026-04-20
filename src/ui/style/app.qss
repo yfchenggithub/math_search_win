@@ -949,3 +949,203 @@ QListWidget#resultList QScrollBar::sub-page:vertical {
     height: 0;
     background: transparent;
 }
+
+/* --------------------------------------------------------------
+   Settings & About Page
+   -------------------------------------------------------------- */
+QWidget#settingsPage {
+    background-color: #f5f6f8;
+    color: #22272f;
+    font-family: "Microsoft YaHei UI";
+}
+
+QWidget#settingsPageHeader {
+    border: 1px solid #e4e9ef;
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+QLabel#settingsPageTitle {
+    color: #1f242b;
+    font-size: 24px;
+    font-weight: 620;
+}
+
+QLabel#settingsPageSubtitle {
+    color: #707985;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QLabel#settingsMetaText {
+    color: #8b95a0;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QScrollArea#settingsScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollArea#settingsScrollArea QWidget#qt_scrollarea_viewport {
+    background: transparent;
+}
+
+QWidget#settingsContent {
+    background: transparent;
+}
+
+QWidget#settingsGroup {
+    border: 1px solid #e4e9ef;
+    border-radius: 14px;
+    background-color: #ffffff;
+}
+
+QWidget#settingsGroup[sectionRole="software"] {
+    border-color: #e4e9ef;
+    background-color: #ffffff;
+}
+
+QWidget#settingsGroup[sectionRole="data"] {
+    border-color: #dae4f1;
+    background-color: #fcfdff;
+}
+
+QWidget#settingsGroup[sectionRole="help"] {
+    border-color: #e4e9ef;
+    background-color: #ffffff;
+}
+
+QWidget#settingsGroup[sectionRole="feedback"] {
+    border-color: #e5e9ee;
+    background-color: #ffffff;
+}
+
+QWidget#settingsGroup[sectionRole="future"] {
+    border-style: dashed;
+    border-color: #dce4ec;
+    background-color: #fbfcfe;
+}
+
+QLabel#settingsGroupTitle {
+    color: #232a32;
+    font-size: 16px;
+    font-weight: 610;
+}
+
+QWidget#settingsInfoRow {
+    border: 1px solid #ebf0f5;
+    border-radius: 10px;
+    background-color: #fafbfd;
+}
+
+QWidget#settingsGroup[sectionRole="data"] QWidget#settingsInfoRow {
+    border-color: #e5ebf4;
+    background-color: #f7faff;
+}
+
+QWidget#settingsGroup[sectionRole="future"] QWidget#settingsInfoRow {
+    border-color: #e5ebf2;
+    background-color: #f9fbfe;
+}
+
+QLabel#settingsInfoLabel {
+    color: #6e7782;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#settingsInfoValue {
+    color: #2b333c;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QLabel#settingsHintText {
+    color: #919ba6;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QPushButton#settingsSecondaryButton {
+    min-height: 32px;
+    min-width: 88px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid #d8dee5;
+    background-color: #f8fafc;
+    color: #5f6872;
+    font-size: 12px;
+    font-weight: 510;
+}
+
+QPushButton#settingsSecondaryButton:hover {
+    border-color: #c8d1db;
+    background-color: #f1f5f8;
+    color: #505862;
+}
+
+QPushButton#settingsSecondaryButton:pressed {
+    border-color: #b6c2cf;
+    background-color: #e9eef3;
+}
+
+QPushButton#settingsSecondaryButton:focus {
+    border-color: #7ea9f8;
+}
+
+QPushButton#settingsLinkButton {
+    min-height: 32px;
+    min-width: 88px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background-color: transparent;
+    color: #6c84a5;
+    font-size: 12px;
+    font-weight: 520;
+}
+
+QPushButton#settingsLinkButton:hover {
+    border-color: #d6e1ee;
+    background-color: #f2f6fb;
+    color: #536a89;
+}
+
+QPushButton#settingsLinkButton:pressed {
+    border-color: #c8d5e3;
+    background-color: #e8eff7;
+}
+
+QPushButton#settingsLinkButton:focus {
+    border-color: #88a8d0;
+}
+
+QPushButton#settingsLinkButton:disabled {
+    color: #a7b1bd;
+}
+
+QScrollArea#settingsScrollArea QScrollBar:vertical {
+    width: 10px;
+    margin: 0;
+    background: transparent;
+}
+
+QScrollArea#settingsScrollArea QScrollBar::handle:vertical {
+    min-height: 26px;
+    border-radius: 5px;
+    background: #c5ccd3;
+}
+
+QScrollArea#settingsScrollArea QScrollBar::handle:vertical:hover {
+    background: #adb5be;
+}
+
+QScrollArea#settingsScrollArea QScrollBar::add-line:vertical,
+QScrollArea#settingsScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#settingsScrollArea QScrollBar::add-page:vertical,
+QScrollArea#settingsScrollArea QScrollBar::sub-page:vertical {
+    height: 0;
+    background: transparent;
+}
