@@ -504,10 +504,11 @@ void SearchPage::connectSignals()
                 [this](const QString& detailId,
                        quint64 requestId,
                        qint64 selectionTimestampMs,
+                       qint64 atMs,
                        const QString& phase,
                        const QString& extra) {
-                    logDetailPerf(detailId, requestId, selectionTimestampMs, phase, extra);
-                    handleDetailPerfPhase(detailId, requestId, selectionTimestampMs, phase, extra);
+                    logDetailPerf(detailId, requestId, selectionTimestampMs, phase, extra, atMs);
+                    handleDetailPerfPhase(detailId, requestId, selectionTimestampMs, atMs, phase, extra);
                 });
     }
 }
@@ -1356,6 +1357,7 @@ void SearchPage::markDetailTimingStaleIgnored(const QString& docId,
 void SearchPage::handleDetailPerfPhase(const QString& detailId,
                                        quint64 requestId,
                                        qint64 selectionTimestampMs,
+                                       qint64 phaseAtMs,
                                        const QString& phase,
                                        const QString& extra)
 {
@@ -1389,8 +1391,10 @@ void SearchPage::handleDetailPerfPhase(const QString& detailId,
         it->elapsedTimer.start();
     }
 
-    const qint64 elapsedMs = it->selectionTimestampMs > 0 ? detailElapsedMs(it->selectionTimestampMs)
-                                                           : std::max<qint64>(0, it->elapsedTimer.elapsed());
+    const qint64 elapsedMs = phaseAtMs >= 0
+                                 ? phaseAtMs
+                                 : (it->selectionTimestampMs > 0 ? detailElapsedMs(it->selectionTimestampMs)
+                                                                  : std::max<qint64>(0, it->elapsedTimer.elapsed()));
 
     if (normalizedPhase == QStringLiteral("dispatch_to_web_start")) {
         it->dispatchToWebStartMs = elapsedMs;
@@ -1431,6 +1435,7 @@ void SearchPage::handleDetailPerfPhase(const QString& detailId,
 void SearchPage::resetDetailTimingSessions(bool clearLabelToIdle)
 {
     detailTimingSessions_.clear();
+    detailPerfAggregator_.clear();
     activeDetailTimingRequestId_ = 0;
     if (clearLabelToIdle) {
         updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);
@@ -1511,23 +1516,62 @@ void SearchPage::logDetailPerf(const QString& docId,
                                quint64 requestId,
                                qint64 selectionTimestampMs,
                                const QString& phase,
-                               const QString& extra) const
+                               const QString& extra,
+                               qint64 phaseAtMs)
 {
-    if (docId.trimmed().isEmpty() || requestId == 0 || selectionTimestampMs <= 0 || phase.trimmed().isEmpty()) {
+    const QString normalizedPhase = phase.trimmed();
+    if (requestId == 0 || normalizedPhase.isEmpty()) {
         return;
     }
 
-    QString line =
-        QStringLiteral("[perf][detail] id=%1 req=%2 phase=%3 t=%4ms")
-            .arg(docId.trimmed())
-            .arg(requestId)
-            .arg(phase.trimmed())
-            .arg(detailElapsedMs(selectionTimestampMs));
-    if (!extra.trimmed().isEmpty()) {
-        line.append(QStringLiteral(" "));
-        line.append(extra.trimmed());
+    const QString normalizedDocId = docId.trimmed().isEmpty() ? QStringLiteral("-") : docId.trimmed();
+    const QString displayPhase = ui::detail::detailperf::toDisplayPhase(normalizedPhase);
+    const bool beginPhase = normalizedPhase == QStringLiteral("request_start")
+                            || normalizedPhase == QStringLiteral("selection_received")
+                            || normalizedPhase == QStringLiteral("detail_request_created");
+    const bool finishPhase = ui::detail::detailperf::isFinishPhase(displayPhase);
+    const bool cancelPhase = ui::detail::detailperf::isCancelPhase(displayPhase);
+    const bool knownPhase = ui::detail::detailperf::isKnownPhase(normalizedPhase);
+
+    if (!beginPhase && !finishPhase && !cancelPhase && !knownPhase && !detailPerfAggregator_.hasActiveRequest(requestId)) {
+        return;
     }
-    LOG_DEBUG(LogCategory::DetailRender, line);
+
+    const qint64 fallbackAtMs = selectionTimestampMs > 0 ? detailElapsedMs(selectionTimestampMs) : 0;
+    const qint64 atMs = phaseAtMs >= 0 ? phaseAtMs : fallbackAtMs;
+
+    if (beginPhase) {
+        detailPerfAggregator_.beginRequest(normalizedDocId, requestId);
+    }
+
+    if (displayPhase == QStringLiteral("superseded")) {
+        const QVariantMap extras = ui::detail::detailperf::parsePerfExtra(extra);
+        const quint64 oldRequestId = static_cast<quint64>(std::max<qint64>(0, extras.value(QStringLiteral("superseded_req")).toLongLong()));
+        const QString oldDetailId = extras.value(QStringLiteral("superseded_id")).toString().trimmed();
+        if (oldRequestId > 0) {
+            detailPerfAggregator_.markSuperseded(oldRequestId, oldDetailId, requestId, normalizedDocId);
+        } else {
+            detailPerfAggregator_.cancelRequest(normalizedDocId, requestId, QStringLiteral("superseded"));
+        }
+        return;
+    }
+
+    if (cancelPhase) {
+        const QVariantMap extras = ui::detail::detailperf::parsePerfExtra(extra);
+        QString reason = extras.value(QStringLiteral("reason")).toString().trimmed();
+        if (reason.isEmpty()) {
+            reason = displayPhase == QStringLiteral("aborted_stale") ? QStringLiteral("superseded") : displayPhase;
+        }
+        detailPerfAggregator_.cancelRequest(normalizedDocId, requestId, reason);
+        return;
+    }
+
+    if (finishPhase) {
+        detailPerfAggregator_.finishRequest(normalizedDocId, requestId, normalizedPhase, atMs, extra);
+        return;
+    }
+
+    detailPerfAggregator_.recordPhase(normalizedDocId, requestId, normalizedPhase, atMs, extra);
 }
 
 qint64 SearchPage::detailElapsedMs(qint64 selectionTimestampMs) const

@@ -46,6 +46,7 @@ signals:
     void perfPhase(const QString& detailId,
                    quint64 requestId,
                    qint64 selectionTimestampMs,
+                   qint64 atMs,
                    const QString& phase,
                    const QString& extra);
     void webModeFailed(const QString& reason);
@@ -53,7 +54,7 @@ signals:
 private:
     void onShellLoadFinished(bool ok);
     void dispatchNow(const RequestContext& request);
-    void emitPerf(const RequestContext& request, const QString& phase, const QString& extra = QString());
+    void emitPerf(const RequestContext& request, const QString& phase, const QString& extra = QString(), qint64 atMs = -1);
     void clearPendingRequest();
     void handleJsConsoleMessage(const QString& message);
     void rememberRequestContext(const RequestContext& request);

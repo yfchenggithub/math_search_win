@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "domain/models/search_result_models.h"
+#include "ui/detail/detail_perf_aggregator.h"
 
 #include <QElapsedTimer>
 #include <QHash>
@@ -129,6 +130,7 @@ private:
     void handleDetailPerfPhase(const QString& detailId,
                                quint64 requestId,
                                qint64 selectionTimestampMs,
+                               qint64 phaseAtMs,
                                const QString& phase,
                                const QString& extra);
     void resetDetailTimingSessions(bool clearLabelToIdle = false);
@@ -147,7 +149,8 @@ private:
                        quint64 requestId,
                        qint64 selectionTimestampMs,
                        const QString& phase,
-                       const QString& extra = QString()) const;
+                       const QString& extra = QString(),
+                       qint64 phaseAtMs = -1);
     qint64 detailElapsedMs(qint64 selectionTimestampMs) const;
     void applySort(QVector<domain::models::SearchHit>* hits) const;
     SortMode currentSortMode() const;
@@ -211,5 +214,6 @@ private:
     std::unique_ptr<ui::detail::DetailHtmlRenderer> detailHtmlRenderer_;
 
     QHash<quint64, DetailTimingSession> detailTimingSessions_;
+    ui::detail::DetailPerfAggregator detailPerfAggregator_;
     quint64 activeDetailTimingRequestId_ = 0;
 };

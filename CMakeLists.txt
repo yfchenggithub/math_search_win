@@ -63,6 +63,8 @@ add_executable(math_search_win
     src/ui/pages/activation_page.cpp
     src/ui/detail/detail_html_renderer.h
     src/ui/detail/detail_html_renderer.cpp
+    src/ui/detail/detail_perf_aggregator.h
+    src/ui/detail/detail_perf_aggregator.cpp
     src/ui/detail/detail_pane.h
     src/ui/detail/detail_pane.cpp
     src/ui/detail/detail_render_coordinator.h

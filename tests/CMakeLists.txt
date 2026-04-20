@@ -18,6 +18,8 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.cpp
     ${PROJECT_SOURCE_DIR}/src/shared/paths.h
     ${PROJECT_SOURCE_DIR}/src/shared/paths.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_perf_aggregator.h
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_perf_aggregator.cpp
 )
 
 add_library(math_search_test_support STATIC ${MATH_SEARCH_TEST_SUPPORT_SOURCES})
@@ -77,4 +79,15 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
         $<TARGET_FILE:math_search_suggest_tests>
+)
+
+add_executable(math_search_detail_perf_tests
+    detail/test_detail_perf_aggregator.cpp
+)
+configure_math_search_test_target(math_search_detail_perf_tests)
+add_test(
+    NAME detail_perf_aggregator_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_detail_perf_tests>
 )

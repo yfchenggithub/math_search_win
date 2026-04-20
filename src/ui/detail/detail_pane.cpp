@@ -11,6 +11,7 @@
 #include <QWebEnginePage>
 #include <QWebEngineView>
 
+#include <algorithm>
 #include <functional>
 
 namespace ui::detail {
@@ -21,6 +22,7 @@ constexpr int kMaxRememberedRequestContextCount = 96;
 struct JsPerfRecord {
     QString detailId;
     quint64 requestId = 0;
+    qint64 atMs = -1;
     QString phase;
     QString extra;
 };
@@ -33,7 +35,7 @@ bool tryParseJsPerfRecord(const QString& message, JsPerfRecord* parsed)
 
     static const QRegularExpression pattern(
         QStringLiteral(
-            R"(^\[perf\]\[detail\]\s+id=([^\s]+)\s+req=(\d+)\s+phase=([^\s]+)\s+t=[0-9]+(?:\.[0-9]+)?ms(?:\s+(.*))?$)"));
+            R"(^\[perf\]\[detail\]\s+id=([^\s]+)\s+req=(\d+)\s+phase=([^\s]+)\s+t=([0-9]+(?:\.[0-9]+)?)ms(?:\s+(.*))?$)"));
 
     const QRegularExpressionMatch match = pattern.match(message.trimmed());
     if (!match.hasMatch()) {
@@ -46,10 +48,17 @@ bool tryParseJsPerfRecord(const QString& message, JsPerfRecord* parsed)
         return false;
     }
 
+    bool elapsedOk = false;
+    const double atMs = match.captured(4).toDouble(&elapsedOk);
+    if (!elapsedOk) {
+        return false;
+    }
+
     parsed->detailId = match.captured(1).trimmed();
     parsed->requestId = requestId;
     parsed->phase = match.captured(3).trimmed();
-    parsed->extra = match.captured(4).trimmed();
+    parsed->atMs = std::max<qint64>(0, qRound64(atMs));
+    parsed->extra = match.captured(5).trimmed();
     return !parsed->phase.isEmpty();
 }
 
@@ -275,9 +284,9 @@ void DetailPane::dispatchNow(const RequestContext& request)
     }
 }
 
-void DetailPane::emitPerf(const RequestContext& request, const QString& phase, const QString& extra)
+void DetailPane::emitPerf(const RequestContext& request, const QString& phase, const QString& extra, qint64 atMs)
 {
-    emit perfPhase(request.detailId, request.requestId, request.selectionTimestampMs, phase, extra);
+    emit perfPhase(request.detailId, request.requestId, request.selectionTimestampMs, atMs, phase, extra);
 }
 
 void DetailPane::clearPendingRequest()
@@ -294,7 +303,7 @@ void DetailPane::handleJsConsoleMessage(const QString& message)
         if (tryParseJsPerfRecord(trimmedMessage, &parsed)) {
             const qint64 selectionTimestampMs = selectionTimestampForRequest(parsed.requestId);
             const QString detailId = detailIdForRequest(parsed.requestId, parsed.detailId);
-            emit perfPhase(detailId, parsed.requestId, selectionTimestampMs, parsed.phase, parsed.extra);
+            emit perfPhase(detailId, parsed.requestId, selectionTimestampMs, parsed.atMs, parsed.phase, parsed.extra);
         } else {
             LOG_DEBUG(LogCategory::DetailRender, trimmedMessage);
         }
