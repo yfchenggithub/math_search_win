@@ -12,12 +12,13 @@
 #include "ui/detail/detail_pane.h"
 #include "ui/detail/detail_render_coordinator.h"
 #include "ui/detail/detail_view_data_mapper.h"
+#include "ui/style/app_style.h"
 
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QFormLayout>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QLabel>
@@ -27,6 +28,7 @@
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QStyle>
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -79,6 +81,25 @@ QString firstNonEmpty(const QStringList& values)
     return {};
 }
 
+void repolishWidget(QWidget* widget)
+{
+    if (widget == nullptr || widget->style() == nullptr) {
+        return;
+    }
+    widget->style()->unpolish(widget);
+    widget->style()->polish(widget);
+    widget->update();
+}
+
+QString detailMetaTextForPlaceholder(const QString& message)
+{
+    const QString normalized = message.trimmed();
+    if (normalized.contains(QStringLiteral("没有找到"))) {
+        return QStringLiteral("暂无匹配详情");
+    }
+    return QStringLiteral("等待选择结果");
+}
+
 }  // namespace
 
 SearchPage::SearchPage(domain::services::SearchService* searchService,
@@ -92,7 +113,9 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
       contentRepository_(contentRepository),
       indexRepository_(indexRepository)
 {
-    setObjectName(QStringLiteral("futureSearchPage"));
+    ui::style::ensureAppStyleSheetLoaded();
+    setObjectName(QStringLiteral("searchPage"));
+    setProperty("pageRole", QStringLiteral("search"));
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
     detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();
@@ -438,39 +461,100 @@ void SearchPage::onClearFiltersClicked()
 void SearchPage::buildUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(20, 20, 20, 20);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(ui::style::tokens::kPageOuterMargin,
+                                   ui::style::tokens::kPageOuterMargin,
+                                   ui::style::tokens::kPageOuterMargin,
+                                   ui::style::tokens::kPageOuterMargin);
+    mainLayout->setSpacing(ui::style::tokens::kMediumSpacing);
 
-    mainLayout->addWidget(new QLabel(QStringLiteral("搜索"), this));
+    auto* topBar = new QWidget(this);
+    topBar->setObjectName(QStringLiteral("searchTopBar"));
+    topBar->setAttribute(Qt::WA_StyledBackground, true);
+    auto* topBarLayout = new QVBoxLayout(topBar);
+    topBarLayout->setContentsMargins(18, 14, 18, 14);
+    topBarLayout->setSpacing(10);
 
-    auto* splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->setChildrenCollapsible(false);
+    auto* titleBlock = new QWidget(topBar);
+    auto* titleLayout = new QVBoxLayout(titleBlock);
+    titleLayout->setContentsMargins(0, 0, 0, 0);
+    titleLayout->setSpacing(4);
 
-    auto* leftPanel = new QWidget(splitter);
-    auto* leftLayout = new QVBoxLayout(leftPanel);
-    leftLayout->setContentsMargins(0, 0, 0, 0);
-    leftLayout->setSpacing(8);
+    auto* pageTitleLabel = new QLabel(QStringLiteral("搜索"), titleBlock);
+    pageTitleLabel->setObjectName(QStringLiteral("searchPageTitle"));
+
+    auto* pageSubtitleLabel =
+        new QLabel(QStringLiteral("输入关键词后快速筛选，在右侧即时预览结论详情。"), titleBlock);
+    pageSubtitleLabel->setObjectName(QStringLiteral("searchPageSubtitle"));
+    pageSubtitleLabel->setWordWrap(true);
+
+    titleLayout->addWidget(pageTitleLabel);
+    titleLayout->addWidget(pageSubtitleLabel);
+    topBarLayout->addWidget(titleBlock);
 
     auto* queryRow = new QHBoxLayout();
-    queryInput_ = new QLineEdit(leftPanel);
+    queryRow->setContentsMargins(0, 0, 0, 0);
+    queryRow->setSpacing(10);
+    queryInput_ = new QLineEdit(topBar);
+    queryInput_->setObjectName(QStringLiteral("searchInput"));
     queryInput_->setPlaceholderText(QStringLiteral("输入结论关键词，例如：不等式、对数、导数"));
-    searchButton_ = new QPushButton(QStringLiteral("搜索"), leftPanel);
+    searchButton_ = new QPushButton(QStringLiteral("搜索"), topBar);
+    searchButton_->setObjectName(QStringLiteral("searchButton"));
+    searchButton_->setCursor(Qt::PointingHandCursor);
     queryRow->addWidget(queryInput_, 1);
-    queryRow->addWidget(searchButton_);
-    leftLayout->addLayout(queryRow);
+    queryRow->addWidget(searchButton_, 0);
+    topBarLayout->addLayout(queryRow);
 
-    suggestionList_ = new QListWidget(leftPanel);
-    suggestionList_->setMaximumHeight(140);
+    suggestionList_ = new QListWidget(topBar);
+    suggestionList_->setObjectName(QStringLiteral("searchSuggestionList"));
+    suggestionList_->setMaximumHeight(150);
     suggestionList_->setVisible(false);
-    leftLayout->addWidget(suggestionList_);
+    topBarLayout->addWidget(suggestionList_);
+    mainLayout->addWidget(topBar);
 
-    auto* filterBox = new QGroupBox(QStringLiteral("筛选与排序"), leftPanel);
-    auto* filterLayout = new QFormLayout(filterBox);
-    moduleFilterCombo_ = new QComboBox(filterBox);
-    categoryFilterCombo_ = new QComboBox(filterBox);
-    tagFilterCombo_ = new QComboBox(filterBox);
-    sortCombo_ = new QComboBox(filterBox);
-    clearFiltersButton_ = new QPushButton(QStringLiteral("清空筛选"), filterBox);
+    auto* workbench = new QWidget(this);
+    workbench->setObjectName(QStringLiteral("searchWorkbench"));
+    workbench->setAttribute(Qt::WA_StyledBackground, true);
+    auto* workbenchLayout = new QVBoxLayout(workbench);
+    workbenchLayout->setContentsMargins(0, 0, 0, 0);
+    workbenchLayout->setSpacing(0);
+
+    auto* splitter = new QSplitter(Qt::Horizontal, workbench);
+    splitter->setObjectName(QStringLiteral("searchWorkbenchSplitter"));
+    splitter->setChildrenCollapsible(false);
+    splitter->setHandleWidth(1);
+
+    auto* leftPanel = new QWidget(splitter);
+    leftPanel->setObjectName(QStringLiteral("searchLeftColumn"));
+    auto* leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(ui::style::tokens::kMediumSpacing);
+
+    auto* filterPanel = new QWidget(leftPanel);
+    filterPanel->setObjectName(QStringLiteral("searchFilterPanel"));
+    filterPanel->setAttribute(Qt::WA_StyledBackground, true);
+    auto* filterPanelLayout = new QVBoxLayout(filterPanel);
+    filterPanelLayout->setContentsMargins(14, 12, 14, 12);
+    filterPanelLayout->setSpacing(10);
+
+    auto* filterTitle = new QLabel(QStringLiteral("筛选与排序"), filterPanel);
+    filterTitle->setObjectName(QStringLiteral("searchFilterTitle"));
+    filterPanelLayout->addWidget(filterTitle);
+
+    auto* filterLayout = new QFormLayout();
+    filterLayout->setContentsMargins(0, 0, 0, 0);
+    filterLayout->setHorizontalSpacing(10);
+    filterLayout->setVerticalSpacing(8);
+    moduleFilterCombo_ = new QComboBox(filterPanel);
+    categoryFilterCombo_ = new QComboBox(filterPanel);
+    tagFilterCombo_ = new QComboBox(filterPanel);
+    sortCombo_ = new QComboBox(filterPanel);
+    moduleFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
+    categoryFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
+    tagFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
+    sortCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
+    clearFiltersButton_ = new QPushButton(QStringLiteral("清空筛选"), filterPanel);
+    clearFiltersButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
+    clearFiltersButton_->setCursor(Qt::PointingHandCursor);
 
     sortCombo_->addItem(QStringLiteral("按相关度"), static_cast<int>(SortMode::ScoreDesc));
     sortCombo_->addItem(QStringLiteral("按标题 A-Z"), static_cast<int>(SortMode::TitleAsc));
@@ -482,38 +566,118 @@ void SearchPage::buildUi()
     filterLayout->addRow(QStringLiteral("标签"), tagFilterCombo_);
     filterLayout->addRow(QStringLiteral("排序"), sortCombo_);
     filterLayout->addRow(clearFiltersButton_);
-    leftLayout->addWidget(filterBox);
+    filterPanelLayout->addLayout(filterLayout);
+    leftLayout->addWidget(filterPanel);
 
-    statusLabel_ = new QLabel(leftPanel);
-    summaryLabel_ = new QLabel(leftPanel);
-    leftLayout->addWidget(statusLabel_);
-    leftLayout->addWidget(summaryLabel_);
+    auto* resultPanel = new QWidget(leftPanel);
+    resultPanel->setObjectName(QStringLiteral("searchResultsPanel"));
+    resultPanel->setAttribute(Qt::WA_StyledBackground, true);
+    auto* resultLayout = new QVBoxLayout(resultPanel);
+    resultLayout->setContentsMargins(14, 12, 14, 12);
+    resultLayout->setSpacing(8);
 
-    auto* resultBox = new QGroupBox(QStringLiteral("搜索结果"), leftPanel);
-    auto* resultLayout = new QVBoxLayout(resultBox);
-    resultList_ = new QListWidget(resultBox);
-    resultLayout->addWidget(resultList_);
-    leftLayout->addWidget(resultBox, 1);
+    auto* resultTitleLabel = new QLabel(QStringLiteral("搜索结果"), resultPanel);
+    resultTitleLabel->setObjectName(QStringLiteral("searchResultsTitle"));
+    resultLayout->addWidget(resultTitleLabel);
 
-    auto* rightPanel = new QWidget(splitter);
-    auto* rightLayout = new QVBoxLayout(rightPanel);
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(8);
+    statusLabel_ = new QLabel(resultPanel);
+    statusLabel_->setObjectName(QStringLiteral("searchStatusLabel"));
+    statusLabel_->setWordWrap(true);
+    summaryLabel_ = new QLabel(resultPanel);
+    summaryLabel_->setObjectName(QStringLiteral("searchSummaryLabel"));
+    summaryLabel_->setWordWrap(true);
+    resultLayout->addWidget(statusLabel_);
+    resultLayout->addWidget(summaryLabel_);
 
-    rightLayout->addWidget(new QLabel(QStringLiteral("详情"), rightPanel));
-    detailWebView_ = new QWebEngineView(rightPanel);
+    resultList_ = new QListWidget(resultPanel);
+    resultList_->setObjectName(QStringLiteral("resultList"));
+    resultList_->setSelectionMode(QAbstractItemView::SingleSelection);
+    resultList_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    resultList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    resultList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    resultList_->setWordWrap(true);
+    resultLayout->addWidget(resultList_, 1);
+
+    resultEmptyState_ = new QWidget(resultPanel);
+    resultEmptyState_->setObjectName(QStringLiteral("emptyState"));
+    auto* resultEmptyLayout = new QVBoxLayout(resultEmptyState_);
+    resultEmptyLayout->setContentsMargins(12, 16, 12, 16);
+    resultEmptyLayout->setSpacing(6);
+    resultEmptyLayout->addStretch(1);
+
+    resultEmptyTitleLabel_ = new QLabel(QStringLiteral("开始搜索"), resultEmptyState_);
+    resultEmptyTitleLabel_->setObjectName(QStringLiteral("emptyStateTitle"));
+    resultEmptyTitleLabel_->setAlignment(Qt::AlignHCenter);
+    resultEmptyDescriptionLabel_ = new QLabel(QStringLiteral("输入关键词后在这里查看匹配结果。"), resultEmptyState_);
+    resultEmptyDescriptionLabel_->setObjectName(QStringLiteral("emptyStateDescription"));
+    resultEmptyDescriptionLabel_->setAlignment(Qt::AlignHCenter);
+    resultEmptyDescriptionLabel_->setWordWrap(true);
+
+    resultEmptyLayout->addWidget(resultEmptyTitleLabel_);
+    resultEmptyLayout->addWidget(resultEmptyDescriptionLabel_);
+    resultEmptyLayout->addStretch(2);
+    resultLayout->addWidget(resultEmptyState_, 1);
+    resultEmptyState_->setVisible(false);
+
+    leftLayout->addWidget(resultPanel, 1);
+
+    auto* detailShell = new QWidget(splitter);
+    detailShell->setObjectName(QStringLiteral("detailShell"));
+    detailShell->setAttribute(Qt::WA_StyledBackground, true);
+    auto* rightLayout = new QVBoxLayout(detailShell);
+    rightLayout->setContentsMargins(14, 12, 14, 12);
+    rightLayout->setSpacing(10);
+
+    auto* detailHeader = new QWidget(detailShell);
+    detailHeader->setObjectName(QStringLiteral("detailShellHeader"));
+    auto* detailHeaderLayout = new QHBoxLayout(detailHeader);
+    detailHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    detailHeaderLayout->setSpacing(8);
+
+    auto* detailHeaderLeft = new QWidget(detailHeader);
+    auto* detailHeaderLeftLayout = new QVBoxLayout(detailHeaderLeft);
+    detailHeaderLeftLayout->setContentsMargins(0, 0, 0, 0);
+    detailHeaderLeftLayout->setSpacing(2);
+
+    auto* detailTitle = new QLabel(QStringLiteral("详情预览"), detailHeaderLeft);
+    detailTitle->setObjectName(QStringLiteral("detailShellTitle"));
+    detailMetaLabel_ = new QLabel(QStringLiteral("等待选择结果"), detailHeaderLeft);
+    detailMetaLabel_->setObjectName(QStringLiteral("detailShellMeta"));
+    detailMetaLabel_->setProperty("tone", QStringLiteral("neutral"));
+    detailMetaLabel_->setWordWrap(true);
+    detailHeaderLeftLayout->addWidget(detailTitle);
+    detailHeaderLeftLayout->addWidget(detailMetaLabel_);
+
+    detailTimingLabel_ = new QLabel(detailHeader);
+    detailTimingLabel_->setObjectName(QStringLiteral("detailPerfLabel"));
+    detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    detailTimingLabel_->setProperty("timingState", QStringLiteral("idle"));
+
+    detailHeaderLayout->addWidget(detailHeaderLeft, 1);
+    detailHeaderLayout->addWidget(detailTimingLabel_, 0, Qt::AlignTop);
+    rightLayout->addWidget(detailHeader);
+
+    auto* detailBody = new QWidget(detailShell);
+    detailBody->setObjectName(QStringLiteral("detailShellBody"));
+    detailBody->setAttribute(Qt::WA_StyledBackground, true);
+    auto* detailBodyLayout = new QVBoxLayout(detailBody);
+    detailBodyLayout->setContentsMargins(10, 10, 10, 10);
+    detailBodyLayout->setSpacing(0);
+
+    detailWebView_ = new QWebEngineView(detailBody);
+    detailWebView_->setObjectName(QStringLiteral("detailWebView"));
     detailWebView_->setVisible(false);
-    rightLayout->addWidget(detailWebView_, 1);
+    detailBodyLayout->addWidget(detailWebView_, 1);
 
-    detailBrowser_ = new QTextBrowser(rightPanel);
+    detailBrowser_ = new QTextBrowser(detailBody);
+    detailBrowser_->setObjectName(QStringLiteral("detailFallbackView"));
     detailBrowser_->setOpenExternalLinks(false);
     detailBrowser_->setVisible(false);
-    rightLayout->addWidget(detailBrowser_, 1);
+    detailBodyLayout->addWidget(detailBrowser_, 1);
 
-    detailTimingLabel_ = new QLabel(rightPanel);
-    detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    rightLayout->addWidget(detailTimingLabel_);
+    rightLayout->addWidget(detailBody, 1);
     updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);
+    updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
 
     webDetailEnabled_ = detailHtmlRenderer_ != nullptr && detailHtmlRenderer_->isReady();
     if (webDetailEnabled_) {
@@ -536,12 +700,13 @@ void SearchPage::buildUi()
     }
 
     splitter->addWidget(leftPanel);
-    splitter->addWidget(rightPanel);
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 1);
-    splitter->setSizes({560, 760});
+    splitter->addWidget(detailShell);
+    splitter->setStretchFactor(0, 10);
+    splitter->setStretchFactor(1, 12);
+    splitter->setSizes({600, 760});
 
-    mainLayout->addWidget(splitter, 1);
+    workbenchLayout->addWidget(splitter, 1);
+    mainLayout->addWidget(workbench, 1);
 }
 
 void SearchPage::connectSignals()
@@ -650,7 +815,9 @@ void SearchPage::resetToEmptyState()
 {
     updateStatusLine(QStringLiteral("请输入关键词开始搜索。"),
                      QStringLiteral("支持实时建议、模块/分类/标签筛选、结果详情联动。"));
+    updateResultEmptyState(QStringLiteral("开始搜索"), QStringLiteral("输入关键词后在这里查看匹配结果。"));
     resetDetailTimingSessions(true);
+    updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
     showDetailPlaceholder(QStringLiteral("左侧输入关键词后可查看搜索结果和详情。"));
 }
 
@@ -662,6 +829,37 @@ void SearchPage::updateStatusLine(const QString& status, const QString& summary)
     if (summaryLabel_ != nullptr) {
         summaryLabel_->setText(summary);
     }
+}
+
+void SearchPage::updateResultEmptyState(const QString& title, const QString& description)
+{
+    if (resultEmptyTitleLabel_ != nullptr) {
+        resultEmptyTitleLabel_->setText(title.trimmed().isEmpty() ? QStringLiteral("暂无结果") : title.trimmed());
+    }
+    if (resultEmptyDescriptionLabel_ != nullptr) {
+        resultEmptyDescriptionLabel_->setText(description.trimmed().isEmpty()
+                                                  ? QStringLiteral("请尝试调整关键词或筛选条件。")
+                                                  : description.trimmed());
+    }
+
+    const bool shouldShowEmpty = (resultList_ != nullptr && resultList_->count() == 0);
+    if (resultList_ != nullptr) {
+        resultList_->setVisible(!shouldShowEmpty);
+    }
+    if (resultEmptyState_ != nullptr) {
+        resultEmptyState_->setVisible(shouldShowEmpty);
+    }
+}
+
+void SearchPage::updateDetailShellMeta(const QString& text, const QString& tone)
+{
+    if (detailMetaLabel_ == nullptr) {
+        return;
+    }
+
+    detailMetaLabel_->setText(text.trimmed().isEmpty() ? QStringLiteral("等待选择结果") : text.trimmed());
+    detailMetaLabel_->setProperty("tone", tone.trimmed().isEmpty() ? QStringLiteral("neutral") : tone.trimmed());
+    repolishWidget(detailMetaLabel_);
 }
 
 void SearchPage::runSuggest(const QString& query)
@@ -797,6 +995,8 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                              .arg(normalizedQuery)
                              .arg(elapsedMs)
                              .arg(filterSummary));
+        updateResultEmptyState(QStringLiteral("没有匹配结果"),
+                               QStringLiteral("建议尝试更短关键词，或清空筛选后重试。"));
         showDetailPlaceholder(QStringLiteral("没有找到相关结论。建议尝试更短关键词或清空筛选。"));
 
         LOG_INFO(LogCategory::PerfSearch,
@@ -813,6 +1013,7 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                          .arg(currentHits_.size())
                          .arg(elapsedMs)
                          .arg(filterSummary));
+    updateResultEmptyState(QString(), QString());
 
     LOG_INFO(LogCategory::PerfSearch,
              QStringLiteral("event=search_done query=%1 total=%2 elapsed_ms=%3 trigger=%4")
@@ -842,19 +1043,29 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
     }
 
     resultList_->clear();
+    if (hits.isEmpty()) {
+        updateResultEmptyState(QStringLiteral("暂无搜索结果"),
+                               QStringLiteral("输入关键词后在这里查看匹配结论。"));
+        return;
+    }
+
     for (const domain::models::SearchHit& hit : hits) {
         const QString titleText = hit.title.trimmed().isEmpty() ? hit.docId : hit.title;
-        const QString tagsText = hit.tags.isEmpty() ? QStringLiteral("-") : hit.tags.mid(0, 6).join(QStringLiteral(", "));
-        const QString lineText =
-            QStringLiteral("%1\nmodule=%2 | category=%3 | tags=%4 | score=%5")
-                .arg(titleText,
-                     hit.module,
-                     hit.category,
-                     tagsText,
-                     QString::number(hit.score, 'f', 2));
+        const QString moduleText = hit.module.trimmed().isEmpty() ? QStringLiteral("未标注模块") : hit.module.trimmed();
+        const QString categoryText = hit.category.trimmed().isEmpty() ? QStringLiteral("未标注分类") : hit.category.trimmed();
+        const QString difficultyText = QStringLiteral("难度 %1").arg(QString::number(hit.difficulty, 'f', 1));
+        const QString tagsText = hit.tags.isEmpty() ? QStringLiteral("-") : hit.tags.mid(0, 6).join(QStringLiteral(" / "));
+        const QString lineText = QStringLiteral("%1\n%2 | %3 | %4\n标签: %5 | 相关度: %6")
+                                     .arg(titleText,
+                                          moduleText,
+                                          categoryText,
+                                          difficultyText,
+                                          tagsText,
+                                          QString::number(hit.score, 'f', 2));
 
         auto* item = new QListWidgetItem(lineText, resultList_);
         item->setData(kResultItemDocIdRole, hit.docId);
+        item->setSizeHint(QSize(item->sizeHint().width(), 76));
 
         if (contentReady_ && contentRepository_ != nullptr) {
             const auto* record = contentRepository_->getById(hit.docId);
@@ -872,6 +1083,8 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
             }
         }
     }
+
+    updateResultEmptyState(QString(), QString());
 }
 
 void SearchPage::enqueueDetailRenderRequest(const QString& docId)
@@ -1172,6 +1385,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
                                         ? QStringLiteral("请选择一条结果查看详情。")
                                         : message.trimmed();
     resetDetailTimingSessions(true);
+    updateDetailShellMeta(detailMetaTextForPlaceholder(fallbackMessage), QStringLiteral("neutral"));
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->clearRenderedDetail();
     }
@@ -1198,6 +1412,7 @@ void SearchPage::showDetailError(const QString& message)
     const QString fallbackMessage = message.trimmed().isEmpty()
                                         ? QStringLiteral("详情暂时无法显示。")
                                         : message.trimmed();
+    updateDetailShellMeta(fallbackMessage, QStringLiteral("error"));
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->clearRenderedDetail();
     }
@@ -1268,6 +1483,7 @@ void SearchPage::startDetailTimingSession(const QString& docId, quint64 requestI
     detailTimingSessions_.insert(requestId, session);
     activeDetailTimingRequestId_ = requestId;
     updateDetailTimingLabel(kDetailTimingLoadingText, kDetailTimingColorLoading);
+    updateDetailShellMeta(QStringLiteral("正在加载详情..."), QStringLiteral("loading"));
 
     logDetailPerf(normalizedDocId, requestId, selectionTimestampMs, QStringLiteral("request_start"));
 
@@ -1328,6 +1544,7 @@ void SearchPage::markDetailTimingFailed(const QString& docId,
 
     Q_UNUSED(reason);
     updateDetailTimingLabel(kDetailTimingFailedText, kDetailTimingColorFailed);
+    updateDetailShellMeta(QStringLiteral("详情加载失败"), QStringLiteral("error"));
 }
 
 void SearchPage::markDetailTimingSuccess(const QString& docId, quint64 requestId, qint64 selectionTimestampMs)
@@ -1394,6 +1611,7 @@ void SearchPage::markDetailTimingSuccess(const QString& docId, quint64 requestId
     }
 #endif
     updateDetailTimingLabel(statusText, kDetailTimingColorSuccess);
+    updateDetailShellMeta(QStringLiteral("详情已就绪"), QStringLiteral("success"));
 
     logDetailPerf(it->detailId,
                   requestId,
@@ -1535,8 +1753,17 @@ void SearchPage::updateDetailTimingLabel(const QString& text, const QString& col
     detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     const QString normalizedColor = colorHex.trimmed().isEmpty() ? kDetailTimingColorIdle : colorHex.trimmed();
-    detailTimingLabel_->setStyleSheet(
-        QStringLiteral("QLabel { color: %1; font-size: 12px; padding: 2px 6px; }").arg(normalizedColor));
+    QString timingState = QStringLiteral("idle");
+    if (normalizedColor == kDetailTimingColorLoading) {
+        timingState = QStringLiteral("loading");
+    } else if (normalizedColor == kDetailTimingColorSuccess) {
+        timingState = QStringLiteral("success");
+    } else if (normalizedColor == kDetailTimingColorFailed) {
+        timingState = QStringLiteral("failed");
+    }
+
+    detailTimingLabel_->setProperty("timingState", timingState);
+    repolishWidget(detailTimingLabel_);
 }
 
 bool SearchPage::lookupCachedDetail(const QString& docId,
@@ -1705,6 +1932,7 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setVisible(true);
     }
+    updateDetailShellMeta(QStringLiteral("已切换到兼容详情模式"), QStringLiteral("warning"));
 }
 
 void SearchPage::applySort(QVector<domain::models::SearchHit>* hits) const

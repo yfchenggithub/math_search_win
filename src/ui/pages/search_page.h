@@ -103,6 +103,8 @@ private:
     void rebuildFilterOptions();
     void resetToEmptyState();
     void updateStatusLine(const QString& status, const QString& summary = QString());
+    void updateResultEmptyState(const QString& title, const QString& description);
+    void updateDetailShellMeta(const QString& text, const QString& tone = QString());
 
     void runSuggest(const QString& query);
     void runSearch(const QString& query, const QString& triggerSource);
@@ -199,6 +201,7 @@ private:
     QPushButton* searchButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
+    QLabel* detailMetaLabel_ = nullptr;
     QLabel* detailTimingLabel_ = nullptr;
     QListWidget* suggestionList_ = nullptr;
     QComboBox* moduleFilterCombo_ = nullptr;
@@ -207,6 +210,9 @@ private:
     QComboBox* sortCombo_ = nullptr;
     QPushButton* clearFiltersButton_ = nullptr;
     QListWidget* resultList_ = nullptr;
+    QWidget* resultEmptyState_ = nullptr;
+    QLabel* resultEmptyTitleLabel_ = nullptr;
+    QLabel* resultEmptyDescriptionLabel_ = nullptr;
     QTimer* detailSelectionCoalesceTimer_ = nullptr;
     QWebEngineView* detailWebView_ = nullptr;
     QTextBrowser* detailBrowser_ = nullptr;

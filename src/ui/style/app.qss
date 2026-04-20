@@ -9,6 +9,7 @@
 QWidget#recentSearchPage,
 QWidget#favoritesPage,
 QWidget#homePage,
+QWidget#searchPage,
 QWidget#futureHomePage,
 QWidget#futureSearchPage {
     background-color: #f5f6f8;
@@ -618,4 +619,333 @@ QLabel#homeFooterMeta {
     color: #96a0aa;
     font-size: 12px;
     font-weight: 400;
+}
+
+/* --------------------------------------------------------------
+   Search Workbench (SearchPage)
+   -------------------------------------------------------------- */
+QWidget#searchPage {
+    background-color: #f5f6f8;
+}
+
+QWidget#searchTopBar {
+    border: 1px solid #e4e9ef;
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+QLabel#searchPageTitle {
+    color: #1f242b;
+    font-size: 23px;
+    font-weight: 620;
+}
+
+QLabel#searchPageSubtitle {
+    color: #727d89;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QLineEdit#searchInput {
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid #d8e0e8;
+    border-radius: 12px;
+    background-color: #fbfcfe;
+    color: #212931;
+    font-size: 14px;
+}
+
+QLineEdit#searchInput:hover {
+    border-color: #cad5e0;
+    background-color: #ffffff;
+}
+
+QLineEdit#searchInput:focus {
+    border-color: #6d97de;
+    background-color: #ffffff;
+}
+
+QPushButton#searchButton {
+    min-width: 96px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid #3b76d2;
+    background-color: #4d88e2;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 610;
+}
+
+QPushButton#searchButton:hover {
+    border-color: #336dc8;
+    background-color: #417edf;
+}
+
+QPushButton#searchButton:pressed {
+    border-color: #2f64b9;
+    background-color: #3773d0;
+}
+
+QPushButton#searchButton:focus {
+    border-color: #2d61b3;
+}
+
+QListWidget#searchSuggestionList {
+    border: 1px solid #e4e9ef;
+    border-radius: 12px;
+    background-color: #fbfcfe;
+    color: #2b333d;
+    padding: 6px;
+    outline: none;
+}
+
+QListWidget#searchSuggestionList::item {
+    padding: 8px 10px;
+    margin: 2px 0;
+    border-radius: 8px;
+    border: 1px solid transparent;
+}
+
+QListWidget#searchSuggestionList::item:hover {
+    background-color: #f1f5fa;
+    border-color: #dde5ee;
+}
+
+QListWidget#searchSuggestionList::item:selected {
+    background-color: #e9f1fc;
+    border-color: #c8d8ee;
+    color: #233140;
+}
+
+QWidget#searchWorkbench {
+    background: transparent;
+}
+
+QSplitter#searchWorkbenchSplitter::handle {
+    background: #e2e7ed;
+    margin: 6px 0;
+}
+
+QWidget#searchFilterPanel,
+QWidget#searchResultsPanel,
+QWidget#detailShell {
+    border: 1px solid #e3e8ee;
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+QWidget#searchFilterPanel QLabel {
+    color: #65707c;
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+}
+
+QLabel#searchFilterTitle,
+QLabel#searchResultsTitle,
+QLabel#detailShellTitle {
+    color: #232a32;
+    font-size: 15px;
+    font-weight: 610;
+}
+
+QComboBox#searchFilterCombo {
+    min-height: 34px;
+    padding: 0 34px 0 12px;
+    border: 1px solid #d9e1e9;
+    border-radius: 10px;
+    background-color: #ffffff;
+    color: #2f353c;
+    font-size: 13px;
+}
+
+QComboBox#searchFilterCombo:hover {
+    border-color: #c8d2dd;
+    background-color: #fcfdff;
+}
+
+QComboBox#searchFilterCombo:focus {
+    border-color: #7098df;
+}
+
+QComboBox#searchFilterCombo::drop-down {
+    width: 24px;
+    border: none;
+}
+
+QPushButton#searchClearFiltersButton {
+    min-height: 32px;
+    min-width: 88px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid #d8dee5;
+    background-color: #f8fafc;
+    color: #606974;
+    font-size: 12px;
+    font-weight: 510;
+}
+
+QPushButton#searchClearFiltersButton:hover {
+    border-color: #c8d1db;
+    background-color: #f1f5f8;
+    color: #4f5862;
+}
+
+QPushButton#searchClearFiltersButton:pressed {
+    border-color: #b6c2cf;
+    background-color: #e9eef3;
+}
+
+QLabel#searchStatusLabel {
+    color: #5e6873;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QLabel#searchSummaryLabel {
+    color: #8b95a0;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QListWidget#resultList {
+    border: 1px solid #e7edf3;
+    border-radius: 12px;
+    background-color: #fbfcfd;
+    padding: 6px;
+    outline: none;
+}
+
+QListWidget#resultList::item {
+    margin: 3px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    color: #25303a;
+    background: transparent;
+}
+
+QListWidget#resultList::item:hover {
+    border-color: #d7e1eb;
+    background-color: #f3f7fc;
+}
+
+QListWidget#resultList::item:selected {
+    border-color: #bfd2ea;
+    background-color: #e9f1fc;
+    color: #1e2832;
+}
+
+QWidget#searchResultsPanel QWidget#emptyState {
+    border: 1px dashed #e1e7ef;
+    border-radius: 12px;
+    background-color: #fafbfd;
+}
+
+QWidget#searchResultsPanel QLabel#emptyStateTitle {
+    color: #2f3741;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QWidget#searchResultsPanel QLabel#emptyStateDescription {
+    color: #7c8793;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QWidget#detailShellHeader {
+    border-bottom: 1px solid #edf1f5;
+    background: transparent;
+}
+
+QLabel#detailShellMeta {
+    color: #7f8a96;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QLabel#detailShellMeta[tone="loading"] {
+    color: #7a8591;
+}
+
+QLabel#detailShellMeta[tone="success"] {
+    color: #5f6a75;
+}
+
+QLabel#detailShellMeta[tone="error"] {
+    color: #b06855;
+}
+
+QLabel#detailShellMeta[tone="warning"] {
+    color: #946f3e;
+}
+
+QLabel#detailPerfLabel {
+    color: #8f99a4;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 4px;
+}
+
+QLabel#detailPerfLabel[timingState="loading"] {
+    color: #8e959f;
+}
+
+QLabel#detailPerfLabel[timingState="success"] {
+    color: #5f666f;
+}
+
+QLabel#detailPerfLabel[timingState="failed"] {
+    color: #b06f5a;
+}
+
+QWidget#detailShellBody {
+    border: 1px solid #e8edf3;
+    border-radius: 12px;
+    background-color: #fbfcfd;
+}
+
+QWebEngineView#detailWebView,
+QTextBrowser#detailFallbackView {
+    border: none;
+    background: transparent;
+}
+
+QTextBrowser#detailFallbackView {
+    color: #2a3139;
+    font-size: 13px;
+}
+
+QListWidget#searchSuggestionList QScrollBar:vertical,
+QListWidget#resultList QScrollBar:vertical {
+    width: 10px;
+    margin: 0;
+    background: transparent;
+}
+
+QListWidget#searchSuggestionList QScrollBar::handle:vertical,
+QListWidget#resultList QScrollBar::handle:vertical {
+    min-height: 26px;
+    border-radius: 5px;
+    background: #c5ccd3;
+}
+
+QListWidget#searchSuggestionList QScrollBar::handle:vertical:hover,
+QListWidget#resultList QScrollBar::handle:vertical:hover {
+    background: #adb5be;
+}
+
+QListWidget#searchSuggestionList QScrollBar::add-line:vertical,
+QListWidget#searchSuggestionList QScrollBar::sub-line:vertical,
+QListWidget#searchSuggestionList QScrollBar::add-page:vertical,
+QListWidget#searchSuggestionList QScrollBar::sub-page:vertical,
+QListWidget#resultList QScrollBar::add-line:vertical,
+QListWidget#resultList QScrollBar::sub-line:vertical,
+QListWidget#resultList QScrollBar::add-page:vertical,
+QListWidget#resultList QScrollBar::sub-page:vertical {
+    height: 0;
+    background: transparent;
 }
