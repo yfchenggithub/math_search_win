@@ -21,12 +21,34 @@
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/msvc-debug",
         "CMAKE_PREFIX_PATH": "D:/Qt/6.11.0/msvc2022_64"
       }
+    },
+    {
+      "name": "msvc-release",
+      "displayName": "MSVC Release",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/out/build/msvc-release",
+      "architecture": {
+        "value": "x64"
+      },
+      "toolset": {
+        "value": "host=x64"
+      },
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/msvc-release",
+        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.0/msvc2022_64"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "msvc-debug",
-      "configurePreset": "msvc-debug"
+      "configurePreset": "msvc-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "msvc-release",
+      "configurePreset": "msvc-release",
+      "configuration": "Release"
     }
   ]
 }
