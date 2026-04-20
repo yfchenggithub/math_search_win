@@ -121,7 +121,8 @@ void MainWindow::setupPages()
     pageStack_->addWidget(new FavoritesPage(pageStack_));
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=favorites").arg(UiConstants::kPageFavorites));
-    pageStack_->addWidget(new RecentSearchesPage(pageStack_));
+    recentSearchesPage_ = new RecentSearchesPage(pageStack_);
+    pageStack_->addWidget(recentSearchesPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=recent_searches").arg(UiConstants::kPageRecentSearches));
     pageStack_->addWidget(new SettingsPage(pageStack_));
@@ -130,6 +131,21 @@ void MainWindow::setupPages()
     pageStack_->addWidget(new ActivationPage(pageStack_));
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=activation").arg(UiConstants::kPageActivation));
+
+    if (recentSearchesPage_ != nullptr) {
+        connect(recentSearchesPage_, &RecentSearchesPage::searchRequested, this, [this](const QString& query) {
+            if (searchPage_ == nullptr) {
+                return;
+            }
+
+            switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("recent_search_item"));
+            searchPage_->triggerSearchFromRecent(query);
+        });
+
+        connect(recentSearchesPage_, &RecentSearchesPage::navigateToSearchRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("recent_empty_action"));
+        });
+    }
 
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("setup_pages done page_count=%1").arg(pageStack_->count()));
 }
@@ -241,6 +257,10 @@ void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
     topBar_->setPageTitle(titleForPage(pageIndex), subtitleForPage(pageIndex));
     currentPageIndex_ = pageIndex;
 
+    if (pageIndex == UiConstants::kPageRecentSearches && recentSearchesPage_ != nullptr) {
+        recentSearchesPage_->reloadData();
+    }
+
     const QString triggerText = trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed();
     const QString message = QStringLiteral("page switched from=%1 to=%2 trigger=%3")
                                 .arg(fromPage.isEmpty() ? QStringLiteral("unknown") : fromPage, toPage, triggerText);
@@ -301,7 +321,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageFavorites:
         return QStringLiteral("收藏列表静态占位");
     case UiConstants::kPageRecentSearches:
-        return QStringLiteral("最近搜索静态占位");
+        return QStringLiteral("快速回访近期检索内容");
     case UiConstants::kPageSettings:
         return QStringLiteral("设置与帮助信息占位");
     case UiConstants::kPageActivation:

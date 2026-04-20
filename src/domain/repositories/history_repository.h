@@ -19,6 +19,7 @@ public:
 
     void addQuery(const QString& query, const QString& source = QStringLiteral("manual"));
     QList<domain::models::SearchHistoryItem> recentItems(int limit = 20) const;
+    bool removeQuery(const QString& query);
 
     void clear();
     int count() const;
@@ -45,4 +46,3 @@ private:
 };
 
 }  // namespace domain::repositories
-

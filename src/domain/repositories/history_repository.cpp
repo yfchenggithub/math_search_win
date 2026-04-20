@@ -191,6 +191,26 @@ QList<domain::models::SearchHistoryItem> HistoryRepository::recentItems(int limi
     return items_.mid(0, limit);
 }
 
+bool HistoryRepository::removeQuery(const QString& query)
+{
+    const QString queryKey = normalizeQueryKey(query);
+    if (queryKey.isEmpty() || items_.isEmpty()) {
+        return false;
+    }
+
+    for (qsizetype i = 0; i < items_.size(); ++i) {
+        if (normalizeQueryKey(items_.at(i).query) != queryKey) {
+            continue;
+        }
+
+        items_.removeAt(i);
+        persistIfNeeded();
+        return true;
+    }
+
+    return false;
+}
+
 void HistoryRepository::clear()
 {
     if (items_.isEmpty()) {

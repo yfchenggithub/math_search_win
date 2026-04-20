@@ -60,6 +60,8 @@ add_executable(math_search_win
     src/ui/widgets/top_bar.cpp
     src/ui/widgets/bottom_status_bar.h
     src/ui/widgets/bottom_status_bar.cpp
+    src/ui/widgets/recent_search_item_widget.h
+    src/ui/widgets/recent_search_item_widget.cpp
     src/ui/pages/home_page.h
     src/ui/pages/home_page.cpp
     src/ui/pages/search_page.h

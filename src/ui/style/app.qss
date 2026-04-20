@@ -1,0 +1,254 @@
+QWidget#RecentSearchPage {
+    background-color: #f5f6f8;
+    color: #20252b;
+    font-family: "Microsoft YaHei UI";
+}
+
+QWidget#recentHeaderWidget {
+    background: transparent;
+}
+
+QLabel#recentPageTitleLabel {
+    color: #1f242b;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+QLabel#recentPageSubtitleLabel {
+    color: #737c86;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QLabel#recentSummaryLabel {
+    color: #8a9199;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QPushButton#recentClearAllButton {
+    min-height: 36px;
+    min-width: 92px;
+    padding: 0 14px;
+    border-radius: 11px;
+    border: 1px solid #d8dee5;
+    background-color: #f8fafc;
+    color: #5e6771;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton#recentClearAllButton:hover {
+    border-color: #c8d1db;
+    background-color: #f1f5f8;
+    color: #505861;
+}
+
+QPushButton#recentClearAllButton:pressed {
+    background-color: #e9eef3;
+    border-color: #b6c2cf;
+}
+
+QPushButton#recentClearAllButton:disabled {
+    border-color: #e3e7ec;
+    background-color: #f7f9fb;
+    color: #b4bbc3;
+}
+
+QPushButton#recentClearAllButton:focus {
+    border-color: #7ea9f8;
+}
+
+QScrollArea#recentScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollArea#recentScrollArea QWidget#qt_scrollarea_viewport {
+    background: transparent;
+}
+
+QWidget#recentListContainer {
+    background: transparent;
+}
+
+RecentSearchItemWidget#recentSearchItemWidget {
+    border: 1px solid #e8ecf0;
+    border-radius: 15px;
+    background-color: #ffffff;
+}
+
+RecentSearchItemWidget#recentSearchItemWidget[hovered="true"] {
+    border-color: #d8e1e9;
+    background-color: #fcfdff;
+}
+
+RecentSearchItemWidget#recentSearchItemWidget[pressed="true"] {
+    border-color: #ccd8e3;
+    background-color: #f3f7fa;
+}
+
+RecentSearchItemWidget#recentSearchItemWidget[focused="true"] {
+    border-color: #77a0ef;
+}
+
+QLabel#recentSearchQueryLabel {
+    color: #242a31;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QLabel#recentSearchTimeLabel {
+    color: #7a828b;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QLabel#recentSearchMetaLabel {
+    color: #959ca4;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QPushButton#recentSearchPrimaryButton {
+    min-height: 34px;
+    min-width: 88px;
+    padding: 0 14px;
+    border-radius: 11px;
+    border: 1px solid #3c77d4;
+    background-color: #4e8be8;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton#recentSearchPrimaryButton:hover {
+    border-color: #336dc9;
+    background-color: #407fdf;
+}
+
+QPushButton#recentSearchPrimaryButton:pressed {
+    border-color: #2f64b9;
+    background-color: #3573d1;
+}
+
+QPushButton#recentSearchPrimaryButton:focus {
+    border-color: #2d62b6;
+}
+
+QPushButton#recentSearchPrimaryButton:disabled {
+    border-color: #9bb8df;
+    background-color: #b9cde8;
+    color: #eff5fb;
+}
+
+QPushButton#recentSearchDangerButton {
+    min-height: 34px;
+    min-width: 64px;
+    padding: 0 12px;
+    border-radius: 11px;
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: #98a0a9;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton#recentSearchDangerButton:hover {
+    border-color: #f3cccc;
+    background-color: #fff4f4;
+    color: #cb5a5a;
+}
+
+QPushButton#recentSearchDangerButton:pressed {
+    border-color: #efb4b4;
+    background-color: #ffeaea;
+    color: #bb4d4d;
+}
+
+QPushButton#recentSearchDangerButton:focus {
+    border-color: #e7c0c0;
+}
+
+QPushButton#recentSearchDangerButton:disabled {
+    color: #c4c9cf;
+}
+
+QWidget#recentEmptyStateWidget {
+    background: transparent;
+}
+
+QWidget#recentEmptyStateCard {
+    min-width: 420px;
+    border-radius: 16px;
+    border: 1px solid #e6eaee;
+    background-color: #ffffff;
+}
+
+QLabel#recentEmptyTitleLabel {
+    color: #2a3037;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+QLabel#recentEmptyDescriptionLabel {
+    color: #7d858e;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QPushButton#recentEmptyActionButton {
+    min-height: 36px;
+    min-width: 96px;
+    padding: 0 14px;
+    border-radius: 11px;
+    border: 1px solid #3c77d4;
+    background-color: #4e8be8;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton#recentEmptyActionButton:hover {
+    border-color: #336dc9;
+    background-color: #407fdf;
+}
+
+QPushButton#recentEmptyActionButton:pressed {
+    border-color: #2f64b9;
+    background-color: #3573d1;
+}
+
+QPushButton#recentEmptyActionButton:focus {
+    border-color: #2d62b6;
+}
+
+QPushButton#recentEmptyActionButton:disabled {
+    border-color: #9bb8df;
+    background-color: #b9cde8;
+    color: #eff5fb;
+}
+
+QScrollArea#recentScrollArea QScrollBar:vertical {
+    width: 10px;
+    margin: 0;
+    background: transparent;
+}
+
+QScrollArea#recentScrollArea QScrollBar::handle:vertical {
+    min-height: 26px;
+    border-radius: 5px;
+    background: #c5ccd3;
+}
+
+QScrollArea#recentScrollArea QScrollBar::handle:vertical:hover {
+    background: #adb5be;
+}
+
+QScrollArea#recentScrollArea QScrollBar::add-line:vertical,
+QScrollArea#recentScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#recentScrollArea QScrollBar::add-page:vertical,
+QScrollArea#recentScrollArea QScrollBar::sub-page:vertical {
+    height: 0;
+    background: transparent;
+}
