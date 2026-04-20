@@ -4,10 +4,10 @@
 #include "core/logging/logger.h"
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "ui/style/app_style.h"
 #include "ui/widgets/favorites/favorite_item_card.h"
 
 #include <QComboBox>
-#include <QDate>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -22,7 +22,6 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <cmath>
 #include <utility>
 
 namespace {
@@ -65,7 +64,9 @@ FavoritesPage::FavoritesPage(const infrastructure::data::ConclusionContentReposi
                              QWidget* parent)
     : QWidget(parent), contentRepository_(contentRepository), indexRepository_(indexRepository)
 {
-    setObjectName(QStringLiteral("FavoritesPage"));
+    ui::style::ensureAppStyleSheetLoaded();
+    setObjectName(QStringLiteral("favoritesPage"));
+    setProperty("pageRole", QStringLiteral("favorites"));
     setupUi();
     setupConnections();
     reloadData();
@@ -101,42 +102,45 @@ void FavoritesPage::reloadData()
 void FavoritesPage::setupUi()
 {
     rootLayout_ = new QVBoxLayout(this);
-    rootLayout_->setContentsMargins(24, 24, 24, 24);
-    rootLayout_->setSpacing(18);
+    rootLayout_->setContentsMargins(ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin);
+    rootLayout_->setSpacing(ui::style::tokens::kPageSectionSpacing);
 
     headerWidget_ = new QWidget(this);
-    headerWidget_->setObjectName(QStringLiteral("favoritesHeaderWidget"));
+    headerWidget_->setObjectName(QStringLiteral("pageHeader"));
     auto* headerLayout = new QVBoxLayout(headerWidget_);
     headerLayout->setContentsMargins(0, 0, 0, 0);
     headerLayout->setSpacing(8);
 
     titleLabel_ = new QLabel(QStringLiteral("我的收藏"), headerWidget_);
-    titleLabel_->setObjectName(QStringLiteral("favoritesPageTitleLabel"));
+    titleLabel_->setObjectName(QStringLiteral("pageTitleLabel"));
 
     subtitleLabel_ = new QLabel(QStringLiteral("沉淀常用二级结论，形成稳定可复习的知识资产。"), headerWidget_);
-    subtitleLabel_->setObjectName(QStringLiteral("favoritesPageSubtitleLabel"));
+    subtitleLabel_->setObjectName(QStringLiteral("pageSubtitleLabel"));
 
     headerLayout->addWidget(titleLabel_);
     headerLayout->addWidget(subtitleLabel_);
     rootLayout_->addWidget(headerWidget_);
 
     toolbarWidget_ = new QWidget(this);
-    toolbarWidget_->setObjectName(QStringLiteral("favoritesToolbarWidget"));
+    toolbarWidget_->setObjectName(QStringLiteral("pageToolbar"));
     auto* toolbarLayout = new QHBoxLayout(toolbarWidget_);
     toolbarLayout->setContentsMargins(14, 12, 14, 12);
     toolbarLayout->setSpacing(10);
 
     summaryLabel_ = new QLabel(QStringLiteral("共 0 条收藏"), toolbarWidget_);
-    summaryLabel_->setObjectName(QStringLiteral("favoritesSummaryLabel"));
+    summaryLabel_->setObjectName(QStringLiteral("pageSummaryLabel"));
 
     sortComboBox_ = new QComboBox(toolbarWidget_);
-    sortComboBox_->setObjectName(QStringLiteral("favoritesSortComboBox"));
+    sortComboBox_->setObjectName(QStringLiteral("toolbarSortCombo"));
     sortComboBox_->addItem(QStringLiteral("最近收藏"), static_cast<int>(SortMode::RecentFirst));
     sortComboBox_->addItem(QStringLiteral("按标题"), static_cast<int>(SortMode::TitleAsc));
     sortComboBox_->addItem(QStringLiteral("按模块"), static_cast<int>(SortMode::ModuleAsc));
 
     filterButton_ = new QPushButton(QStringLiteral("筛选（即将支持）"), toolbarWidget_);
-    filterButton_->setObjectName(QStringLiteral("favoritesFilterButton"));
+    filterButton_->setObjectName(QStringLiteral("toolbarButton"));
     filterButton_->setCursor(Qt::PointingHandCursor);
 
     toolbarLayout->addWidget(summaryLabel_);
@@ -147,23 +151,23 @@ void FavoritesPage::setupUi()
     rootLayout_->addWidget(toolbarWidget_);
 
     scrollArea_ = new QScrollArea(this);
-    scrollArea_->setObjectName(QStringLiteral("favoritesScrollArea"));
+    scrollArea_->setObjectName(QStringLiteral("pageScrollArea"));
     scrollArea_->setFrameShape(QFrame::NoFrame);
     scrollArea_->setWidgetResizable(true);
     scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     cardsContainer_ = new QWidget(scrollArea_);
-    cardsContainer_->setObjectName(QStringLiteral("favoritesCardsContainer"));
+    cardsContainer_->setObjectName(QStringLiteral("pageContentContainer"));
     cardsLayout_ = new QVBoxLayout(cardsContainer_);
     cardsLayout_->setContentsMargins(0, 2, 0, 2);
-    cardsLayout_->setSpacing(12);
+    cardsLayout_->setSpacing(ui::style::tokens::kCardSpacing);
     cardsLayout_->addStretch(1);
 
     scrollArea_->setWidget(cardsContainer_);
     rootLayout_->addWidget(scrollArea_, 1);
 
     emptyStateWidget_ = new QWidget(this);
-    emptyStateWidget_->setObjectName(QStringLiteral("favoritesEmptyStateWidget"));
+    emptyStateWidget_->setObjectName(QStringLiteral("emptyState"));
 
     auto* emptyRootLayout = new QVBoxLayout(emptyStateWidget_);
     emptyRootLayout->setContentsMargins(0, 0, 0, 0);
@@ -171,27 +175,33 @@ void FavoritesPage::setupUi()
     emptyRootLayout->addStretch(2);
 
     auto* emptyCard = new QWidget(emptyStateWidget_);
-    emptyCard->setObjectName(QStringLiteral("favoritesEmptyCard"));
+    emptyCard->setObjectName(QStringLiteral("elevatedCard"));
+    emptyCard->setProperty("cardRole", QStringLiteral("emptyState"));
+    emptyCard->setProperty("emptyVariant", QStringLiteral("favorites"));
+
     auto* emptyCardLayout = new QVBoxLayout(emptyCard);
-    emptyCardLayout->setContentsMargins(32, 28, 32, 28);
+    emptyCardLayout->setContentsMargins(ui::style::tokens::kEmptyCardPaddingHorizontal + 2,
+                                        ui::style::tokens::kEmptyCardPaddingVertical,
+                                        ui::style::tokens::kEmptyCardPaddingHorizontal + 2,
+                                        ui::style::tokens::kEmptyCardPaddingVertical);
     emptyCardLayout->setSpacing(10);
 
     auto* emptyTitleLabel = new QLabel(QStringLiteral("还没有收藏的结论"), emptyCard);
-    emptyTitleLabel->setObjectName(QStringLiteral("favoritesEmptyTitleLabel"));
+    emptyTitleLabel->setObjectName(QStringLiteral("emptyStateTitle"));
     emptyTitleLabel->setAlignment(Qt::AlignCenter);
 
     auto* emptyDescriptionLabel = new QLabel(QStringLiteral("把常用二级结论加入收藏，后续复习会更方便。"), emptyCard);
-    emptyDescriptionLabel->setObjectName(QStringLiteral("favoritesEmptyDescriptionLabel"));
+    emptyDescriptionLabel->setObjectName(QStringLiteral("emptyStateDescription"));
     emptyDescriptionLabel->setAlignment(Qt::AlignCenter);
     emptyDescriptionLabel->setWordWrap(true);
 
     emptyActionButton_ = new QPushButton(QStringLiteral("去搜索"), emptyCard);
-    emptyActionButton_->setObjectName(QStringLiteral("favoritesEmptyActionButton"));
+    emptyActionButton_->setObjectName(QStringLiteral("emptyStatePrimaryButton"));
     emptyActionButton_->setCursor(Qt::PointingHandCursor);
 
     emptyCardLayout->addWidget(emptyTitleLabel);
     emptyCardLayout->addWidget(emptyDescriptionLabel);
-    emptyCardLayout->addSpacing(8);
+    emptyCardLayout->addSpacing(ui::style::tokens::kSmallSpacing);
     emptyCardLayout->addWidget(emptyActionButton_, 0, Qt::AlignHCenter);
 
     emptyRootLayout->addWidget(emptyCard, 0, Qt::AlignHCenter);
@@ -341,7 +351,7 @@ void FavoritesPage::updateEmptyState()
     }
 
     QString summary = QStringLiteral("共 %1 条收藏").arg(items_.size());
-    const QString latestTimeText = formatFavoriteTime(latestFavoriteTime);
+    const QString latestTimeText = ui::style::formatRelativeDateTime(latestFavoriteTime);
     if (!latestTimeText.isEmpty()) {
         summary.append(QStringLiteral(" · 最近收藏 %1").arg(latestTimeText));
     }
@@ -419,7 +429,7 @@ FavoritesPage::FavoriteItem FavoritesPage::buildItemFromId(const QString& conclu
     } else if (doc != nullptr && doc->difficulty > 0.0) {
         difficulty = doc->difficulty;
     }
-    item.difficultyText = formatDifficulty(difficulty);
+    item.difficultyText = ui::style::formatDifficultyText(difficulty);
 
     const QString statementCandidate = record == nullptr ? QString() : record->content.plain.statement;
     const QString summaryCandidate =
@@ -431,7 +441,7 @@ FavoritesPage::FavoriteItem FavoritesPage::buildItemFromId(const QString& conclu
     const auto it = favoriteTimestampById_.constFind(item.conclusionId);
     if (it != favoriteTimestampById_.constEnd()) {
         item.favoriteAt = it.value();
-        item.favoriteTimeText = formatFavoriteTime(item.favoriteAt);
+        item.favoriteTimeText = ui::style::formatRelativeDateTime(item.favoriteAt);
     }
 
     return item;
@@ -524,36 +534,4 @@ QDateTime FavoritesPage::parseDateTime(const QString& rawText)
     }
 
     return {};
-}
-
-QString FavoritesPage::formatFavoriteTime(const QDateTime& dateTime)
-{
-    if (!dateTime.isValid()) {
-        return {};
-    }
-
-    const QDateTime localTime = dateTime.toLocalTime();
-    const QDate eventDate = localTime.date();
-    const QDate today = QDate::currentDate();
-
-    if (eventDate == today) {
-        return QStringLiteral("今天 %1").arg(localTime.time().toString(QStringLiteral("HH:mm")));
-    }
-    if (eventDate == today.addDays(-1)) {
-        return QStringLiteral("昨天 %1").arg(localTime.time().toString(QStringLiteral("HH:mm")));
-    }
-    return localTime.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
-}
-
-QString FavoritesPage::formatDifficulty(double difficulty)
-{
-    if (difficulty <= 0.0) {
-        return {};
-    }
-
-    const double rounded = std::round(difficulty);
-    if (std::fabs(difficulty - rounded) < 1e-6) {
-        return QStringLiteral("难度 %1").arg(static_cast<int>(rounded));
-    }
-    return QStringLiteral("难度 %1").arg(QString::number(difficulty, 'f', 1));
 }

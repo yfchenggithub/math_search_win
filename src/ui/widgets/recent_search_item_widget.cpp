@@ -1,5 +1,7 @@
 #include "ui/widgets/recent_search_item_widget.h"
 
+#include "ui/style/app_style.h"
+
 #include <QEnterEvent>
 #include <QFocusEvent>
 #include <QFontMetrics>
@@ -18,7 +20,8 @@
 
 RecentSearchItemWidget::RecentSearchItemWidget(QWidget* parent) : QWidget(parent)
 {
-    setObjectName(QStringLiteral("recentSearchItemWidget"));
+    setObjectName(QStringLiteral("listItemCard"));
+    setProperty("cardRole", QStringLiteral("recentListItem"));
     setAttribute(Qt::WA_Hover, true);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -130,7 +133,10 @@ void RecentSearchItemWidget::keyPressEvent(QKeyEvent* event)
 void RecentSearchItemWidget::setupUi()
 {
     auto* rootLayout = new QHBoxLayout(this);
-    rootLayout->setContentsMargins(18, 16, 18, 16);
+    rootLayout->setContentsMargins(ui::style::tokens::kCardPaddingHorizontal,
+                                   ui::style::tokens::kCardPaddingVertical,
+                                   ui::style::tokens::kCardPaddingHorizontal,
+                                   ui::style::tokens::kCardPaddingVertical);
     rootLayout->setSpacing(14);
 
     auto* textBlock = new QWidget(this);
@@ -139,16 +145,16 @@ void RecentSearchItemWidget::setupUi()
     textLayout->setSpacing(5);
 
     queryLabel_ = new QLabel(textBlock);
-    queryLabel_->setObjectName(QStringLiteral("recentSearchQueryLabel"));
+    queryLabel_->setObjectName(QStringLiteral("cardTitleLabel"));
     queryLabel_->setWordWrap(false);
     queryLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
     timeLabel_ = new QLabel(textBlock);
-    timeLabel_->setObjectName(QStringLiteral("recentSearchTimeLabel"));
+    timeLabel_->setObjectName(QStringLiteral("cardMetaLabel"));
     timeLabel_->setWordWrap(false);
 
     metaLabel_ = new QLabel(textBlock);
-    metaLabel_->setObjectName(QStringLiteral("recentSearchMetaLabel"));
+    metaLabel_->setObjectName(QStringLiteral("subtleTextLabel"));
     metaLabel_->setWordWrap(false);
     metaLabel_->setVisible(false);
 
@@ -157,14 +163,14 @@ void RecentSearchItemWidget::setupUi()
     textLayout->addWidget(metaLabel_);
 
     auto* actionLayout = new QHBoxLayout();
-    actionLayout->setSpacing(8);
+    actionLayout->setSpacing(ui::style::tokens::kSmallSpacing);
 
     searchAgainButton_ = new QPushButton(QStringLiteral("再次搜索"), this);
-    searchAgainButton_->setObjectName(QStringLiteral("recentSearchPrimaryButton"));
+    searchAgainButton_->setObjectName(QStringLiteral("primaryButton"));
     searchAgainButton_->setCursor(Qt::PointingHandCursor);
 
     deleteButton_ = new QPushButton(QStringLiteral("删除"), this);
-    deleteButton_->setObjectName(QStringLiteral("recentSearchDangerButton"));
+    deleteButton_->setObjectName(QStringLiteral("weakDangerButton"));
     deleteButton_->setCursor(Qt::PointingHandCursor);
 
     actionLayout->addWidget(searchAgainButton_);

@@ -92,6 +92,7 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
       contentRepository_(contentRepository),
       indexRepository_(indexRepository)
 {
+    setObjectName(QStringLiteral("futureSearchPage"));
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
     detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();

@@ -1,5 +1,7 @@
 #include "ui/widgets/favorites/favorite_item_card.h"
 
+#include "ui/style/app_style.h"
+
 #include <QEnterEvent>
 #include <QFocusEvent>
 #include <QFontMetrics>
@@ -81,9 +83,16 @@ QString elideTextToLines(const QFontMetrics& metrics, const QString& rawText, in
 
 QLabel* createChip(QWidget* parent, const QString& text, const QString& role)
 {
+    const QString normalizedRole = role.trimmed().toLower();
+
     auto* label = new QLabel(text, parent);
-    label->setObjectName(QStringLiteral("favoriteItemChip"));
-    label->setProperty("chipRole", role);
+    if (normalizedRole == QStringLiteral("difficulty")) {
+        label->setObjectName(QStringLiteral("difficultyBadge"));
+    } else if (normalizedRole == QStringLiteral("meta")) {
+        label->setObjectName(QStringLiteral("metaBadge"));
+    } else {
+        label->setObjectName(QStringLiteral("tagChip"));
+    }
     label->setVisible(!text.trimmed().isEmpty());
     return label;
 }
@@ -92,7 +101,8 @@ QLabel* createChip(QWidget* parent, const QString& text, const QString& role)
 
 FavoriteItemCard::FavoriteItemCard(QWidget* parent) : QWidget(parent)
 {
-    setObjectName(QStringLiteral("favoriteItemCard"));
+    setObjectName(QStringLiteral("contentCard"));
+    setProperty("cardRole", QStringLiteral("favoriteContent"));
     setAttribute(Qt::WA_Hover, true);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -210,27 +220,30 @@ void FavoriteItemCard::keyPressEvent(QKeyEvent* event)
 void FavoriteItemCard::setupUi()
 {
     auto* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(18, 16, 18, 16);
+    rootLayout->setContentsMargins(ui::style::tokens::kCardPaddingHorizontal,
+                                   ui::style::tokens::kCardPaddingVertical,
+                                   ui::style::tokens::kCardPaddingHorizontal,
+                                   ui::style::tokens::kCardPaddingVertical);
     rootLayout->setSpacing(10);
 
     titleLabel_ = new QLabel(this);
-    titleLabel_->setObjectName(QStringLiteral("favoriteItemTitleLabel"));
+    titleLabel_->setObjectName(QStringLiteral("cardTitleLabel"));
     titleLabel_->setWordWrap(false);
 
     moduleLabel_ = new QLabel(this);
-    moduleLabel_->setObjectName(QStringLiteral("favoriteItemModuleLabel"));
+    moduleLabel_->setObjectName(QStringLiteral("cardMetaLabel"));
     moduleLabel_->setWordWrap(false);
     moduleLabel_->setVisible(false);
 
     chipsContainer_ = new QWidget(this);
-    chipsContainer_->setObjectName(QStringLiteral("favoriteItemChipsContainer"));
+    chipsContainer_->setObjectName(QStringLiteral("chipRow"));
     chipsLayout_ = new QHBoxLayout(chipsContainer_);
     chipsLayout_->setContentsMargins(0, 0, 0, 0);
     chipsLayout_->setSpacing(6);
     chipsContainer_->setVisible(false);
 
     summaryLabel_ = new QLabel(this);
-    summaryLabel_->setObjectName(QStringLiteral("favoriteItemSummaryLabel"));
+    summaryLabel_->setObjectName(QStringLiteral("cardSummaryLabel"));
     summaryLabel_->setWordWrap(true);
     summaryLabel_->setVisible(false);
 
@@ -239,19 +252,21 @@ void FavoriteItemCard::setupUi()
     footerLayout->setSpacing(10);
 
     favoriteTimeLabel_ = new QLabel(this);
-    favoriteTimeLabel_->setObjectName(QStringLiteral("favoriteItemTimeLabel"));
+    favoriteTimeLabel_->setObjectName(QStringLiteral("subtleTextLabel"));
     favoriteTimeLabel_->setVisible(false);
 
     auto* actionLayout = new QHBoxLayout();
     actionLayout->setContentsMargins(0, 0, 0, 0);
-    actionLayout->setSpacing(8);
+    actionLayout->setSpacing(ui::style::tokens::kSmallSpacing);
 
     openButton_ = new QPushButton(QStringLiteral("打开详情"), this);
-    openButton_->setObjectName(QStringLiteral("favoriteItemPrimaryButton"));
+    openButton_->setObjectName(QStringLiteral("primaryButton"));
+    openButton_->setProperty("buttonSize", QStringLiteral("compact"));
     openButton_->setCursor(Qt::PointingHandCursor);
 
     unfavoriteButton_ = new QPushButton(QStringLiteral("取消收藏"), this);
-    unfavoriteButton_->setObjectName(QStringLiteral("favoriteItemWeakButton"));
+    unfavoriteButton_->setObjectName(QStringLiteral("weakDangerButton"));
+    unfavoriteButton_->setProperty("buttonSize", QStringLiteral("compact"));
     unfavoriteButton_->setCursor(Qt::PointingHandCursor);
 
     actionLayout->addWidget(openButton_);

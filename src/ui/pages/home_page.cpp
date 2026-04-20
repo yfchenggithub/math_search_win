@@ -14,6 +14,7 @@
 
 HomePage::HomePage(QWidget* parent) : QWidget(parent)
 {
+    setObjectName(QStringLiteral("futureHomePage"));
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("page constructed name=home mode=placeholder"));
 
     auto* mainLayout = new QVBoxLayout(this);

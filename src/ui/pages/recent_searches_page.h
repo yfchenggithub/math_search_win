@@ -3,7 +3,6 @@
 #include "domain/models/search_history_item.h"
 #include "domain/repositories/history_repository.h"
 
-#include <QDateTime>
 #include <QList>
 #include <QWidget>
 
@@ -35,8 +34,6 @@ private:
     void updateEmptyState();
     void handleItemDelete(const QString& entryId);
     void handleSearchAgain(const QString& query);
-    static QString formatRelativeTime(const QDateTime& timestamp);
-    static bool applyAppStyleSheetOnce();
 
     domain::repositories::HistoryRepository historyRepository_;
     QList<domain::models::SearchHistoryItem> items_;

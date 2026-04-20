@@ -2,14 +2,9 @@
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
+#include "ui/style/app_style.h"
 #include "ui/widgets/recent_search_item_widget.h"
 
-#include <QApplication>
-#include <QCoreApplication>
-#include <QDate>
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -18,58 +13,9 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
-namespace {
-
-QString locateAppStylePath()
-{
-    auto tryFindInTree = [](const QString& startPath) -> QString {
-        QDir dir(startPath);
-        for (int depth = 0; depth < 10; ++depth) {
-            const QString rootStyle = dir.filePath(QStringLiteral("app.qss"));
-            if (QFileInfo::exists(rootStyle)) {
-                return QDir::cleanPath(rootStyle);
-            }
-
-            const QString sourceStyle = dir.filePath(QStringLiteral("src/ui/style/app.qss"));
-            if (QFileInfo::exists(sourceStyle)) {
-                return QDir::cleanPath(sourceStyle);
-            }
-
-            if (!dir.cdUp()) {
-                break;
-            }
-        }
-        return {};
-    };
-
-    const QString fromAppDir = tryFindInTree(QCoreApplication::applicationDirPath());
-    if (!fromAppDir.isEmpty()) {
-        return fromAppDir;
-    }
-
-    return tryFindInTree(QDir::currentPath());
-}
-
-bool loadTextFile(const QString& path, QString* outText)
-{
-    if (outText == nullptr || path.trimmed().isEmpty()) {
-        return false;
-    }
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return false;
-    }
-
-    *outText = QString::fromUtf8(file.readAll());
-    return !outText->trimmed().isEmpty();
-}
-
-}  // namespace
-
 RecentSearchesPage::RecentSearchesPage(QWidget* parent) : QWidget(parent)
 {
-    applyAppStyleSheetOnce();
+    ui::style::ensureAppStyleSheetLoaded();
     setupUi();
     setupConnections();
     reloadData();
@@ -79,14 +25,18 @@ RecentSearchesPage::RecentSearchesPage(QWidget* parent) : QWidget(parent)
 
 void RecentSearchesPage::setupUi()
 {
-    setObjectName(QStringLiteral("RecentSearchPage"));
+    setObjectName(QStringLiteral("recentSearchPage"));
+    setProperty("pageRole", QStringLiteral("recent"));
 
     rootLayout_ = new QVBoxLayout(this);
-    rootLayout_->setContentsMargins(24, 24, 24, 24);
-    rootLayout_->setSpacing(22);
+    rootLayout_->setContentsMargins(ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin,
+                                    ui::style::tokens::kPageOuterMargin);
+    rootLayout_->setSpacing(ui::style::tokens::kPageSectionSpacing);
 
     headerWidget_ = new QWidget(this);
-    headerWidget_->setObjectName(QStringLiteral("recentHeaderWidget"));
+    headerWidget_->setObjectName(QStringLiteral("pageHeader"));
     auto* headerLayout = new QHBoxLayout(headerWidget_);
     headerLayout->setContentsMargins(0, 0, 0, 0);
     headerLayout->setSpacing(16);
@@ -97,20 +47,20 @@ void RecentSearchesPage::setupUi()
     titleLayout->setSpacing(6);
 
     titleLabel_ = new QLabel(QStringLiteral("最近搜索"), titleBlock);
-    titleLabel_->setObjectName(QStringLiteral("recentPageTitleLabel"));
+    titleLabel_->setObjectName(QStringLiteral("pageTitleLabel"));
 
     subtitleLabel_ = new QLabel(QStringLiteral("快速回访你最近搜索过的内容"), titleBlock);
-    subtitleLabel_->setObjectName(QStringLiteral("recentPageSubtitleLabel"));
+    subtitleLabel_->setObjectName(QStringLiteral("pageSubtitleLabel"));
 
     summaryLabel_ = new QLabel(QStringLiteral("共 0 条"), titleBlock);
-    summaryLabel_->setObjectName(QStringLiteral("recentSummaryLabel"));
+    summaryLabel_->setObjectName(QStringLiteral("pageSummaryLabel"));
 
     titleLayout->addWidget(titleLabel_);
     titleLayout->addWidget(subtitleLabel_);
     titleLayout->addWidget(summaryLabel_);
 
     clearAllButton_ = new QPushButton(QStringLiteral("清空历史"), headerWidget_);
-    clearAllButton_->setObjectName(QStringLiteral("recentClearAllButton"));
+    clearAllButton_->setObjectName(QStringLiteral("secondaryButton"));
     clearAllButton_->setCursor(Qt::PointingHandCursor);
 
     headerLayout->addWidget(titleBlock, 1);
@@ -119,51 +69,57 @@ void RecentSearchesPage::setupUi()
     rootLayout_->addWidget(headerWidget_);
 
     scrollArea_ = new QScrollArea(this);
-    scrollArea_->setObjectName(QStringLiteral("recentScrollArea"));
+    scrollArea_->setObjectName(QStringLiteral("pageScrollArea"));
     scrollArea_->setFrameShape(QFrame::NoFrame);
     scrollArea_->setWidgetResizable(true);
     scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     listContainer_ = new QWidget(scrollArea_);
-    listContainer_->setObjectName(QStringLiteral("recentListContainer"));
+    listContainer_->setObjectName(QStringLiteral("pageContentContainer"));
     listLayout_ = new QVBoxLayout(listContainer_);
     listLayout_->setContentsMargins(0, 2, 0, 2);
-    listLayout_->setSpacing(12);
+    listLayout_->setSpacing(ui::style::tokens::kCardSpacing);
     listLayout_->addStretch(1);
 
     scrollArea_->setWidget(listContainer_);
     rootLayout_->addWidget(scrollArea_, 1);
 
     emptyStateWidget_ = new QWidget(this);
-    emptyStateWidget_->setObjectName(QStringLiteral("recentEmptyStateWidget"));
+    emptyStateWidget_->setObjectName(QStringLiteral("emptyState"));
     auto* emptyRootLayout = new QVBoxLayout(emptyStateWidget_);
     emptyRootLayout->setContentsMargins(0, 0, 0, 0);
     emptyRootLayout->setSpacing(0);
     emptyRootLayout->addStretch(2);
 
     auto* emptyCard = new QWidget(emptyStateWidget_);
-    emptyCard->setObjectName(QStringLiteral("recentEmptyStateCard"));
+    emptyCard->setObjectName(QStringLiteral("elevatedCard"));
+    emptyCard->setProperty("cardRole", QStringLiteral("emptyState"));
+    emptyCard->setProperty("emptyVariant", QStringLiteral("recent"));
+
     auto* emptyCardLayout = new QVBoxLayout(emptyCard);
-    emptyCardLayout->setContentsMargins(30, 28, 30, 28);
+    emptyCardLayout->setContentsMargins(ui::style::tokens::kEmptyCardPaddingHorizontal,
+                                        ui::style::tokens::kEmptyCardPaddingVertical,
+                                        ui::style::tokens::kEmptyCardPaddingHorizontal,
+                                        ui::style::tokens::kEmptyCardPaddingVertical);
     emptyCardLayout->setSpacing(10);
 
     emptyTitleLabel_ = new QLabel(QStringLiteral("还没有最近搜索"), emptyCard);
-    emptyTitleLabel_->setObjectName(QStringLiteral("recentEmptyTitleLabel"));
+    emptyTitleLabel_->setObjectName(QStringLiteral("emptyStateTitle"));
     emptyTitleLabel_->setAlignment(Qt::AlignCenter);
 
     emptyDescriptionLabel_ =
         new QLabel(QStringLiteral("你搜索过的内容会出现在这里，方便快速回访"), emptyCard);
-    emptyDescriptionLabel_->setObjectName(QStringLiteral("recentEmptyDescriptionLabel"));
+    emptyDescriptionLabel_->setObjectName(QStringLiteral("emptyStateDescription"));
     emptyDescriptionLabel_->setAlignment(Qt::AlignCenter);
     emptyDescriptionLabel_->setWordWrap(true);
 
     emptyActionButton_ = new QPushButton(QStringLiteral("去搜索"), emptyCard);
-    emptyActionButton_->setObjectName(QStringLiteral("recentEmptyActionButton"));
+    emptyActionButton_->setObjectName(QStringLiteral("emptyStatePrimaryButton"));
     emptyActionButton_->setCursor(Qt::PointingHandCursor);
 
     emptyCardLayout->addWidget(emptyTitleLabel_);
     emptyCardLayout->addWidget(emptyDescriptionLabel_);
-    emptyCardLayout->addSpacing(8);
+    emptyCardLayout->addSpacing(ui::style::tokens::kSmallSpacing);
     emptyCardLayout->addWidget(emptyActionButton_, 0, Qt::AlignHCenter);
 
     emptyRootLayout->addWidget(emptyCard, 0, Qt::AlignHCenter);
@@ -198,7 +154,7 @@ void RecentSearchesPage::rebuildList()
         auto* itemWidget = new RecentSearchItemWidget(listContainer_);
         itemWidget->setData(item);
         itemWidget->setEntryId(item.query.trimmed());
-        itemWidget->setTimeText(formatRelativeTime(item.searchedAt));
+        itemWidget->setTimeText(ui::style::formatRelativeDateTime(item.searchedAt));
 
         const QString source = item.source.trimmed();
         if (!source.isEmpty() && source.compare(QStringLiteral("manual"), Qt::CaseInsensitive) != 0) {
@@ -244,7 +200,7 @@ void RecentSearchesPage::updateEmptyState()
     }
 
     QString summaryText = QStringLiteral("共 %1 条").arg(items_.size());
-    const QString latestText = formatRelativeTime(items_.first().searchedAt);
+    const QString latestText = ui::style::formatRelativeDateTime(items_.first().searchedAt);
     if (!latestText.isEmpty()) {
         summaryText.append(QStringLiteral(" · 最近一条 %1").arg(latestText));
     }
@@ -281,59 +237,4 @@ void RecentSearchesPage::handleSearchAgain(const QString& query)
     reloadData();
     emit historyChanged();
     emit searchRequested(normalizedQuery);
-}
-
-QString RecentSearchesPage::formatRelativeTime(const QDateTime& timestamp)
-{
-    if (!timestamp.isValid()) {
-        return QString();
-    }
-
-    const QDateTime localTime = timestamp.toLocalTime();
-    const QDate eventDate = localTime.date();
-    const QDate today = QDate::currentDate();
-
-    if (eventDate == today) {
-        return QStringLiteral("今天 %1").arg(localTime.time().toString(QStringLiteral("HH:mm")));
-    }
-
-    if (eventDate == today.addDays(-1)) {
-        return QStringLiteral("昨天 %1").arg(localTime.time().toString(QStringLiteral("HH:mm")));
-    }
-
-    return localTime.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
-}
-
-bool RecentSearchesPage::applyAppStyleSheetOnce()
-{
-    if (qApp == nullptr) {
-        return false;
-    }
-
-    const bool alreadyAttempted = qApp->property("math_search_app_qss_attempted").toBool();
-    if (alreadyAttempted) {
-        return qApp->property("math_search_app_qss_applied").toBool();
-    }
-    qApp->setProperty("math_search_app_qss_attempted", true);
-
-    const QString stylePath = locateAppStylePath();
-    QString styleText;
-    if (stylePath.isEmpty() || !loadTextFile(stylePath, &styleText)) {
-        LOG_WARN(LogCategory::UiMainWindow, QStringLiteral("app stylesheet missing path=app.qss"));
-        qApp->setProperty("math_search_app_qss_applied", false);
-        return false;
-    }
-
-    const QString existingStyle = qApp->styleSheet().trimmed();
-    if (existingStyle.isEmpty()) {
-        qApp->setStyleSheet(styleText);
-    } else {
-        qApp->setStyleSheet(existingStyle + QStringLiteral("\n\n") + styleText);
-    }
-
-    qApp->setProperty("math_search_app_qss_applied", true);
-    qApp->setProperty("math_search_app_qss_path", stylePath);
-
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("app stylesheet loaded path=%1").arg(stylePath));
-    return true;
 }

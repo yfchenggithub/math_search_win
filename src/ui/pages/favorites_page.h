@@ -64,8 +64,6 @@ private:
     static QString preferredSummary(const QString& statement, const QString& summaryCandidate);
     static QString normalizedText(const QString& text);
     static QDateTime parseDateTime(const QString& rawText);
-    static QString formatFavoriteTime(const QDateTime& dateTime);
-    static QString formatDifficulty(double difficulty);
 
 private:
     domain::repositories::FavoritesRepository favoritesRepository_;
@@ -90,4 +88,3 @@ private:
     QWidget* emptyStateWidget_ = nullptr;
     QPushButton* emptyActionButton_ = nullptr;
 };
-
