@@ -8,6 +8,15 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_index_models.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_result_models.h
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_result_models.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/search_history_item.h
+    ${PROJECT_SOURCE_DIR}/src/domain/models/app_settings.h
+    ${PROJECT_SOURCE_DIR}/src/domain/models/app_settings.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/favorites_repository.h
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/favorites_repository.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/history_repository.h
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/history_repository.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/settings_repository.h
+    ${PROJECT_SOURCE_DIR}/src/domain/repositories/settings_repository.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/services/search_service.h
     ${PROJECT_SOURCE_DIR}/src/domain/services/search_service.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/services/suggest_service.h
@@ -16,6 +25,8 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/backend_search_index_loader.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.h
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/storage/local_storage_service.h
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/storage/local_storage_service.cpp
     ${PROJECT_SOURCE_DIR}/src/shared/paths.h
     ${PROJECT_SOURCE_DIR}/src/shared/paths.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_perf_aggregator.h
@@ -90,4 +101,15 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
         $<TARGET_FILE:math_search_detail_perf_tests>
+)
+
+add_executable(math_search_storage_tests
+    storage/test_local_storage_repositories.cpp
+)
+configure_math_search_test_target(math_search_storage_tests)
+add_test(
+    NAME storage_repository_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_storage_tests>
 )
