@@ -16,6 +16,8 @@
   const MATH_HINT_GLOBAL_PATTERN = /(\$\$|\\\[|\\\(|\$)/g;
   const LABEL_TRAILING_PUNCT_PATTERN = /[\uFF1A:\uFF0C,\u3002\uFF0E\u3001\uFF1B;\uFF01!\uFF1F?]+$/g;
   const LABEL_INLINE_PREFIX_PATTERN = /^\s*([^\uFF1A:\n]{1,24})\s*[\uFF1A:]\s*/;
+  const LABEL_TRAILING_QUALIFIER_PATTERN = /\s*[（(][^()（）\r\n]{1,24}[)）]\s*$/;
+  const LABEL_LEADING_BULLET_PATTERN = /^\s*[-*•·]\s*/;
   const LABEL_STRIP_WHITESPACE_PATTERN = /[\s\u00a0\u3000]/g;
 
   const SECTION_ID_ALIAS_MAP = Object.freeze({
@@ -61,6 +63,15 @@
       "\u5173\u952e\u63d0\u9192": "summary"
     })
   });
+  const LEVEL2_LABEL_KEYS_BY_SECTION = Object.freeze(
+    Object.keys(LEVEL2_LABEL_THEME_BY_SECTION).reduce(function (acc, sectionId) {
+      const keys = Object.keys(LEVEL2_LABEL_THEME_BY_SECTION[sectionId]).sort(function (lhs, rhs) {
+        return rhs.length - lhs.length;
+      });
+      acc[sectionId] = Object.freeze(keys);
+      return acc;
+    }, {})
+  );
 
   const LEVEL3_LABEL_KIND_MAP = Object.freeze({
     "\u6761\u4ef61": "condition",
@@ -163,10 +174,19 @@
     if (!raw) {
       return "";
     }
-    const normalizedDigits = raw.replace(/[\uFF10-\uFF19]/g, function (char) {
+    const withoutBullet = raw.replace(LABEL_LEADING_BULLET_PATTERN, "");
+    const normalizedDigits = withoutBullet.replace(/[\uFF10-\uFF19]/g, function (char) {
       return String.fromCharCode(char.charCodeAt(0) - 65248);
     });
     return normalizedDigits.replace(LABEL_STRIP_WHITESPACE_PATTERN, "").replace(/[\uFF1A:]/g, "").trim();
+  }
+
+  function stripSubtitleTrailingQualifier(text) {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return "";
+    }
+    return raw.replace(LABEL_TRAILING_QUALIFIER_PATTERN, "").trim();
   }
 
   function resolveLevel2Theme(sectionId, normalizedLabel) {
@@ -177,7 +197,14 @@
     if (!sectionMap) {
       return "";
     }
-    return sectionMap[normalizedLabel] || "";
+    if (sectionMap[normalizedLabel]) {
+      return sectionMap[normalizedLabel];
+    }
+    const strippedLabel = stripSubtitleTrailingQualifier(normalizedLabel);
+    if (strippedLabel && strippedLabel !== normalizedLabel) {
+      return sectionMap[strippedLabel] || "";
+    }
+    return "";
   }
 
   function resolveLevel3Kind(normalizedLabel) {
@@ -224,6 +251,58 @@
     return [];
   }
 
+  function resolveLevel2InlinePrefixMatch(sectionId, rawText) {
+    if (!sectionId || !rawText) {
+      return null;
+    }
+    const sectionMap = LEVEL2_LABEL_THEME_BY_SECTION[sectionId];
+    const labelKeys = LEVEL2_LABEL_KEYS_BY_SECTION[sectionId];
+    if (!sectionMap || !labelKeys || !labelKeys.length) {
+      return null;
+    }
+    const text = String(rawText || "").replace(LABEL_LEADING_BULLET_PATTERN, "").trimStart();
+    if (!text) {
+      return null;
+    }
+    for (let i = 0; i < labelKeys.length; i += 1) {
+      const baseLabel = labelKeys[i];
+      if (!text.startsWith(baseLabel)) {
+        continue;
+      }
+      let consumed = baseLabel.length;
+      let labelText = baseLabel;
+      const trailing = text.slice(consumed);
+      const qualifierMatch = trailing.match(/^\s*[（(][^()（）\r\n]{1,24}[)）]/);
+      if (qualifierMatch) {
+        consumed += qualifierMatch[0].length;
+        labelText += qualifierMatch[0].replace(/^\s+/, "");
+      }
+      const suffixWithDelimiter = text.slice(consumed);
+      const separatorMatch = suffixWithDelimiter.match(/^\s*(?:[\uFF1A:]|(?:\r?\n)+|\s+)/);
+      if (!separatorMatch) {
+        continue;
+      }
+      const suffixText = suffixWithDelimiter.slice(separatorMatch[0].length).trimStart();
+      if (!suffixText) {
+        continue;
+      }
+      const normalizedLabel = normalizeSubtitleToken(labelText);
+      const theme = resolveLevel2Theme(sectionId, normalizedLabel) || sectionMap[baseLabel] || "";
+      if (!theme) {
+        continue;
+      }
+      return {
+        level: 2,
+        theme: theme,
+        matchType: "inline",
+        normalizedLabel: normalizedLabel,
+        labelText: String(labelText || "").trim(),
+        suffixText: suffixText
+      };
+    }
+    return null;
+  }
+
   function resolveSubtitleLabelMatch(sectionId, text) {
     const raw = String(text || "").trim();
     if (!raw) {
@@ -233,15 +312,22 @@
 
     const standaloneCandidate = raw.replace(LABEL_TRAILING_PUNCT_PATTERN, "").trim();
     const normalizedStandalone = normalizeSubtitleToken(standaloneCandidate);
-    if (normalizedStandalone && normalizedStandalone.length <= 12) {
+    if (normalizedStandalone) {
       const level2Theme = resolveLevel2Theme(normalizedSectionId, normalizedStandalone);
       if (level2Theme) {
         return { level: 2, theme: level2Theme, matchType: "standalone", normalizedLabel: normalizedStandalone };
       }
-      const level3Kind = resolveLevel3Kind(normalizedStandalone);
-      if (level3Kind) {
-        return { level: 3, kind: level3Kind, matchType: "standalone", normalizedLabel: normalizedStandalone };
+      if (normalizedStandalone.length <= 12) {
+        const level3Kind = resolveLevel3Kind(normalizedStandalone);
+        if (level3Kind) {
+          return { level: 3, kind: level3Kind, matchType: "standalone", normalizedLabel: normalizedStandalone };
+        }
       }
+    }
+
+    const level2PrefixMatch = resolveLevel2InlinePrefixMatch(normalizedSectionId, raw);
+    if (level2PrefixMatch) {
+      return level2PrefixMatch;
     }
 
     const inlinePrefixMatch = raw.match(LABEL_INLINE_PREFIX_PATTERN);
@@ -276,25 +362,37 @@
     if (!node || !match || match.matchType !== "inline" || !classNames.length) {
       return false;
     }
-    if (node.children && node.children.length > 0) {
+    const elementChildren = node.children ? Array.from(node.children) : [];
+    const hasUnsupportedChildren = elementChildren.some(function (child) {
+      return child && child.tagName !== "BR";
+    });
+    if (hasUnsupportedChildren) {
       return false;
     }
     if (node.querySelector && node.querySelector(".detail-math-inline, .katex")) {
       return false;
     }
-    const rawText = String(node.textContent || "");
-    const prefixMatch = rawText.match(LABEL_INLINE_PREFIX_PATTERN);
-    if (!prefixMatch) {
+    let labelText = String(match.labelText || "").trim();
+    let suffixText = String(match.suffixText || "").trimStart();
+    if (!labelText || !suffixText) {
+      const rawText = String(node.textContent || "");
+      const prefixMatch = rawText.match(LABEL_INLINE_PREFIX_PATTERN);
+      if (!prefixMatch) {
+        return false;
+      }
+      const normalizedPrefix = normalizeSubtitleToken(prefixMatch[1]);
+      if (!normalizedPrefix || normalizedPrefix !== match.normalizedLabel) {
+        return false;
+      }
+      labelText = String(prefixMatch[1] || "").trim();
+      suffixText = rawText.slice(prefixMatch[0].length).trimStart();
+    }
+    if (!labelText || !suffixText) {
       return false;
     }
-    const normalizedPrefix = normalizeSubtitleToken(prefixMatch[1]);
-    if (!normalizedPrefix || normalizedPrefix !== match.normalizedLabel) {
-      return false;
-    }
-    const suffixText = rawText.slice(prefixMatch[0].length).trimStart();
     const labelSpan = document.createElement("span");
     labelSpan.className = "detail-subtitle-lead " + classNames.join(" ");
-    labelSpan.textContent = String(prefixMatch[1] || "").trim();
+    labelSpan.textContent = labelText;
 
     node.textContent = "";
     node.classList.add("detail-inline-subtitle-paragraph");
