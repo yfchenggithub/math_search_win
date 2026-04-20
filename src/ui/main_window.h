@@ -9,6 +9,7 @@
 #include <QMainWindow>
 
 class BottomStatusBar;
+class ActivationPage;
 class FavoritesPage;
 class HomePage;
 class NavigationSidebar;
@@ -60,4 +61,5 @@ private:
     FavoritesPage* favoritesPage_ = nullptr;
     RecentSearchesPage* recentSearchesPage_ = nullptr;
     SettingsPage* settingsPage_ = nullptr;
+    ActivationPage* activationPage_ = nullptr;
 };

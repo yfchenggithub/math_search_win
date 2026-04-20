@@ -1149,3 +1149,298 @@ QScrollArea#settingsScrollArea QScrollBar::sub-page:vertical {
     height: 0;
     background: transparent;
 }
+
+/* --------------------------------------------------------------
+   Activation & Upgrade Page
+   -------------------------------------------------------------- */
+QWidget#activationPage {
+    background-color: #f5f6f8;
+    color: #22272f;
+    font-family: "Microsoft YaHei UI";
+}
+
+QWidget#activationPageHeader {
+    border: 1px solid #e4e9ef;
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+QLabel#activationPageTitle {
+    color: #1f242b;
+    font-size: 24px;
+    font-weight: 620;
+}
+
+QLabel#activationPageSubtitle {
+    color: #707985;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QLabel#activationMetaText {
+    color: #8b95a0;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QScrollArea#activationScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollArea#activationScrollArea QWidget#qt_scrollarea_viewport {
+    background: transparent;
+}
+
+QWidget#activationContent {
+    background: transparent;
+}
+
+QWidget#activationGroup {
+    border: 1px solid #e4e9ef;
+    border-radius: 14px;
+    background-color: #ffffff;
+}
+
+QWidget#activationGroup[sectionRole="version"] {
+    border-color: #e4e9ef;
+}
+
+QWidget#activationGroup[sectionRole="licenseStatus"] {
+    border-color: #dae4f1;
+    background-color: #fcfdff;
+}
+
+QWidget#activationGroup[sectionRole="deviceCode"] {
+    border-color: #dee6ef;
+    background-color: #ffffff;
+}
+
+QWidget#activationGroup[sectionRole="activationInput"] {
+    border-color: #d6e0ec;
+    background-color: #fbfdff;
+}
+
+QWidget#activationGroup[sectionRole="upgrade"] {
+    border-color: #e4e9ef;
+    background-color: #ffffff;
+}
+
+QLabel#activationGroupTitle {
+    color: #232a32;
+    font-size: 16px;
+    font-weight: 610;
+}
+
+QWidget#activationInfoRow {
+    border: 1px solid #ebf0f5;
+    border-radius: 10px;
+    background-color: #fafbfd;
+}
+
+QWidget#activationGroup[sectionRole="licenseStatus"] QWidget#activationInfoRow {
+    border-color: #e3eaf4;
+    background-color: #f8fbff;
+}
+
+QWidget#activationGroup[sectionRole="activationInput"] QWidget#activationInfoRow {
+    border-color: #e1e9f3;
+    background-color: #f8fbff;
+}
+
+QLabel#activationInfoLabel {
+    color: #6e7782;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#activationInfoValue {
+    color: #2b333c;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QLabel#licenseStatusValue {
+    padding: 2px 10px;
+    border: 1px solid #dfe5ec;
+    border-radius: 9px;
+    background-color: #f5f8fb;
+    color: #586473;
+    font-size: 12px;
+    font-weight: 620;
+}
+
+QLabel#licenseStatusHint {
+    color: #8b95a0;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QLabel#licenseStatusValue[statusClass="licenseStatusActive"] {
+    border-color: #cee3d2;
+    background-color: #edf8f0;
+    color: #356541;
+}
+
+QLabel#licenseStatusValue[statusClass="licenseStatusInactive"] {
+    border-color: #eadbcd;
+    background-color: #fcf5ee;
+    color: #8c5f3a;
+}
+
+QLabel#licenseStatusValue[statusClass="licenseStatusUnknown"] {
+    border-color: #dbe2ea;
+    background-color: #f4f7fb;
+    color: #5f6c79;
+}
+
+QLabel#licenseStatusValue[statusClass="licenseStatusError"] {
+    border-color: #efcfd4;
+    background-color: #fff1f3;
+    color: #9a4d59;
+}
+
+QLabel#licenseStatusHint[statusClass="licenseStatusActive"] {
+    color: #5f7e68;
+}
+
+QLabel#licenseStatusHint[statusClass="licenseStatusInactive"] {
+    color: #8f6f54;
+}
+
+QLabel#licenseStatusHint[statusClass="licenseStatusUnknown"] {
+    color: #7b8793;
+}
+
+QLabel#licenseStatusHint[statusClass="licenseStatusError"] {
+    color: #9f6370;
+}
+
+QLineEdit#deviceCodeField {
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid #d8e0e9;
+    border-radius: 10px;
+    background-color: #f7fafe;
+    color: #26313b;
+    font-size: 13px;
+    font-family: "Consolas", "Courier New", "Microsoft YaHei UI";
+}
+
+QLineEdit#deviceCodeField:focus {
+    border-color: #8ca7d0;
+    background-color: #ffffff;
+}
+
+QLineEdit#activationCodeField {
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid #d5dde7;
+    border-radius: 11px;
+    background-color: #ffffff;
+    color: #25303a;
+    font-size: 13px;
+}
+
+QLineEdit#activationCodeField:hover {
+    border-color: #c7d3df;
+}
+
+QLineEdit#activationCodeField:focus {
+    border-color: #7098df;
+}
+
+QPushButton#activationPrimaryButton {
+    min-height: 38px;
+    min-width: 96px;
+    padding: 0 16px;
+    border: 1px solid #3b76d2;
+    border-radius: 11px;
+    background-color: #4d88e2;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 610;
+}
+
+QPushButton#activationPrimaryButton:hover {
+    border-color: #336dc8;
+    background-color: #417edf;
+}
+
+QPushButton#activationPrimaryButton:pressed {
+    border-color: #2f64b9;
+    background-color: #3773d0;
+}
+
+QPushButton#activationPrimaryButton:focus {
+    border-color: #2d61b3;
+}
+
+QPushButton#activationPrimaryButton:disabled {
+    border-color: #9db7de;
+    background-color: #b8cbe7;
+    color: #edf4fb;
+}
+
+QPushButton#activationSecondaryButton {
+    min-height: 34px;
+    min-width: 96px;
+    padding: 0 14px;
+    border: 1px solid #d8dee5;
+    border-radius: 10px;
+    background-color: #f8fafc;
+    color: #5f6872;
+    font-size: 12px;
+    font-weight: 510;
+}
+
+QPushButton#activationSecondaryButton:hover {
+    border-color: #c8d1db;
+    background-color: #f1f5f8;
+    color: #505862;
+}
+
+QPushButton#activationSecondaryButton:pressed {
+    border-color: #b6c2cf;
+    background-color: #e9eef3;
+}
+
+QPushButton#activationSecondaryButton:focus {
+    border-color: #7ea9f8;
+}
+
+QPushButton#activationSecondaryButton:disabled {
+    border-color: #e3e7ec;
+    background-color: #f7f9fb;
+    color: #b4bbc3;
+}
+
+QLabel#activationHintText {
+    color: #909aa5;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+QScrollArea#activationScrollArea QScrollBar:vertical {
+    width: 10px;
+    margin: 0;
+    background: transparent;
+}
+
+QScrollArea#activationScrollArea QScrollBar::handle:vertical {
+    min-height: 26px;
+    border-radius: 5px;
+    background: #c5ccd3;
+}
+
+QScrollArea#activationScrollArea QScrollBar::handle:vertical:hover {
+    background: #adb5be;
+}
+
+QScrollArea#activationScrollArea QScrollBar::add-line:vertical,
+QScrollArea#activationScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#activationScrollArea QScrollBar::add-page:vertical,
+QScrollArea#activationScrollArea QScrollBar::sub-page:vertical {
+    height: 0;
+    background: transparent;
+}

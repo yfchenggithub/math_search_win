@@ -132,7 +132,8 @@ void MainWindow::setupPages()
     pageStack_->addWidget(settingsPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=settings").arg(UiConstants::kPageSettings));
-    pageStack_->addWidget(new ActivationPage(pageStack_));
+    activationPage_ = new ActivationPage(pageStack_);
+    pageStack_->addWidget(activationPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=activation").arg(UiConstants::kPageActivation));
 
@@ -332,6 +333,9 @@ void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
     if (pageIndex == UiConstants::kPageSettings && settingsPage_ != nullptr) {
         settingsPage_->reloadData();
     }
+    if (pageIndex == UiConstants::kPageActivation && activationPage_ != nullptr) {
+        activationPage_->reloadData();
+    }
 
     const QString triggerText = trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed();
     const QString message = QStringLiteral("page switched from=%1 to=%2 trigger=%3")
@@ -397,7 +401,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageSettings:
         return QStringLiteral("管理应用信息、数据状态与帮助入口");
     case UiConstants::kPageActivation:
-        return QStringLiteral("激活与升级入口占位");
+        return QStringLiteral("状态确认、激活操作与升级说明");
     default:
         return UiConstants::kDefaultTopSubtitle;
     }
