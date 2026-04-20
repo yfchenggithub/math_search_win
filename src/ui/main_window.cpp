@@ -107,7 +107,8 @@ void MainWindow::setupPages()
 {
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("setupPages begin"));
 
-    pageStack_->addWidget(new HomePage(pageStack_));
+    homePage_ = new HomePage(&indexRepository_, pageStack_);
+    pageStack_->addWidget(homePage_);
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("registered page index=%1 name=home").arg(UiConstants::kPageHome));
 
     searchPage_ = new SearchPage(&searchService_,
@@ -146,6 +147,12 @@ void MainWindow::setupPages()
         connect(recentSearchesPage_, &RecentSearchesPage::navigateToSearchRequested, this, [this]() {
             switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("recent_empty_action"));
         });
+
+        connect(recentSearchesPage_, &RecentSearchesPage::historyChanged, this, [this]() {
+            if (homePage_ != nullptr) {
+                homePage_->reloadData();
+            }
+        });
     }
 
     if (favoritesPage_ != nullptr) {
@@ -160,6 +167,44 @@ void MainWindow::setupPages()
 
         connect(favoritesPage_, &FavoritesPage::navigateToSearchRequested, this, [this]() {
             switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("favorites_empty_action"));
+        });
+
+        connect(favoritesPage_, &FavoritesPage::favoritesChanged, this, [this]() {
+            if (homePage_ != nullptr) {
+                homePage_->reloadData();
+            }
+        });
+    }
+
+    if (homePage_ != nullptr) {
+        connect(homePage_, &HomePage::navigateToSearchRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("home_primary_search"));
+        });
+        connect(homePage_, &HomePage::navigateToRecentRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageRecentSearches, QStringLiteral("home_recent_entry"));
+        });
+        connect(homePage_, &HomePage::navigateToFavoritesRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageFavorites, QStringLiteral("home_favorites_entry"));
+        });
+        connect(homePage_, &HomePage::navigateToSettingsRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageSettings, QStringLiteral("home_settings_entry"));
+        });
+        connect(homePage_, &HomePage::navigateToActivationRequested, this, [this]() {
+            switchPageWithTrigger(UiConstants::kPageActivation, QStringLiteral("home_activation_entry"));
+        });
+        connect(homePage_, &HomePage::searchRequested, this, [this](const QString& query) {
+            if (searchPage_ == nullptr) {
+                return;
+            }
+            switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("home_recent_preview_search"));
+            searchPage_->triggerSearchFromRecent(query);
+        });
+        connect(homePage_, &HomePage::openConclusionRequested, this, [this](const QString& conclusionId) {
+            if (searchPage_ == nullptr) {
+                return;
+            }
+            switchPageWithTrigger(UiConstants::kPageSearch, QStringLiteral("home_favorites_preview_open"));
+            searchPage_->openConclusionById(conclusionId);
         });
     }
 
@@ -279,6 +324,9 @@ void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
     if (pageIndex == UiConstants::kPageFavorites && favoritesPage_ != nullptr) {
         favoritesPage_->reloadData();
     }
+    if (pageIndex == UiConstants::kPageHome && homePage_ != nullptr) {
+        homePage_->reloadData();
+    }
 
     const QString triggerText = trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed();
     const QString message = QStringLiteral("page switched from=%1 to=%2 trigger=%3")
@@ -334,7 +382,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
 {
     switch (pageIndex) {
     case UiConstants::kPageHome:
-        return QStringLiteral("欢迎使用本地离线版骨架");
+        return QStringLiteral("主路径入口：先搜索，再回访最近和收藏");
     case UiConstants::kPageSearch:
         return QStringLiteral("本页已接入本地检索与 WebEngine 详情渲染");
     case UiConstants::kPageFavorites:

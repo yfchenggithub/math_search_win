@@ -1,14 +1,14 @@
 /* --------------------------------------------------------------
    Lightweight shared visual language for:
+   - homePage
    - recentSearchPage
    - favoritesPage
-   Prepared hooks:
-   - futureHomePage
-   - futureSearchPage
+   Prepared hooks: futureSearchPage
    -------------------------------------------------------------- */
 
 QWidget#recentSearchPage,
 QWidget#favoritesPage,
+QWidget#homePage,
 QWidget#futureHomePage,
 QWidget#futureSearchPage {
     background-color: #f5f6f8;
@@ -407,4 +407,215 @@ QScrollArea#pageScrollArea QScrollBar::add-page:vertical,
 QScrollArea#pageScrollArea QScrollBar::sub-page:vertical {
     height: 0;
     background: transparent;
+}
+
+/* --------------------------------------------------------------
+   HomePage
+   -------------------------------------------------------------- */
+QWidget#homePage {
+    background-color: #f5f6f8;
+}
+
+QWidget#homeHero {
+    border: 1px solid #e3e8ee;
+    border-radius: 20px;
+    background-color: #ffffff;
+}
+
+QLabel#homeHeroTitle {
+    color: #1f242b;
+    font-size: 27px;
+    font-weight: 630;
+}
+
+QLabel#homeHeroSubtitle {
+    color: #66707c;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QPushButton#homeHeroPrimaryButton {
+    min-height: 40px;
+    min-width: 112px;
+    padding: 0 18px;
+    border: 1px solid #3b76d2;
+    border-radius: 12px;
+    background-color: #4d88e2;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 620;
+}
+
+QPushButton#homeHeroPrimaryButton:hover {
+    border-color: #336dc8;
+    background-color: #427edf;
+}
+
+QPushButton#homeHeroPrimaryButton:pressed {
+    border-color: #2f64b9;
+    background-color: #3773d0;
+}
+
+QPushButton#homeHeroPrimaryButton:focus {
+    border-color: #2d61b3;
+}
+
+QPushButton#homeHeroSecondaryButton {
+    min-height: 38px;
+    min-width: 108px;
+    padding: 0 14px;
+    border: 1px solid #d8dee5;
+    border-radius: 11px;
+    background-color: #f8fafc;
+    color: #5f6872;
+    font-size: 13px;
+    font-weight: 510;
+}
+
+QPushButton#homeHeroSecondaryButton:hover {
+    border-color: #c8d1db;
+    background-color: #f1f5f8;
+    color: #4f5862;
+}
+
+QPushButton#homeHeroSecondaryButton:pressed {
+    background-color: #e9eef3;
+    border-color: #b6c2cf;
+}
+
+QPushButton#homeHeroSecondaryButton:focus {
+    border-color: #7ea9f8;
+}
+
+QWidget#homeQuickActions {
+    background: transparent;
+}
+
+QPushButton#homeQuickActionCard {
+    text-align: left;
+    border: 1px solid #e4e9ef;
+    border-radius: 14px;
+    background-color: #ffffff;
+    padding: 0;
+}
+
+QPushButton#homeQuickActionCard:hover {
+    border-color: #d5dee7;
+    background-color: #fbfcfe;
+}
+
+QPushButton#homeQuickActionCard:pressed {
+    border-color: #cbd6e1;
+    background-color: #f4f7fa;
+}
+
+QPushButton#homeQuickActionCard[weakEntry="true"] {
+    border-color: #e8edf2;
+    background-color: #f9fafc;
+}
+
+QPushButton#homeQuickActionCard[weakEntry="true"]:hover {
+    border-color: #dde5ed;
+    background-color: #f3f7fb;
+}
+
+QLabel#homeQuickActionTitle {
+    color: #252b33;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+}
+
+QLabel#homeQuickActionDescription {
+    color: #75808d;
+    font-size: 12px;
+    font-weight: 400;
+    background: transparent;
+}
+
+QWidget#homePreviewSection {
+    border: 1px solid #e4e9ef;
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+QLabel#homeSectionTitle {
+    color: #232a32;
+    font-size: 16px;
+    font-weight: 610;
+}
+
+QPushButton#homeSectionActionButton {
+    min-height: 28px;
+    min-width: 72px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background-color: transparent;
+    color: #8090a2;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#homeSectionActionButton:hover {
+    border-color: #d9e1eb;
+    background-color: #f4f7fb;
+    color: #5f6e80;
+}
+
+QPushButton#homeSectionActionButton:pressed {
+    border-color: #ccd7e3;
+    background-color: #ecf2f8;
+}
+
+QPushButton#homeSectionActionButton:focus {
+    border-color: #86a3d8;
+}
+
+QPushButton#homePreviewItem,
+QWidget#homePreviewItem {
+    border: 1px solid #e8edf3;
+    border-radius: 12px;
+    background-color: #fafbfd;
+}
+
+QPushButton#homePreviewItem {
+    text-align: left;
+    padding: 0;
+}
+
+QPushButton#homePreviewItem:hover {
+    border-color: #d8e1eb;
+    background-color: #f5f8fc;
+}
+
+QPushButton#homePreviewItem:pressed {
+    border-color: #cdd8e3;
+    background-color: #edf2f8;
+}
+
+QWidget#homePreviewItem[empty="true"] {
+    border-style: dashed;
+    border-color: #e2e8ef;
+    background-color: #fbfcfe;
+}
+
+QLabel#homePreviewItemTitle {
+    color: #2d3540;
+    font-size: 13px;
+    font-weight: 580;
+    background: transparent;
+}
+
+QLabel#homePreviewItemMeta {
+    color: #7b8591;
+    font-size: 12px;
+    font-weight: 400;
+    background: transparent;
+}
+
+QLabel#homeFooterMeta {
+    color: #96a0aa;
+    font-size: 12px;
+    font-weight: 400;
 }

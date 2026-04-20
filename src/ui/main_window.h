@@ -10,6 +10,7 @@
 
 class BottomStatusBar;
 class FavoritesPage;
+class HomePage;
 class NavigationSidebar;
 class QStackedWidget;
 class RecentSearchesPage;
@@ -53,6 +54,7 @@ private:
     TopBar* topBar_ = nullptr;
     QStackedWidget* pageStack_ = nullptr;
     BottomStatusBar* bottomStatusBar_ = nullptr;
+    HomePage* homePage_ = nullptr;
     SearchPage* searchPage_ = nullptr;
     FavoritesPage* favoritesPage_ = nullptr;
     RecentSearchesPage* recentSearchesPage_ = nullptr;
