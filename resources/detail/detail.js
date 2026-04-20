@@ -14,6 +14,77 @@
   const DEFERRED_KATEX_MAX_UNITS_PER_BATCH = 3;
   const MATH_HINT_PATTERN = /(\$\$|\\\[|\\\(|\$)/;
   const MATH_HINT_GLOBAL_PATTERN = /(\$\$|\\\[|\\\(|\$)/g;
+  const LABEL_TRAILING_PUNCT_PATTERN = /[\uFF1A:\uFF0C,\u3002\uFF0E\u3001\uFF1B;\uFF01!\uFF1F?]+$/g;
+  const LABEL_INLINE_PREFIX_PATTERN = /^\s*([^\uFF1A:\n]{1,24})\s*[\uFF1A:]\s*/;
+  const LABEL_STRIP_WHITESPACE_PATTERN = /[\s\u00a0\u3000]/g;
+
+  const SECTION_ID_ALIAS_MAP = Object.freeze({
+    pitfall: "pitfalls",
+    traps: "pitfalls",
+    examples: "usage",
+    explanation: "intuition"
+  });
+
+  const LEVEL2_LABEL_THEME_BY_SECTION = Object.freeze({
+    intuition: Object.freeze({
+      "\u4e00\u53e5\u8bdd\u76f4\u89c9": "understanding",
+      "\u6838\u5fc3\u62c6\u89e3": "understanding",
+      "\u51e0\u4f55\u672c\u8d28": "understanding",
+      "\u4ee3\u6570\u610f\u4e49": "understanding",
+      "\u8003\u70b9\u4ef7\u503c": "understanding",
+      "\u987f\u609f\u70b9": "understanding",
+      "\u4f7f\u7528\u573a\u666f": "understanding"
+    }),
+    proof: Object.freeze({
+      "\u601d\u8def\u63d0\u793a": "proof",
+      "\u6b63\u5f0f\u63a8\u5bfc": "proof",
+      "\u7ed3\u8bba\u56de\u6263": "proof"
+    }),
+    derivation: Object.freeze({
+      "\u601d\u8def\u63d0\u793a": "proof",
+      "\u6b63\u5f0f\u63a8\u5bfc": "proof",
+      "\u7ed3\u8bba\u56de\u6263": "proof"
+    }),
+    usage: Object.freeze({
+      "\u4f8b1": "usage",
+      "\u4f8b2": "usage",
+      "\u4f8b3": "usage"
+    }),
+    pitfalls: Object.freeze({
+      "\u6613\u9519\u70b9\u4e00": "pitfall",
+      "\u6613\u9519\u70b9\u4e8c": "pitfall",
+      "\u6613\u9519\u70b9\u4e09": "pitfall"
+    }),
+    summary: Object.freeze({
+      "\u4e00\u53e5\u8bdd\u6838\u5fc3": "summary",
+      "\u4f7f\u7528\u6761\u4ef6": "summary",
+      "\u5173\u952e\u63d0\u9192": "summary"
+    })
+  });
+
+  const LEVEL3_LABEL_KIND_MAP = Object.freeze({
+    "\u6761\u4ef61": "condition",
+    "\u6761\u4ef62": "condition",
+    "\u6761\u4ef63": "condition",
+    "\u6761\u4ef64": "condition",
+    "\u7b2c\u4e00\u6b65": "step",
+    "\u7b2c\u4e8c\u6b65": "step",
+    "\u7b2c\u4e09\u6b65": "step",
+    "\u7b2c\u56db\u6b65": "step",
+    "\u6b65\u9aa4\u4e00": "step",
+    "\u6b65\u9aa4\u4e8c": "step",
+    "\u6b65\u9aa4\u4e09": "step",
+    "\u6b65\u9aa4\u56db": "step",
+    "\u573a\u666f\u4e00": "scene",
+    "\u573a\u666f\u4e8c": "scene",
+    "\u573a\u666f\u4e09": "scene",
+    "\u8003\u6cd5\u4e00": "method",
+    "\u8003\u6cd5\u4e8c": "method",
+    "\u8003\u6cd5\u4e09": "method",
+    "\u8981\u70b9\u4e00": "point",
+    "\u8981\u70b9\u4e8c": "point",
+    "\u8981\u70b9\u4e09": "point"
+  });
 
   const runtime = {
     shellInitialized: false,
@@ -76,6 +147,204 @@
     return paragraphs
       .map((paragraph) => "<p>" + escapeHtml(paragraph).replace(/\n/g, "<br/>") + "</p>")
       .join("");
+  }
+
+  function canonicalSectionId(sectionId) {
+    const normalized = String(sectionId || "").trim().toLowerCase();
+    if (!normalized) {
+      return "";
+    }
+    const base = normalized.split("_")[0];
+    return SECTION_ID_ALIAS_MAP[base] || base;
+  }
+
+  function normalizeSubtitleToken(text) {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const normalizedDigits = raw.replace(/[\uFF10-\uFF19]/g, function (char) {
+      return String.fromCharCode(char.charCodeAt(0) - 65248);
+    });
+    return normalizedDigits.replace(LABEL_STRIP_WHITESPACE_PATTERN, "").replace(/[\uFF1A:]/g, "").trim();
+  }
+
+  function resolveLevel2Theme(sectionId, normalizedLabel) {
+    if (!sectionId || !normalizedLabel) {
+      return "";
+    }
+    const sectionMap = LEVEL2_LABEL_THEME_BY_SECTION[sectionId];
+    if (!sectionMap) {
+      return "";
+    }
+    return sectionMap[normalizedLabel] || "";
+  }
+
+  function resolveLevel3Kind(normalizedLabel) {
+    if (!normalizedLabel) {
+      return "";
+    }
+    return LEVEL3_LABEL_KIND_MAP[normalizedLabel] || "";
+  }
+
+  function subtitleClassesForMatch(match) {
+    if (!match || !match.level) {
+      return [];
+    }
+    if (match.level === 2) {
+      const classes = ["detail-subtitle-primary", "detail-subtitle-level2"];
+      if (match.theme === "understanding") {
+        classes.push("detail-subtitle-understanding", "detail-subtitle-insight");
+      } else if (match.theme === "proof") {
+        classes.push("detail-subtitle-proof");
+      } else if (match.theme === "usage") {
+        classes.push("detail-subtitle-usage");
+      } else if (match.theme === "pitfall") {
+        classes.push("detail-subtitle-pitfall");
+      } else if (match.theme === "summary") {
+        classes.push("detail-subtitle-summary");
+      }
+      return classes;
+    }
+    if (match.level === 3) {
+      const classes = ["detail-subtitle-level3", "detail-subpoint-label"];
+      if (match.kind === "scene") {
+        classes.push("detail-scene-label");
+      } else if (match.kind === "method") {
+        classes.push("detail-method-label");
+      } else if (match.kind === "point") {
+        classes.push("detail-point-label");
+      } else if (match.kind === "condition") {
+        classes.push("detail-condition-label");
+      } else {
+        classes.push("detail-step-label");
+      }
+      return classes;
+    }
+    return [];
+  }
+
+  function resolveSubtitleLabelMatch(sectionId, text) {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const normalizedSectionId = canonicalSectionId(sectionId);
+
+    const standaloneCandidate = raw.replace(LABEL_TRAILING_PUNCT_PATTERN, "").trim();
+    const normalizedStandalone = normalizeSubtitleToken(standaloneCandidate);
+    if (normalizedStandalone && normalizedStandalone.length <= 12) {
+      const level2Theme = resolveLevel2Theme(normalizedSectionId, normalizedStandalone);
+      if (level2Theme) {
+        return { level: 2, theme: level2Theme, matchType: "standalone", normalizedLabel: normalizedStandalone };
+      }
+      const level3Kind = resolveLevel3Kind(normalizedStandalone);
+      if (level3Kind) {
+        return { level: 3, kind: level3Kind, matchType: "standalone", normalizedLabel: normalizedStandalone };
+      }
+    }
+
+    const inlinePrefixMatch = raw.match(LABEL_INLINE_PREFIX_PATTERN);
+    if (!inlinePrefixMatch) {
+      return null;
+    }
+    const normalizedPrefix = normalizeSubtitleToken(inlinePrefixMatch[1]);
+    if (!normalizedPrefix) {
+      return null;
+    }
+    const level2Theme = resolveLevel2Theme(normalizedSectionId, normalizedPrefix);
+    if (level2Theme) {
+      return { level: 2, theme: level2Theme, matchType: "inline", normalizedLabel: normalizedPrefix };
+    }
+    const level3Kind = resolveLevel3Kind(normalizedPrefix);
+    if (level3Kind) {
+      return { level: 3, kind: level3Kind, matchType: "inline", normalizedLabel: normalizedPrefix };
+    }
+    return null;
+  }
+
+  function addClassNames(target, classNames) {
+    if (!target || !classNames || !classNames.length) {
+      return;
+    }
+    classNames.forEach(function (className) {
+      target.classList.add(className);
+    });
+  }
+
+  function decorateInlineLeadingLabel(node, match, classNames) {
+    if (!node || !match || match.matchType !== "inline" || !classNames.length) {
+      return false;
+    }
+    if (node.children && node.children.length > 0) {
+      return false;
+    }
+    if (node.querySelector && node.querySelector(".detail-math-inline, .katex")) {
+      return false;
+    }
+    const rawText = String(node.textContent || "");
+    const prefixMatch = rawText.match(LABEL_INLINE_PREFIX_PATTERN);
+    if (!prefixMatch) {
+      return false;
+    }
+    const normalizedPrefix = normalizeSubtitleToken(prefixMatch[1]);
+    if (!normalizedPrefix || normalizedPrefix !== match.normalizedLabel) {
+      return false;
+    }
+    const suffixText = rawText.slice(prefixMatch[0].length).trimStart();
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "detail-subtitle-lead " + classNames.join(" ");
+    labelSpan.textContent = String(prefixMatch[1] || "").trim();
+
+    node.textContent = "";
+    node.classList.add("detail-inline-subtitle-paragraph");
+    node.appendChild(labelSpan);
+    if (suffixText) {
+      node.appendChild(document.createTextNode("\uFF1A" + suffixText));
+    }
+    return true;
+  }
+
+  function decorateSectionBodyLabels(body, sectionId) {
+    if (!body) {
+      return;
+    }
+    const normalizedSectionId = canonicalSectionId(sectionId);
+    body.classList.add("detail-block");
+    body.classList.remove("detail-understanding-block", "detail-proof-block");
+    if (normalizedSectionId === "intuition") {
+      body.classList.add("detail-understanding-block");
+    } else if (normalizedSectionId === "proof" || normalizedSectionId === "derivation") {
+      body.classList.add("detail-proof-block");
+    }
+
+    const richText = body.querySelector(".detail-rich-text");
+    if (!richText) {
+      return;
+    }
+    const candidates = richText.querySelectorAll("p, li");
+    candidates.forEach(function (node) {
+      if (!node) {
+        return;
+      }
+      node.classList.add("detail-paragraph");
+      const rawText = String(node.textContent || "").trim();
+      if (!rawText) {
+        return;
+      }
+      const match = resolveSubtitleLabelMatch(normalizedSectionId, rawText);
+      if (!match) {
+        return;
+      }
+      const classNames = subtitleClassesForMatch(match);
+      if (!classNames.length) {
+        return;
+      }
+      if (decorateInlineLeadingLabel(node, match, classNames)) {
+        return;
+      }
+      addClassNames(node, classNames);
+    });
   }
 
   function cacheDomRefs() {
@@ -366,10 +635,10 @@
       dom.content.hidden = state !== "content";
     }
     if (state === "empty" && dom.emptyText) {
-      dom.emptyText.textContent = message || "请从左侧结果中选择一条结论查看详情。";
+      dom.emptyText.textContent = message || "\u8bf7\u4ece\u5de6\u4fa7\u7ed3\u679c\u4e2d\u9009\u62e9\u4e00\u6761\u7ed3\u8bba\u67e5\u770b\u8be6\u60c5\u3002";
     }
     if (state === "error" && dom.errorText) {
-      dom.errorText.textContent = message || "详情暂时不可用。";
+      dom.errorText.textContent = message || "\u8be6\u60c5\u6682\u65f6\u4e0d\u53ef\u7528\u3002";
     }
   }
 
@@ -386,10 +655,10 @@
       items.push("ID " + detailId);
     }
     if (module) {
-      items.push("模块 " + module);
+      items.push("\u6a21\u5757 " + module);
     }
     if (category) {
-      items.push("分类 " + category);
+      items.push("\u5206\u7c7b " + category);
     }
     dom.meta.innerHTML = items
       .map(function (item) {
@@ -460,7 +729,7 @@
           "<div class=\"detail-var-head\">" +
           (name ? "<span class=\"detail-var-name\">" + escapeHtml(name) + "</span>" : "") +
           (latex ? "<span class=\"detail-var-latex\">\\(" + escapeHtml(latex) + "\\)</span>" : "") +
-          (required ? "<span class=\"detail-var-required\">必需</span>" : "") +
+          (required ? "<span class=\"detail-var-required\">\u5fc5\u9700</span>" : "") +
           "</div>" +
           (description ? "<div class=\"detail-var-desc\">" + escapeHtml(description) + "</div>" : "") +
           "</li>"
@@ -473,7 +742,7 @@
       return;
     }
     dom.vars.hidden = false;
-    dom.vars.innerHTML = "<h3 class=\"detail-fixed-section-title\">变量</h3><ul class=\"detail-vars-list\">" + html + "</ul>";
+    dom.vars.innerHTML = "<h3 class=\"detail-fixed-section-title\">\u53d8\u91cf</h3><ul class=\"detail-vars-list\">" + html + "</ul>";
     dom.vars.dataset.katexRequestId = "";
   }
 
@@ -490,7 +759,7 @@
     sectionNode.className = "detail-section";
     sectionNode.dataset.sectionId = normalizedId;
     const headerNode = document.createElement("h3");
-    headerNode.className = "detail-section-header";
+    headerNode.className = "detail-section-header detail-section-title";
     const bodyNode = document.createElement("div");
     bodyNode.className = "detail-section-body";
     sectionNode.appendChild(headerNode);
@@ -513,7 +782,7 @@
     const node = entry.node;
     const header = entry.header;
     const body = entry.body;
-    const label = String((sectionData && sectionData.label) || "").trim() || "内容";
+    const label = String((sectionData && sectionData.label) || "").trim() || "\u5185\u5bb9";
     const html = String((sectionData && sectionData.html) || "").trim();
     const isPlaceholder = !!(sectionData && sectionData.isPlaceholder);
     const order = toNumber(sectionData && sectionData.order, 0);
@@ -522,10 +791,12 @@
       header.textContent = label;
     }
     if (body) {
+      body.classList.remove("detail-block", "detail-understanding-block", "detail-proof-block");
       if (isPlaceholder) {
-        body.innerHTML = "<p class=\"detail-section-placeholder\">正在补全内容...</p>";
+        body.innerHTML = "<p class=\"detail-section-placeholder\">\u6b63\u5728\u8865\u5168\u5185\u5bb9...</p>";
       } else {
         body.innerHTML = "<div class=\"detail-rich-text\">" + html + "</div>";
+        decorateSectionBodyLabels(body, sectionId);
       }
       body.dataset.katexRequestId = "";
       body.dataset.sectionId = String(sectionId || "").trim();
@@ -570,7 +841,7 @@
 
     setState("content");
     if (dom.title) {
-      dom.title.textContent = String(payload.title || "").trim() || "未命名结论";
+      dom.title.textContent = String(payload.title || "").trim() || "\u672a\u547d\u540d\u7ed3\u8bba";
     }
     renderMeta(payload);
     renderTags(payload.tags);
@@ -579,9 +850,9 @@
     const conditionHtml = String(payload.conditionHtml || "").trim();
     const remarkHtml = String(payload.remarkHtml || "").trim();
 
-    renderFixedSection(dom.core, "核心结论", statementHtml || htmlFromText(""));
-    renderFixedSection(dom.condition, "条件", conditionHtml);
-    renderFixedSection(dom.remarks, "备注", remarkHtml);
+    renderFixedSection(dom.core, "\u6838\u5fc3\u7ed3\u8bba", statementHtml || htmlFromText(""));
+    renderFixedSection(dom.condition, "\u6761\u4ef6", conditionHtml);
+    renderFixedSection(dom.remarks, "\u5907\u6ce8", remarkHtml);
     renderVars(payload.vars);
 
     const sections = Array.isArray(payload.sections) ? payload.sections : [];
@@ -1154,7 +1425,7 @@
 
     const session = beginRenderSession(payload);
     if (!session.ok) {
-      setState("error", "详情请求参数无效。");
+      setState("error", "\u8be6\u60c5\u8bf7\u6c42\u53c2\u6570\u65e0\u6548\u3002");
       reportPerf("js_render_failed", {
         requestId: session.requestId,
         detailId: session.detailId,

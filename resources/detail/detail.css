@@ -19,6 +19,30 @@
   --detail-text-muted: #5f6976;
   --detail-text-tertiary: #7a8390;
   --detail-accent: #3f63bf;
+  --detail-l2-understanding-fg: #73593a;
+  --detail-l2-understanding-border: rgba(145, 115, 80, 0.44);
+  --detail-l2-understanding-bg: rgba(192, 167, 136, 0.12);
+  --detail-l2-proof-fg: #42556d;
+  --detail-l2-proof-border: rgba(85, 109, 136, 0.44);
+  --detail-l2-proof-bg: rgba(154, 173, 194, 0.14);
+  --detail-l2-usage-fg: #3f6753;
+  --detail-l2-usage-border: rgba(90, 137, 112, 0.4);
+  --detail-l2-usage-bg: rgba(149, 186, 165, 0.13);
+  --detail-l2-pitfall-fg: #875230;
+  --detail-l2-pitfall-border: rgba(168, 110, 70, 0.4);
+  --detail-l2-pitfall-bg: rgba(213, 167, 132, 0.14);
+  --detail-l2-summary-fg: #5d4d73;
+  --detail-l2-summary-border: rgba(122, 104, 148, 0.36);
+  --detail-l2-summary-bg: rgba(176, 163, 195, 0.13);
+  --detail-l3-fg: #4a5664;
+  --detail-l3-border: rgba(96, 114, 136, 0.18);
+  --detail-l3-bg: rgba(128, 147, 169, 0.06);
+  --detail-l3-logic-fg: #44576d;
+  --detail-l3-logic-border: rgba(87, 111, 140, 0.19);
+  --detail-l3-logic-bg: rgba(135, 159, 186, 0.07);
+  --detail-l3-insight-fg: #625345;
+  --detail-l3-insight-border: rgba(129, 107, 86, 0.17);
+  --detail-l3-insight-bg: rgba(170, 150, 129, 0.06);
   --detail-radius: 14px;
   --detail-gap: 20px;
 }
@@ -242,7 +266,8 @@ body {
   opacity: var(--section-hover-accent-opacity);
 }
 
-.detail-section-header {
+.detail-section-header,
+.detail-section-title {
   margin: 0 0 10px;
   font-size: 18px;
   line-height: 1.45;
@@ -268,12 +293,140 @@ body {
   overflow-wrap: break-word;
 }
 
+.detail-block {
+  margin: 0;
+}
+
+.detail-understanding-block,
+.detail-proof-block {
+  margin: 0;
+}
+
+.detail-paragraph {
+  margin: 0 0 12px;
+}
+
 .detail-rich-text p {
   margin: 0 0 12px;
 }
 
 .detail-rich-text p:last-child {
   margin-bottom: 0;
+}
+
+.detail-subtitle-primary {
+  font-weight: 660;
+  letter-spacing: 0.01em;
+}
+
+.detail-subtitle-level2 {
+  --detail-l2-fg: var(--detail-l2-understanding-fg);
+  --detail-l2-border: var(--detail-l2-understanding-border);
+  --detail-l2-bg: var(--detail-l2-understanding-bg);
+  color: var(--detail-l2-fg);
+  font-size: 0.97rem;
+  line-height: 1.5;
+}
+
+p.detail-subtitle-level2,
+li.detail-subtitle-level2,
+.detail-subtitle-lead.detail-subtitle-level2 {
+  display: inline-block;
+  margin-top: 16px;
+  margin-bottom: 9px;
+  padding: 2px 11px 2px 10px;
+  border: 1px solid rgba(120, 128, 139, 0.12);
+  border-left: 3px solid var(--detail-l2-border);
+  border-radius: 7px;
+  background: var(--detail-l2-bg);
+  color: var(--detail-l2-fg);
+}
+
+.detail-subtitle-understanding {
+  --detail-l2-fg: var(--detail-l2-understanding-fg);
+  --detail-l2-border: var(--detail-l2-understanding-border);
+  --detail-l2-bg: var(--detail-l2-understanding-bg);
+}
+
+.detail-subtitle-insight {
+  --detail-l2-fg: var(--detail-l2-understanding-fg);
+  --detail-l2-border: var(--detail-l2-understanding-border);
+  --detail-l2-bg: var(--detail-l2-understanding-bg);
+}
+
+.detail-subtitle-proof {
+  --detail-l2-fg: var(--detail-l2-proof-fg);
+  --detail-l2-border: var(--detail-l2-proof-border);
+  --detail-l2-bg: var(--detail-l2-proof-bg);
+}
+
+.detail-subtitle-usage {
+  --detail-l2-fg: var(--detail-l2-usage-fg);
+  --detail-l2-border: var(--detail-l2-usage-border);
+  --detail-l2-bg: var(--detail-l2-usage-bg);
+}
+
+.detail-subtitle-pitfall {
+  --detail-l2-fg: var(--detail-l2-pitfall-fg);
+  --detail-l2-border: var(--detail-l2-pitfall-border);
+  --detail-l2-bg: var(--detail-l2-pitfall-bg);
+}
+
+.detail-subtitle-summary {
+  --detail-l2-fg: var(--detail-l2-summary-fg);
+  --detail-l2-border: var(--detail-l2-summary-border);
+  --detail-l2-bg: var(--detail-l2-summary-bg);
+}
+
+.detail-subpoint-label {
+  font-weight: 600;
+  letter-spacing: 0.002em;
+}
+
+.detail-subtitle-level3 {
+  --detail-l3-fg-active: var(--detail-l3-fg);
+  --detail-l3-border-active: var(--detail-l3-border);
+  --detail-l3-bg-active: var(--detail-l3-bg);
+  color: var(--detail-l3-fg-active);
+  font-size: 0.92em;
+  line-height: 1.48;
+}
+
+p.detail-subtitle-level3,
+li.detail-subtitle-level3,
+.detail-subtitle-lead.detail-subtitle-level3 {
+  display: inline-block;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--detail-l3-border-active);
+  border-radius: 5px;
+  background: var(--detail-l3-bg-active);
+  color: var(--detail-l3-fg-active);
+  opacity: 0.95;
+}
+
+.detail-step-label,
+.detail-condition-label {
+  --detail-l3-fg-active: var(--detail-l3-logic-fg);
+  --detail-l3-border-active: var(--detail-l3-logic-border);
+  --detail-l3-bg-active: var(--detail-l3-logic-bg);
+}
+
+.detail-scene-label,
+.detail-method-label,
+.detail-point-label {
+  --detail-l3-fg-active: var(--detail-l3-insight-fg);
+  --detail-l3-border-active: var(--detail-l3-insight-border);
+  --detail-l3-bg-active: var(--detail-l3-insight-bg);
+}
+
+.detail-inline-subtitle-paragraph {
+  margin-top: 8px;
+}
+
+.detail-subtitle-lead {
+  margin-right: 3px;
 }
 
 .detail-rich-text ul,
@@ -316,6 +469,28 @@ body {
   border: 1px solid #e2e6eb;
   border-radius: 6px;
   padding: 1px 4px;
+}
+
+.detail-rich-text .detail-subtitle-level2 + p,
+.detail-rich-text .detail-subtitle-level2 + ul,
+.detail-rich-text .detail-subtitle-level2 + ol,
+.detail-rich-text .detail-subtitle-level3 + p,
+.detail-rich-text .detail-subtitle-level3 + ul,
+.detail-rich-text .detail-subtitle-level3 + ol {
+  margin-top: 0;
+}
+
+.detail-rich-text p + .detail-math-block,
+.detail-rich-text .detail-subtitle-level2 + .detail-math-block {
+  margin-top: 10px;
+}
+
+.detail-rich-text .detail-subtitle-level3 + .detail-math-block {
+  margin-top: 8px;
+}
+
+.detail-rich-text .detail-math-block + p {
+  margin-top: 10px;
 }
 
 .detail-math-block {
@@ -477,5 +652,21 @@ body {
 
   .detail-section::before {
     left: 10px;
+  }
+
+  p.detail-subtitle-level2,
+  li.detail-subtitle-level2,
+  .detail-subtitle-lead.detail-subtitle-level2 {
+    margin-top: 13px;
+    margin-bottom: 8px;
+    padding: 1px 10px 1px 9px;
+  }
+
+  p.detail-subtitle-level3,
+  li.detail-subtitle-level3,
+  .detail-subtitle-lead.detail-subtitle-level3 {
+    margin-top: 5px;
+    margin-bottom: 4px;
+    padding: 0 5px;
   }
 }
