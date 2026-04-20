@@ -8,6 +8,8 @@
 #include "domain/services/suggest_service.h"
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "license/feature_gate.h"
+#include "license/license_service.h"
 #include "ui/detail/detail_html_renderer.h"
 #include "ui/detail/detail_pane.h"
 #include "ui/detail/detail_render_coordinator.h"
@@ -47,6 +49,7 @@ const QString kDetailTimingColorIdle = QStringLiteral("#7a7f87");
 const QString kDetailTimingColorLoading = QStringLiteral("#8e959f");
 const QString kDetailTimingColorSuccess = QStringLiteral("#5f666f");
 const QString kDetailTimingColorFailed = QStringLiteral("#b06f5a");
+constexpr int kTrialPreviewLimit = 5;
 
 int findComboDataIndex(const QComboBox* combo, const QString& value)
 {
@@ -106,12 +109,16 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
                        domain::services::SuggestService* suggestService,
                        const infrastructure::data::ConclusionContentRepository* contentRepository,
                        const infrastructure::data::ConclusionIndexRepository* indexRepository,
+                       const license::FeatureGate* featureGate,
+                       const license::LicenseService* licenseService,
                        QWidget* parent)
     : QWidget(parent),
       searchService_(searchService),
       suggestService_(suggestService),
       contentRepository_(contentRepository),
-      indexRepository_(indexRepository)
+      indexRepository_(indexRepository),
+      featureGate_(featureGate),
+      licenseService_(licenseService)
 {
     ui::style::ensureAppStyleSheetLoaded();
     setObjectName(QStringLiteral("searchPage"));
@@ -135,7 +142,20 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     connectSignals();
     ensureDetailShellLoaded();
     rebuildFilterOptions();
+    applyFeatureGate();
     resetToEmptyState();
+
+    if (licenseService_ != nullptr) {
+        connect(licenseService_, &license::LicenseService::licenseStateChanged, this, [this](const license::LicenseState&) {
+            applyFeatureGate();
+            refreshFavoriteButtonState();
+            const QString currentQuery = queryInput_ == nullptr ? QString() : queryInput_->text().trimmed();
+            if (!currentQuery.isEmpty()) {
+                lastSearchSignature_.clear();
+                runSearch(currentQuery, QStringLiteral("license_state_changed"));
+            }
+        });
+    }
 }
 
 bool SearchPage::isDetailWebReady() const
@@ -377,6 +397,8 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
         pendingDetailDocId_.clear();
         pendingDetailRequestId_ = 0;
         pendingDetailSelectionTimestampMs_ = 0;
+        currentDetailDocId_.clear();
+        refreshFavoriteButtonState();
         if (detailRenderCoordinator_ != nullptr) {
             detailRenderCoordinator_->clearRenderedDetail();
         }
@@ -397,6 +419,12 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
 
 void SearchPage::onFilterChanged()
 {
+    if (!isFeatureEnabled(license::Feature::AdvancedFilter)) {
+        updateStatusLine(QStringLiteral("高级筛选未开放。"),
+                         featureDisabledReason(license::Feature::AdvancedFilter));
+        return;
+    }
+
     lastSuggestSignature_.clear();
     lastSearchSignature_.clear();
 
@@ -441,6 +469,12 @@ void SearchPage::onSortChanged()
 
 void SearchPage::onClearFiltersClicked()
 {
+    if (!isFeatureEnabled(license::Feature::AdvancedFilter)) {
+        updateStatusLine(QStringLiteral("高级筛选未开放。"),
+                         featureDisabledReason(license::Feature::AdvancedFilter));
+        return;
+    }
+
     if (moduleFilterCombo_ == nullptr || categoryFilterCombo_ == nullptr || tagFilterCombo_ == nullptr) {
         return;
     }
@@ -456,6 +490,35 @@ void SearchPage::onClearFiltersClicked()
 
     LOG_INFO(LogCategory::SearchEngine, QStringLiteral("filters cleared trigger=manual"));
     onFilterChanged();
+}
+
+void SearchPage::onFavoriteButtonClicked()
+{
+    const QString docId = currentDetailDocId_.trimmed();
+    if (docId.isEmpty()) {
+        updateStatusLine(QStringLiteral("当前未选中可收藏结论。"), QStringLiteral("请先在左侧选择一条结果。"));
+        return;
+    }
+
+    if (!isFeatureEnabled(license::Feature::Favorites)) {
+        updateStatusLine(QStringLiteral("收藏功能未开放。"), featureDisabledReason(license::Feature::Favorites));
+        return;
+    }
+
+    if (!favoritesRepository_.load()) {
+        LOG_WARN(LogCategory::FileIo, QStringLiteral("favorites load failed before add doc_id=%1").arg(docId));
+    }
+
+    if (favoritesRepository_.contains(docId)) {
+        updateStatusLine(QStringLiteral("该结论已在收藏中。"), QStringLiteral("docId=%1").arg(docId));
+        refreshFavoriteButtonState(docId);
+        return;
+    }
+
+    favoritesRepository_.add(docId);
+    updateStatusLine(QStringLiteral("已加入收藏。"), QStringLiteral("docId=%1").arg(docId));
+    refreshFavoriteButtonState(docId);
+    emit favoritesChanged();
 }
 
 void SearchPage::buildUi()
@@ -653,8 +716,20 @@ void SearchPage::buildUi()
     detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     detailTimingLabel_->setProperty("timingState", QStringLiteral("idle"));
 
+    favoriteButton_ = new QPushButton(QStringLiteral("收藏当前结论"), detailHeader);
+    favoriteButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
+    favoriteButton_->setCursor(Qt::PointingHandCursor);
+    favoriteButton_->setEnabled(false);
+
+    auto* detailHeaderRight = new QWidget(detailHeader);
+    auto* detailHeaderRightLayout = new QVBoxLayout(detailHeaderRight);
+    detailHeaderRightLayout->setContentsMargins(0, 0, 0, 0);
+    detailHeaderRightLayout->setSpacing(4);
+    detailHeaderRightLayout->addWidget(favoriteButton_, 0, Qt::AlignRight);
+    detailHeaderRightLayout->addWidget(detailTimingLabel_, 0, Qt::AlignRight);
+
     detailHeaderLayout->addWidget(detailHeaderLeft, 1);
-    detailHeaderLayout->addWidget(detailTimingLabel_, 0, Qt::AlignTop);
+    detailHeaderLayout->addWidget(detailHeaderRight, 0, Qt::AlignTop);
     rightLayout->addWidget(detailHeader);
 
     auto* detailBody = new QWidget(detailShell);
@@ -732,6 +807,7 @@ void SearchPage::connectSignals()
     connect(tagFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
+    connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
 
     if (detailPane_ != nullptr) {
         connect(detailPane_.get(), &ui::detail::DetailPane::shellReadyChanged, this, [this](bool ready) {
@@ -949,6 +1025,14 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
         return;
     }
 
+    if (!isFeatureEnabled(license::Feature::BasicSearchPreview)
+        && !isFeatureEnabled(license::Feature::FullSearch)) {
+        updateStatusLine(QStringLiteral("当前授权不支持搜索。"), QStringLiteral("请先激活正式版。"));
+        updateResultEmptyState(QStringLiteral("搜索未开放"), QStringLiteral("请先在激活页完成授权。"));
+        showDetailPlaceholder(QStringLiteral("当前授权不支持详情查看。"));
+        return;
+    }
+
     const QString signature = buildSearchSignature(normalizedQuery);
     if (signature == lastSearchSignature_) {
         LOG_DEBUG(LogCategory::SearchEngine,
@@ -957,18 +1041,21 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     }
 
     domain::models::SearchOptions options;
-    options.maxResults = 120;
+    const bool fullSearchEnabled = isFeatureEnabled(license::Feature::FullSearch);
+    const bool basicPreviewEnabled = isFeatureEnabled(license::Feature::BasicSearchPreview);
+    const bool advancedFilterEnabled = isFeatureEnabled(license::Feature::AdvancedFilter);
+    options.maxResults = fullSearchEnabled ? 120 : kTrialPreviewLimit;
 
     const QString moduleFilter = selectedModuleFilter();
     const QString categoryFilter = selectedCategoryFilter();
     const QString tagFilter = selectedTagFilter();
-    if (!moduleFilter.isEmpty()) {
+    if (advancedFilterEnabled && !moduleFilter.isEmpty()) {
         options.moduleFilter.push_back(moduleFilter);
     }
-    if (!categoryFilter.isEmpty()) {
+    if (advancedFilterEnabled && !categoryFilter.isEmpty()) {
         options.categoryFilter.push_back(categoryFilter);
     }
-    if (!tagFilter.isEmpty()) {
+    if (advancedFilterEnabled && !tagFilter.isEmpty()) {
         options.tagFilter.push_back(tagFilter);
     }
 
@@ -977,7 +1064,15 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     const domain::models::SearchResult result = searchService_->search(normalizedQuery, options);
     const qint64 elapsedMs = timer.elapsed();
 
+    const int rawHitCount = result.hits.size();
     currentHits_ = result.hits;
+    if (!fullSearchEnabled) {
+        if (!basicPreviewEnabled) {
+            currentHits_.clear();
+        } else if (currentHits_.size() > kTrialPreviewLimit) {
+            currentHits_.resize(kTrialPreviewLimit);
+        }
+    }
     applySort(&currentHits_);
     renderResults(currentHits_);
     clearSuggestions();
@@ -985,9 +1080,12 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
 
     const QString filterSummary =
         QStringLiteral("module=%1 | category=%2 | tag=%3")
-            .arg(moduleFilter.isEmpty() ? QStringLiteral("all") : moduleFilter)
-            .arg(categoryFilter.isEmpty() ? QStringLiteral("all") : categoryFilter)
-            .arg(tagFilter.isEmpty() ? QStringLiteral("all") : tagFilter);
+            .arg(advancedFilterEnabled ? (moduleFilter.isEmpty() ? QStringLiteral("all") : moduleFilter)
+                                       : QStringLiteral("locked"))
+            .arg(advancedFilterEnabled ? (categoryFilter.isEmpty() ? QStringLiteral("all") : categoryFilter)
+                                       : QStringLiteral("locked"))
+            .arg(advancedFilterEnabled ? (tagFilter.isEmpty() ? QStringLiteral("all") : tagFilter)
+                                       : QStringLiteral("locked"));
 
     if (currentHits_.isEmpty()) {
         updateStatusLine(QStringLiteral("没有找到相关结论。"),
@@ -1013,6 +1111,13 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                          .arg(currentHits_.size())
                          .arg(elapsedMs)
                          .arg(filterSummary));
+
+    if (!fullSearchEnabled) {
+        const QString reason = featureDisabledReason(license::Feature::FullSearch);
+        updateStatusLine(
+            QStringLiteral("体验版仅展示前 %1 条结果（命中 %2 条）。").arg(kTrialPreviewLimit).arg(rawHitCount),
+            reason.isEmpty() ? QStringLiteral("正式版解锁完整搜索。") : reason);
+    }
     updateResultEmptyState(QString(), QString());
 
     LOG_INFO(LogCategory::PerfSearch,
@@ -1196,6 +1301,9 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
+    currentDetailDocId_ = normalizedDocId;
+    refreshFavoriteButtonState(normalizedDocId);
+
     if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId)) {
         // Drop stale work before touching repositories so rapid A/B/C/D switches stay responsive.
         logDetailPerf(normalizedDocId,
@@ -1307,6 +1415,20 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
+    if (!isFeatureEnabled(license::Feature::FullDetail)) {
+        showTrialDetailPreview(detailView, normalizedDocId);
+        if (detailRenderCoordinator_ != nullptr) {
+            detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
+        }
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("total"),
+                      QStringLiteral("dt=%1ms mode=trial_preview").arg(detailElapsedMs(selectionTimestampMs)));
+        markDetailTimingSuccess(normalizedDocId, requestId, selectionTimestampMs);
+        return;
+    }
+
     if (webDetailEnabled_ && detailPane_ != nullptr && detailViewDataMapper_ != nullptr) {
         QJsonObject payload = contentPayload;
         if (payload.isEmpty()) {
@@ -1389,6 +1511,8 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->clearRenderedDetail();
     }
+    currentDetailDocId_.clear();
+    refreshFavoriteButtonState();
 
     if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
         const QJsonObject payload = detailViewDataMapper_->buildEmptyPayload(fallbackMessage);
@@ -1416,6 +1540,8 @@ void SearchPage::showDetailError(const QString& message)
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->clearRenderedDetail();
     }
+    currentDetailDocId_.clear();
+    refreshFavoriteButtonState();
 
     if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
         const QJsonObject payload = detailViewDataMapper_->buildErrorPayload(fallbackMessage);
@@ -1449,6 +1575,12 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
 {
     if (!webDetailEnabled_ || detailPane_ == nullptr) {
         return;
+    }
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setVisible(false);
+    }
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(true);
     }
     ui::detail::DetailPane::RequestContext requestContext;
     requestContext.payload = payload;
@@ -1933,6 +2065,137 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
         detailBrowser_->setVisible(true);
     }
     updateDetailShellMeta(QStringLiteral("已切换到兼容详情模式"), QStringLiteral("warning"));
+}
+
+bool SearchPage::isFeatureEnabled(license::Feature feature) const
+{
+    return featureGate_ == nullptr ? true : featureGate_->isEnabled(feature);
+}
+
+QString SearchPage::featureDisabledReason(license::Feature feature) const
+{
+    return featureGate_ == nullptr ? QString() : featureGate_->disabledReason(feature);
+}
+
+void SearchPage::applyFeatureGate()
+{
+    const bool advancedFilterEnabled = isFeatureEnabled(license::Feature::AdvancedFilter);
+    if (!advancedFilterEnabled && moduleFilterCombo_ != nullptr && categoryFilterCombo_ != nullptr && tagFilterCombo_ != nullptr) {
+        QSignalBlocker moduleBlocker(moduleFilterCombo_);
+        QSignalBlocker categoryBlocker(categoryFilterCombo_);
+        QSignalBlocker tagBlocker(tagFilterCombo_);
+        moduleFilterCombo_->setCurrentIndex(0);
+        categoryFilterCombo_->setCurrentIndex(0);
+        tagFilterCombo_->setCurrentIndex(0);
+        lastSuggestSignature_.clear();
+        lastSearchSignature_.clear();
+    }
+
+    if (moduleFilterCombo_ != nullptr) {
+        moduleFilterCombo_->setEnabled(advancedFilterEnabled);
+    }
+    if (categoryFilterCombo_ != nullptr) {
+        categoryFilterCombo_->setEnabled(advancedFilterEnabled);
+    }
+    if (tagFilterCombo_ != nullptr) {
+        tagFilterCombo_->setEnabled(advancedFilterEnabled);
+    }
+    if (clearFiltersButton_ != nullptr) {
+        clearFiltersButton_->setEnabled(advancedFilterEnabled);
+        if (advancedFilterEnabled) {
+            clearFiltersButton_->setToolTip(QString());
+        } else {
+            clearFiltersButton_->setToolTip(featureDisabledReason(license::Feature::AdvancedFilter));
+        }
+    }
+
+    refreshFavoriteButtonState();
+}
+
+void SearchPage::refreshFavoriteButtonState(const QString& docId)
+{
+    if (favoriteButton_ == nullptr) {
+        return;
+    }
+
+    const QString targetId = docId.trimmed().isEmpty() ? currentDetailDocId_.trimmed() : docId.trimmed();
+    if (targetId.isEmpty()) {
+        favoriteButton_->setText(QStringLiteral("收藏当前结论"));
+        favoriteButton_->setEnabled(false);
+        favoriteButton_->setToolTip(QStringLiteral("请先选择一条结论。"));
+        return;
+    }
+
+    if (!isFeatureEnabled(license::Feature::Favorites)) {
+        favoriteButton_->setText(QStringLiteral("收藏（正式版）"));
+        favoriteButton_->setEnabled(false);
+        favoriteButton_->setToolTip(featureDisabledReason(license::Feature::Favorites));
+        return;
+    }
+
+    if (!favoritesRepository_.load()) {
+        LOG_WARN(LogCategory::FileIo, QStringLiteral("favorites load failed while refreshing button"));
+    }
+
+    const bool alreadyFavorited = favoritesRepository_.contains(targetId);
+    favoriteButton_->setText(alreadyFavorited ? QStringLiteral("已收藏") : QStringLiteral("收藏当前结论"));
+    favoriteButton_->setEnabled(!alreadyFavorited);
+    favoriteButton_->setToolTip(alreadyFavorited ? QStringLiteral("该结论已加入收藏。")
+                                                 : QStringLiteral("点击将当前结论加入收藏。"));
+}
+
+void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetailViewData& detailView, const QString& docId)
+{
+    const QString reason = featureDisabledReason(license::Feature::FullDetail);
+    updateDetailShellMeta(QStringLiteral("详情预览（体验版）"), QStringLiteral("warning"));
+
+    QStringList html;
+    html.push_back(QStringLiteral("<h2>%1</h2>").arg(detailView.title.trimmed().toHtmlEscaped()));
+    html.push_back(QStringLiteral("<p><b>ID:</b> %1</p>").arg(docId.toHtmlEscaped()));
+
+    const QString summary = detailView.summary.trimmed();
+    if (!summary.isEmpty()) {
+        html.push_back(QStringLiteral("<h3>摘要</h3>"));
+        html.push_back(toHtmlParagraph(summary));
+    }
+
+    QString snippet;
+    for (const domain::adapters::DetailSectionViewData& section : detailView.sections) {
+        if (!section.visible) {
+            continue;
+        }
+        const QString sectionText = section.text.trimmed();
+        const QString sectionHtml = section.html.trimmed();
+        if (!sectionText.isEmpty()) {
+            snippet = sectionText;
+            break;
+        }
+        if (!sectionHtml.isEmpty()) {
+            snippet = QString(sectionHtml).remove(QRegularExpression(QStringLiteral("<[^>]*>"))).trimmed();
+            if (!snippet.isEmpty()) {
+                break;
+            }
+        }
+    }
+    if (!snippet.isEmpty()) {
+        if (snippet.size() > 220) {
+            snippet = snippet.left(220).trimmed();
+            snippet.append(QStringLiteral("..."));
+        }
+        html.push_back(QStringLiteral("<h3>内容预览</h3>"));
+        html.push_back(toHtmlParagraph(snippet));
+    }
+
+    html.push_back(QStringLiteral("<p style=\"color:#9a3412;\"><b>%1</b></p>")
+                       .arg((reason.isEmpty() ? QStringLiteral("正式版解锁完整详情。") : reason).toHtmlEscaped()));
+
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setHtml(html.join(QString()));
+        detailBrowser_->setVisible(true);
+    }
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
 }
 
 void SearchPage::applySort(QVector<domain::models::SearchHit>* hits) const

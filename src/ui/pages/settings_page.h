@@ -5,6 +5,10 @@
 
 #include <QWidget>
 
+namespace license {
+class LicenseService;
+}
+
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -16,6 +20,7 @@ class SettingsPage : public QWidget {
 public:
     explicit SettingsPage(const infrastructure::data::ConclusionIndexRepository* indexRepository,
                           const infrastructure::data::ConclusionContentRepository* contentRepository,
+                          const license::LicenseService* licenseService,
                           bool indexLoaded,
                           bool contentLoaded,
                           QWidget* parent = nullptr);
@@ -28,6 +33,7 @@ private:
     void setupSections();
 
     QWidget* buildSoftwareInfoSection();
+    QWidget* buildLicenseInfoSection();
     QWidget* buildDataInfoSection();
     QWidget* buildHelpSection();
     QWidget* buildFeedbackSection();
@@ -43,6 +49,7 @@ private:
 private:
     const infrastructure::data::ConclusionIndexRepository* indexRepository_ = nullptr;
     const infrastructure::data::ConclusionContentRepository* contentRepository_ = nullptr;
+    const license::LicenseService* licenseService_ = nullptr;
     bool indexLoaded_ = false;
     bool contentLoaded_ = false;
 
@@ -57,6 +64,7 @@ private:
     QVBoxLayout* contentLayout_ = nullptr;
 
     QWidget* softwareInfoGroup_ = nullptr;
+    QWidget* licenseInfoGroup_ = nullptr;
     QWidget* dataInfoGroup_ = nullptr;
     QWidget* helpGroup_ = nullptr;
     QWidget* feedbackGroup_ = nullptr;
@@ -66,6 +74,14 @@ private:
     QLabel* versionValueLabel_ = nullptr;
     QLabel* buildValueLabel_ = nullptr;
     QLabel* modeValueLabel_ = nullptr;
+
+    QLabel* licenseStatusValueLabel_ = nullptr;
+    QLabel* licenseFileStatusValueLabel_ = nullptr;
+    QLabel* licenseSerialValueLabel_ = nullptr;
+    QLabel* licenseWatermarkValueLabel_ = nullptr;
+    QLabel* deviceFingerprintValueLabel_ = nullptr;
+    QLabel* licensePathValueLabel_ = nullptr;
+    QLabel* licenseHintLabel_ = nullptr;
 
     QLabel* dataStatusValueLabel_ = nullptr;
     QLabel* dataDirValueLabel_ = nullptr;

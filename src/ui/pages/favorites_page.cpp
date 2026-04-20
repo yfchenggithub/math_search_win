@@ -4,6 +4,8 @@
 #include "core/logging/logger.h"
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "license/feature_gate.h"
+#include "license/license_service.h"
 #include "ui/style/app_style.h"
 #include "ui/widgets/favorites/favorite_item_card.h"
 
@@ -61,14 +63,29 @@ QStringList normalizeTagList(const QStringList& rawTags)
 
 FavoritesPage::FavoritesPage(const infrastructure::data::ConclusionContentRepository* contentRepository,
                              const infrastructure::data::ConclusionIndexRepository* indexRepository,
+                             const license::FeatureGate* featureGate,
+                             const license::LicenseService* licenseService,
                              QWidget* parent)
-    : QWidget(parent), contentRepository_(contentRepository), indexRepository_(indexRepository)
+    : QWidget(parent),
+      contentRepository_(contentRepository),
+      indexRepository_(indexRepository),
+      featureGate_(featureGate),
+      licenseService_(licenseService)
 {
     ui::style::ensureAppStyleSheetLoaded();
     setObjectName(QStringLiteral("favoritesPage"));
     setProperty("pageRole", QStringLiteral("favorites"));
     setupUi();
     setupConnections();
+    applyFeatureGate();
+
+    if (licenseService_ != nullptr) {
+        connect(licenseService_, &license::LicenseService::licenseStateChanged, this, [this](const license::LicenseState&) {
+            applyFeatureGate();
+            reloadData();
+        });
+    }
+
     reloadData();
 
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("page constructed name=favorites mode=content_list_ui"));
@@ -76,6 +93,14 @@ FavoritesPage::FavoritesPage(const infrastructure::data::ConclusionContentReposi
 
 void FavoritesPage::reloadData()
 {
+    applyFeatureGate();
+    if (!favoritesFeatureEnabled_) {
+        items_.clear();
+        clearCards();
+        updateEmptyState();
+        return;
+    }
+
     const bool loaded = favoritesRepository_.load();
     if (!loaded) {
         LOG_WARN(LogCategory::FileIo, QStringLiteral("favorites_page load favorites failed fallback=memory"));
@@ -119,6 +144,7 @@ void FavoritesPage::setupUi()
 
     subtitleLabel_ = new QLabel(QStringLiteral("沉淀常用二级结论，形成稳定可复习的知识资产。"), headerWidget_);
     subtitleLabel_->setObjectName(QStringLiteral("pageSubtitleLabel"));
+    subtitleLabel_->setWordWrap(true);
 
     headerLayout->addWidget(titleLabel_);
     headerLayout->addWidget(subtitleLabel_);
@@ -186,21 +212,21 @@ void FavoritesPage::setupUi()
                                         ui::style::tokens::kEmptyCardPaddingVertical);
     emptyCardLayout->setSpacing(10);
 
-    auto* emptyTitleLabel = new QLabel(QStringLiteral("还没有收藏的结论"), emptyCard);
-    emptyTitleLabel->setObjectName(QStringLiteral("emptyStateTitle"));
-    emptyTitleLabel->setAlignment(Qt::AlignCenter);
+    emptyTitleLabel_ = new QLabel(QStringLiteral("还没有收藏的结论"), emptyCard);
+    emptyTitleLabel_->setObjectName(QStringLiteral("emptyStateTitle"));
+    emptyTitleLabel_->setAlignment(Qt::AlignCenter);
 
-    auto* emptyDescriptionLabel = new QLabel(QStringLiteral("把常用二级结论加入收藏，后续复习会更方便。"), emptyCard);
-    emptyDescriptionLabel->setObjectName(QStringLiteral("emptyStateDescription"));
-    emptyDescriptionLabel->setAlignment(Qt::AlignCenter);
-    emptyDescriptionLabel->setWordWrap(true);
+    emptyDescriptionLabel_ = new QLabel(QStringLiteral("把常用二级结论加入收藏，后续复习会更方便。"), emptyCard);
+    emptyDescriptionLabel_->setObjectName(QStringLiteral("emptyStateDescription"));
+    emptyDescriptionLabel_->setAlignment(Qt::AlignCenter);
+    emptyDescriptionLabel_->setWordWrap(true);
 
     emptyActionButton_ = new QPushButton(QStringLiteral("去搜索"), emptyCard);
     emptyActionButton_->setObjectName(QStringLiteral("emptyStatePrimaryButton"));
     emptyActionButton_->setCursor(Qt::PointingHandCursor);
 
-    emptyCardLayout->addWidget(emptyTitleLabel);
-    emptyCardLayout->addWidget(emptyDescriptionLabel);
+    emptyCardLayout->addWidget(emptyTitleLabel_);
+    emptyCardLayout->addWidget(emptyDescriptionLabel_);
     emptyCardLayout->addSpacing(ui::style::tokens::kSmallSpacing);
     emptyCardLayout->addWidget(emptyActionButton_, 0, Qt::AlignHCenter);
 
@@ -213,13 +239,15 @@ void FavoritesPage::setupUi()
 void FavoritesPage::setupConnections()
 {
     connect(sortComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        if (!favoritesFeatureEnabled_) {
+            return;
+        }
         applySort();
         rebuildCards();
         updateEmptyState();
     });
 
     connect(filterButton_, &QPushButton::clicked, this, []() {});
-
     connect(emptyActionButton_, &QPushButton::clicked, this, &FavoritesPage::navigateToSearchRequested);
 }
 
@@ -240,15 +268,12 @@ void FavoritesPage::applySort()
             if (lhsHasTime != rhsHasTime) {
                 return lhsHasTime;
             }
-
             if (lhsHasTime && rhsHasTime && lhs.favoriteAt != rhs.favoriteAt) {
                 return lhs.favoriteAt > rhs.favoriteAt;
             }
-
             if (lhs.sourceOrder != rhs.sourceOrder) {
                 return lhs.sourceOrder > rhs.sourceOrder;
             }
-
             if (!lhs.title.isEmpty() || !rhs.title.isEmpty()) {
                 return textLess(lhs.title, rhs.title);
             }
@@ -285,6 +310,11 @@ void FavoritesPage::rebuildCards()
 {
     clearCards();
 
+    if (!favoritesFeatureEnabled_) {
+        cardsLayout_->addStretch(1);
+        return;
+    }
+
     for (const FavoriteItem& item : std::as_const(items_)) {
         FavoriteItemViewData cardData;
         cardData.conclusionId = item.conclusionId;
@@ -300,6 +330,11 @@ void FavoritesPage::rebuildCards()
 
         connect(card, &FavoriteItemCard::openRequested, this, &FavoritesPage::openConclusionRequested);
         connect(card, &FavoriteItemCard::unfavoriteRequested, this, [this](const QString& conclusionId) {
+            if (!favoritesFeatureEnabled_) {
+                LOG_INFO(LogCategory::UiMainWindow,
+                         QStringLiteral("unfavorite blocked reason=feature_locked id=%1").arg(conclusionId));
+                return;
+            }
             if (conclusionId.trimmed().isEmpty()) {
                 return;
             }
@@ -330,13 +365,32 @@ void FavoritesPage::clearCards()
 
 void FavoritesPage::updateEmptyState()
 {
+    if (!favoritesFeatureEnabled_) {
+        scrollArea_->setVisible(false);
+        emptyStateWidget_->setVisible(true);
+        sortComboBox_->setEnabled(false);
+        filterButton_->setEnabled(false);
+        summaryLabel_->setText(QStringLiteral("收藏功能未开放"));
+
+        const QString reason = featureGate_ == nullptr ? QStringLiteral("正式版可启用收藏功能。")
+                                                       : featureGate_->disabledReason(license::Feature::Favorites);
+        emptyTitleLabel_->setText(QStringLiteral("体验版不支持收藏"));
+        emptyDescriptionLabel_->setText(reason.isEmpty() ? QStringLiteral("激活正式版后可使用收藏。") : reason);
+        emptyActionButton_->setText(QStringLiteral("去搜索"));
+        return;
+    }
+
     const bool hasItems = !items_.isEmpty();
     scrollArea_->setVisible(hasItems);
     emptyStateWidget_->setVisible(!hasItems);
     sortComboBox_->setEnabled(hasItems);
+    filterButton_->setEnabled(true);
+    emptyActionButton_->setText(QStringLiteral("去搜索"));
 
     if (!hasItems) {
         summaryLabel_->setText(QStringLiteral("共 0 条收藏"));
+        emptyTitleLabel_->setText(QStringLiteral("还没有收藏的结论"));
+        emptyDescriptionLabel_->setText(QStringLiteral("把常用二级结论加入收藏，后续复习会更方便。"));
         return;
     }
 
@@ -356,6 +410,11 @@ void FavoritesPage::updateEmptyState()
         summary.append(QStringLiteral(" · 最近收藏 %1").arg(latestTimeText));
     }
     summaryLabel_->setText(summary);
+}
+
+void FavoritesPage::applyFeatureGate()
+{
+    favoritesFeatureEnabled_ = featureGate_ == nullptr ? true : featureGate_->isEnabled(license::Feature::Favorites);
 }
 
 void FavoritesPage::rebuildFavoriteTimestampIndex()
@@ -535,3 +594,4 @@ QDateTime FavoritesPage::parseDateTime(const QString& rawText)
 
     return {};
 }
+

@@ -2,6 +2,8 @@
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
+#include "license/license_service.h"
+#include "license/license_state.h"
 #include "shared/constants.h"
 #include "shared/paths.h"
 #include "ui/style/app_style.h"
@@ -38,16 +40,43 @@ QString buildTypeText()
 #endif
 }
 
+QString licenseFileStatusText(const license::LicenseState& state)
+{
+    switch (state.status) {
+    case license::LicenseStatus::ValidFull:
+        return QStringLiteral("有效");
+    case license::LicenseStatus::Missing:
+    case license::LicenseStatus::Trial:
+        return QStringLiteral("未找到");
+    case license::LicenseStatus::DeviceMismatch:
+        return QStringLiteral("设备不匹配");
+    case license::LicenseStatus::ReadError:
+        return QStringLiteral("读取失败");
+    case license::LicenseStatus::ParseError:
+    case license::LicenseStatus::Invalid:
+        return QStringLiteral("无效");
+    case license::LicenseStatus::ActivationCodeInvalid:
+        return QStringLiteral("激活失败");
+    case license::LicenseStatus::WriteError:
+        return QStringLiteral("写入失败");
+    case license::LicenseStatus::Unknown:
+    default:
+        return QStringLiteral("未知");
+    }
+}
+
 }  // namespace
 
 SettingsPage::SettingsPage(const infrastructure::data::ConclusionIndexRepository* indexRepository,
                            const infrastructure::data::ConclusionContentRepository* contentRepository,
+                           const license::LicenseService* licenseService,
                            bool indexLoaded,
                            bool contentLoaded,
                            QWidget* parent)
     : QWidget(parent),
       indexRepository_(indexRepository),
       contentRepository_(contentRepository),
+      licenseService_(licenseService),
       indexLoaded_(indexLoaded),
       contentLoaded_(contentLoaded)
 {
@@ -111,6 +140,7 @@ void SettingsPage::setupHeader()
 
     subtitleLabel_ = new QLabel(QStringLiteral("管理应用信息、数据状态与帮助入口"), titleBlock);
     subtitleLabel_->setObjectName(QStringLiteral("settingsPageSubtitle"));
+    subtitleLabel_->setWordWrap(true);
 
     titleLayout->addWidget(titleLabel_);
     titleLayout->addWidget(subtitleLabel_);
@@ -126,12 +156,14 @@ void SettingsPage::setupHeader()
 void SettingsPage::setupSections()
 {
     softwareInfoGroup_ = buildSoftwareInfoSection();
+    licenseInfoGroup_ = buildLicenseInfoSection();
     dataInfoGroup_ = buildDataInfoSection();
     helpGroup_ = buildHelpSection();
     feedbackGroup_ = buildFeedbackSection();
     expansionHintGroup_ = buildExpansionHintSection();
 
     contentLayout_->addWidget(softwareInfoGroup_);
+    contentLayout_->addWidget(licenseInfoGroup_);
     contentLayout_->addWidget(dataInfoGroup_);
     contentLayout_->addWidget(helpGroup_);
     contentLayout_->addWidget(feedbackGroup_);
@@ -200,7 +232,9 @@ QWidget* SettingsPage::createInfoRow(const QString& label, QLabel** valueLabel, 
 
 QWidget* SettingsPage::buildSoftwareInfoSection()
 {
-    auto* section = createSection(QStringLiteral("软件信息"), QStringLiteral("当前应用版本、构建环境与运行模式。"), QStringLiteral("software"));
+    auto* section = createSection(QStringLiteral("软件信息"),
+                                  QStringLiteral("当前应用版本、构建环境与运行模式。"),
+                                  QStringLiteral("software"));
     auto* sectionLayout = static_cast<QVBoxLayout*>(section->layout());
 
     sectionLayout->addWidget(createInfoRow(QStringLiteral("应用名称"), &appNameValueLabel_));
@@ -208,10 +242,31 @@ QWidget* SettingsPage::buildSoftwareInfoSection()
     sectionLayout->addWidget(createInfoRow(QStringLiteral("构建信息"), &buildValueLabel_));
     sectionLayout->addWidget(createInfoRow(QStringLiteral("运行模式"), &modeValueLabel_));
 
-    auto* hintLabel = new QLabel(QStringLiteral("用于问题反馈时快速定位版本环境，不涉及业务配置改动。"), section);
+    auto* hintLabel = new QLabel(QStringLiteral("用于问题反馈时快速确认环境信息，不涉及业务配置修改。"), section);
     hintLabel->setObjectName(QStringLiteral("settingsHintText"));
     hintLabel->setWordWrap(true);
     sectionLayout->addWidget(hintLabel);
+
+    return section;
+}
+
+QWidget* SettingsPage::buildLicenseInfoSection()
+{
+    auto* section =
+        createSection(QStringLiteral("授权信息"), QStringLiteral("展示当前离线授权状态，仅用于查看，不在此页执行激活。"), QStringLiteral("license"));
+    auto* sectionLayout = static_cast<QVBoxLayout*>(section->layout());
+
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("当前授权状态"), &licenseStatusValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("授权文件状态"), &licenseFileStatusValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("授权编号"), &licenseSerialValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("水印编号"), &licenseWatermarkValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("本机设备码"), &deviceFingerprintValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("授权文件路径"), &licensePathValueLabel_, true));
+
+    licenseHintLabel_ = new QLabel(section);
+    licenseHintLabel_->setObjectName(QStringLiteral("settingsHintText"));
+    licenseHintLabel_->setWordWrap(true);
+    sectionLayout->addWidget(licenseHintLabel_);
 
     return section;
 }
@@ -264,7 +319,7 @@ QWidget* SettingsPage::buildDataInfoSection()
 QWidget* SettingsPage::buildHelpSection()
 {
     auto* section =
-        createSection(QStringLiteral("使用帮助"), QStringLiteral("以可执行入口和说明为主，不堆叠冗长占位文本。"), QStringLiteral("help"));
+        createSection(QStringLiteral("使用帮助"), QStringLiteral("以可执行入口和说明为主，不堆叠冗长占位文案。"), QStringLiteral("help"));
     auto* sectionLayout = static_cast<QVBoxLayout*>(section->layout());
 
     sectionLayout->addWidget(createInfoRow(QStringLiteral("使用说明"), &helpTextLabel_, true));
@@ -351,7 +406,8 @@ QWidget* SettingsPage::buildExpansionHintSection()
 
     sectionLayout->addWidget(createInfoRow(QStringLiteral("后续方向"), &expansionHintLabel_, true));
 
-    auto* hintLabel = new QLabel(QStringLiteral("可扩展方向：数据目录切换、主题/缩放、快捷键帮助、日志入口、激活状态摘要。"), section);
+    auto* hintLabel = new QLabel(
+        QStringLiteral("可扩展方向：数据目录切换、主题/缩放、快捷键帮助、日志入口、激活状态摘要。"), section);
     hintLabel->setObjectName(QStringLiteral("settingsHintText"));
     hintLabel->setWordWrap(true);
     sectionLayout->addWidget(hintLabel);
@@ -369,6 +425,46 @@ void SettingsPage::reloadData()
     versionValueLabel_->setText(UiConstants::kStatusVersion);
     buildValueLabel_->setText(QStringLiteral("%1 · Qt %2").arg(buildTypeText(), QString::fromLatin1(qVersion())));
     modeValueLabel_->setText(QStringLiteral("%1 · 搜索与详情均使用本地数据").arg(UiConstants::kStatusOffline));
+
+    if (licenseService_ != nullptr) {
+        const license::LicenseState licenseState = licenseService_->currentState();
+        licenseStatusValueLabel_->setText(licenseState.isFull ? QStringLiteral("正式版") : QStringLiteral("体验版"));
+        licenseFileStatusValueLabel_->setText(licenseFileStatusText(licenseState));
+        licenseSerialValueLabel_->setText(licenseState.licenseSerial.trimmed().isEmpty() ? QStringLiteral("—")
+                                                                                          : licenseState.licenseSerial.trimmed());
+        licenseWatermarkValueLabel_->setText(licenseState.watermarkId.trimmed().isEmpty() ? QStringLiteral("—")
+                                                                                            : licenseState.watermarkId.trimmed());
+        deviceFingerprintValueLabel_->setText(licenseState.deviceFingerprint.trimmed().isEmpty()
+                                                  ? QStringLiteral("—")
+                                                  : licenseState.deviceFingerprint.trimmed());
+
+        const QString licensePath =
+            licenseState.licenseFilePath.trimmed().isEmpty() ? QDir::toNativeSeparators(licenseService_->licenseFilePath())
+                                                             : QDir::toNativeSeparators(licenseState.licenseFilePath);
+        licensePathValueLabel_->setText(licensePath);
+        licensePathValueLabel_->setToolTip(licensePath);
+
+        const QString message = licenseState.message.trimmed();
+        const QString technical = licenseState.technicalReason.trimmed();
+        if (!message.isEmpty() && !technical.isEmpty()) {
+            licenseHintLabel_->setText(QStringLiteral("%1（%2）").arg(message, technical));
+        } else if (!message.isEmpty()) {
+            licenseHintLabel_->setText(message);
+        } else if (!technical.isEmpty()) {
+            licenseHintLabel_->setText(technical);
+        } else {
+            licenseHintLabel_->setText(QStringLiteral("授权状态正常。"));
+        }
+    } else {
+        licenseStatusValueLabel_->setText(QStringLiteral("体验版"));
+        licenseFileStatusValueLabel_->setText(QStringLiteral("未找到"));
+        licenseSerialValueLabel_->setText(QStringLiteral("—"));
+        licenseWatermarkValueLabel_->setText(QStringLiteral("—"));
+        deviceFingerprintValueLabel_->setText(QStringLiteral("—"));
+        licensePathValueLabel_->setText(
+            QDir::toNativeSeparators(QDir(AppPaths::licenseDir()).filePath(QStringLiteral("license.dat"))));
+        licenseHintLabel_->setText(QStringLiteral("授权服务未接入，默认按体验版运行。"));
+    }
 
     const QString dataDir = QDir::toNativeSeparators(AppPaths::dataDir());
     dataStatusValueLabel_->setText(buildDataStatusText());
@@ -411,7 +507,7 @@ void SettingsPage::reloadData()
     dataHintLabel_->setText(buildDataHintText());
 
     helpTextLabel_->setText(QStringLiteral("建议先在搜索页检索，再把高频结论加入收藏，最后通过最近搜索回访。"));
-    shortcutHintLabel_->setText(QStringLiteral("当前版本未提供全局快捷键，后续补充常用操作快捷提示。"));
+    shortcutHintLabel_->setText(QStringLiteral("当前版本未提供全局快捷键，后续补充常用操作提示。"));
     const QString helpPathText =
         QStringLiteral("README：%1\n文档目录：%2")
             .arg(resolvedPath(QDir(AppPaths::appRoot()).filePath(QStringLiteral("README.md")), QString()),
@@ -423,7 +519,7 @@ void SettingsPage::reloadData()
     feedbackGuideLabel_->setText(QStringLiteral("请附上版本号、数据状态、复现步骤和截图，便于快速定位问题。"));
     feedbackIssueLabel_->setText(QStringLiteral("检索结果异常 / 内容缺失 / 详情渲染问题 / 激活相关问题。"));
 
-    expansionHintLabel_->setText(QStringLiteral("将逐步开放真实设置项，不再使用静态说明占位的方式扩展页面。"));
+    expansionHintLabel_->setText(QStringLiteral("将逐步开放真实设置项，不再依赖静态说明扩展页面。"));
 }
 
 QString SettingsPage::buildDataStatusText() const
@@ -457,7 +553,7 @@ QString SettingsPage::buildDataHintText() const
     }
 
     if (hints.isEmpty()) {
-        return QStringLiteral("数据加载逻辑沿用主窗口启动流程；本页仅展示状态与目录信息。");
+        return QStringLiteral("数据加载沿用主窗口启动流程；本页仅展示状态与目录信息。");
     }
 
     return hints.join(QStringLiteral(" "));
@@ -471,3 +567,4 @@ QString SettingsPage::resolvedPath(const QString& candidate, const QString& fall
     }
     return QDir::toNativeSeparators(QDir::cleanPath(path));
 }
+

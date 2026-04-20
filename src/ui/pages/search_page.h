@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "domain/models/search_result_models.h"
+#include "domain/repositories/favorites_repository.h"
 #include "ui/detail/detail_perf_aggregator.h"
 
 #include <QElapsedTimer>
@@ -30,6 +31,12 @@ class ConclusionContentRepository;
 class ConclusionIndexRepository;
 }
 
+namespace license {
+enum class Feature : int;
+class FeatureGate;
+class LicenseService;
+}
+
 namespace domain::adapters {
 struct ConclusionDetailViewData;
 }
@@ -49,6 +56,8 @@ public:
                         domain::services::SuggestService* suggestService,
                         const infrastructure::data::ConclusionContentRepository* contentRepository,
                         const infrastructure::data::ConclusionIndexRepository* indexRepository,
+                        const license::FeatureGate* featureGate,
+                        const license::LicenseService* licenseService,
                         QWidget* parent = nullptr);
 
     bool isDetailWebReady() const;
@@ -57,6 +66,9 @@ public:
     void setInitialModule(const QString& module);
     void triggerSearchFromRecent(const QString& query, const QString& module = QString());
     void openConclusionById(const QString& conclusionId);
+
+signals:
+    void favoritesChanged();
 
 private slots:
     void onQueryTextChanged(const QString& text);
@@ -67,6 +79,7 @@ private slots:
     void onFilterChanged();
     void onSortChanged();
     void onClearFiltersClicked();
+    void onFavoriteButtonClicked();
     void flushPendingDetailRequest();
 
 private:
@@ -169,12 +182,20 @@ private:
     QStringList collectCategoryOptions() const;
     static QStringList uniqueSortedCaseInsensitive(const QStringList& values);
     static QString joinNonEmpty(const QStringList& values, const QString& separator);
+    bool isFeatureEnabled(license::Feature feature) const;
+    QString featureDisabledReason(license::Feature feature) const;
+    void applyFeatureGate();
+    void refreshFavoriteButtonState(const QString& docId = QString());
+    void showTrialDetailPreview(const domain::adapters::ConclusionDetailViewData& detailView, const QString& docId);
 
 private:
     domain::services::SearchService* searchService_ = nullptr;
     domain::services::SuggestService* suggestService_ = nullptr;
     const infrastructure::data::ConclusionContentRepository* contentRepository_ = nullptr;
     const infrastructure::data::ConclusionIndexRepository* indexRepository_ = nullptr;
+    const license::FeatureGate* featureGate_ = nullptr;
+    const license::LicenseService* licenseService_ = nullptr;
+    domain::repositories::FavoritesRepository favoritesRepository_;
 
     bool indexReady_ = false;
     bool contentReady_ = false;
@@ -188,6 +209,7 @@ private:
     QString pendingDetailDocId_;
     quint64 pendingDetailRequestId_ = 0;
     qint64 pendingDetailSelectionTimestampMs_ = 0;
+    QString currentDetailDocId_;
 
     QHash<QString, domain::adapters::ConclusionDetailViewData> detailViewCache_;
     QHash<QString, QJsonObject> detailPayloadCache_;
@@ -203,6 +225,7 @@ private:
     QLabel* summaryLabel_ = nullptr;
     QLabel* detailMetaLabel_ = nullptr;
     QLabel* detailTimingLabel_ = nullptr;
+    QPushButton* favoriteButton_ = nullptr;
     QListWidget* suggestionList_ = nullptr;
     QComboBox* moduleFilterCombo_ = nullptr;
     QComboBox* categoryFilterCombo_ = nullptr;

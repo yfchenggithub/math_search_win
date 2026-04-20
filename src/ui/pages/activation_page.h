@@ -1,7 +1,15 @@
 #pragma once
 
+#include "license/license_state.h"
+
 #include <QString>
 #include <QWidget>
+
+namespace license {
+class ActivationCodeService;
+class DeviceFingerprintService;
+class LicenseService;
+}  // namespace license
 
 class QLabel;
 class QLineEdit;
@@ -13,17 +21,17 @@ class ActivationPage : public QWidget {
     Q_OBJECT
 
 public:
-    explicit ActivationPage(QWidget* parent = nullptr);
+    explicit ActivationPage(license::LicenseService* licenseService,
+                            const license::DeviceFingerprintService* deviceFingerprintService,
+                            const license::ActivationCodeService* activationCodeService,
+                            QWidget* parent = nullptr);
     void reloadData();
 
-private:
-    enum class LicenseUiState {
-        Active,
-        Inactive,
-        Unknown,
-        Error
-    };
+private slots:
+    void onActivateClicked();
+    void onReloadLicenseClicked();
 
+private:
     void setupUi();
     void setupHeader();
     void setupSections();
@@ -37,10 +45,13 @@ private:
     QWidget* createSection(const QString& title, const QString& summary, const QString& sectionRole);
     QWidget* createInfoRow(const QString& label, QLabel** valueLabel, bool wrapValue = false);
 
-    void updateLicenseStateUi();
+    void updateLicenseStateUi(const license::LicenseState& state);
+    QString licenseStatusHintText(const license::LicenseState& state) const;
 
 private:
-    LicenseUiState licenseUiState_ = LicenseUiState::Inactive;
+    license::LicenseService* licenseService_ = nullptr;
+    const license::DeviceFingerprintService* deviceFingerprintService_ = nullptr;
+    const license::ActivationCodeService* activationCodeService_ = nullptr;
 
     QVBoxLayout* rootLayout_ = nullptr;
     QWidget* headerWidget_ = nullptr;
@@ -65,9 +76,15 @@ private:
     QLabel* licenseStatusHintLabel_ = nullptr;
     QLabel* licenseTypeValueLabel_ = nullptr;
     QLabel* licenseExpireValueLabel_ = nullptr;
+    QLabel* licenseSerialValueLabel_ = nullptr;
+    QLabel* watermarkValueLabel_ = nullptr;
     QLineEdit* deviceCodeLineEdit_ = nullptr;
     QLineEdit* activationCodeLineEdit_ = nullptr;
     QPushButton* activateButton_ = nullptr;
+    QPushButton* reloadLicenseButton_ = nullptr;
     QPushButton* viewUpgradePlanButton_ = nullptr;
     QLabel* upgradeDescriptionLabel_ = nullptr;
+
+    QString transientActivationError_;
 };
+

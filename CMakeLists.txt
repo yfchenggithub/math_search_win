@@ -49,6 +49,16 @@ add_executable(math_search_win
     src/infrastructure/data/conclusion_index_repository.cpp
     src/infrastructure/storage/local_storage_service.h
     src/infrastructure/storage/local_storage_service.cpp
+    src/license/license_state.h
+    src/license/license_state.cpp
+    src/license/device_fingerprint_service.h
+    src/license/device_fingerprint_service.cpp
+    src/license/activation_code_service.h
+    src/license/activation_code_service.cpp
+    src/license/license_service.h
+    src/license/license_service.cpp
+    src/license/feature_gate.h
+    src/license/feature_gate.cpp
     src/shared/constants.h
     src/shared/paths.h
     src/shared/paths.cpp

@@ -4,6 +4,10 @@
 #include "domain/services/suggest_service.h"
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "license/activation_code_service.h"
+#include "license/device_fingerprint_service.h"
+#include "license/feature_gate.h"
+#include "license/license_service.h"
 
 #include <QString>
 #include <QMainWindow>
@@ -45,6 +49,10 @@ private:
     infrastructure::data::ConclusionContentRepository contentRepository_;
     domain::services::SearchService searchService_;
     domain::services::SuggestService suggestService_;
+    license::DeviceFingerprintService deviceFingerprintService_;
+    license::ActivationCodeService activationCodeService_;
+    license::LicenseService licenseService_;
+    license::FeatureGate featureGate_;
 
     bool indexLoaded_ = false;
     bool contentLoaded_ = false;

@@ -8,6 +8,11 @@
 #include <QList>
 #include <QWidget>
 
+namespace license {
+class FeatureGate;
+class LicenseService;
+}
+
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -25,6 +30,8 @@ class FavoritesPage final : public QWidget {
 public:
     explicit FavoritesPage(const infrastructure::data::ConclusionContentRepository* contentRepository,
                            const infrastructure::data::ConclusionIndexRepository* indexRepository,
+                           const license::FeatureGate* featureGate,
+                           const license::LicenseService* licenseService,
                            QWidget* parent = nullptr);
 
     void reloadData();
@@ -59,6 +66,7 @@ private:
     void rebuildCards();
     void clearCards();
     void updateEmptyState();
+    void applyFeatureGate();
     void rebuildFavoriteTimestampIndex();
     FavoriteItem buildItemFromId(const QString& conclusionId, int sourceOrder) const;
     static QString preferredSummary(const QString& statement, const QString& summaryCandidate);
@@ -70,6 +78,9 @@ private:
     infrastructure::storage::LocalStorageService localStorageService_;
     const infrastructure::data::ConclusionContentRepository* contentRepository_ = nullptr;
     const infrastructure::data::ConclusionIndexRepository* indexRepository_ = nullptr;
+    const license::FeatureGate* featureGate_ = nullptr;
+    const license::LicenseService* licenseService_ = nullptr;
+    bool favoritesFeatureEnabled_ = true;
 
     QList<FavoriteItem> items_;
     QHash<QString, QDateTime> favoriteTimestampById_;
@@ -86,5 +97,7 @@ private:
     QWidget* cardsContainer_ = nullptr;
     QVBoxLayout* cardsLayout_ = nullptr;
     QWidget* emptyStateWidget_ = nullptr;
+    QLabel* emptyTitleLabel_ = nullptr;
+    QLabel* emptyDescriptionLabel_ = nullptr;
     QPushButton* emptyActionButton_ = nullptr;
 };

@@ -2,6 +2,9 @@
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
+#include "license/activation_code_service.h"
+#include "license/device_fingerprint_service.h"
+#include "license/license_service.h"
 #include "shared/constants.h"
 #include "ui/style/app_style.h"
 
@@ -9,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -19,15 +23,40 @@ namespace {
 
 constexpr int kInfoLabelMinWidth = 124;
 
+void repolishWidget(QWidget* widget)
+{
+    if (widget == nullptr || widget->style() == nullptr) {
+        return;
+    }
+    widget->style()->unpolish(widget);
+    widget->style()->polish(widget);
+    widget->update();
+}
+
 }  // namespace
 
-ActivationPage::ActivationPage(QWidget* parent) : QWidget(parent)
+ActivationPage::ActivationPage(license::LicenseService* licenseService,
+                               const license::DeviceFingerprintService* deviceFingerprintService,
+                               const license::ActivationCodeService* activationCodeService,
+                               QWidget* parent)
+    : QWidget(parent),
+      licenseService_(licenseService),
+      deviceFingerprintService_(deviceFingerprintService),
+      activationCodeService_(activationCodeService)
 {
     ui::style::ensureAppStyleSheetLoaded();
     setupUi();
-    reloadData();
 
-    LOG_DEBUG(LogCategory::Config, QStringLiteral("page constructed name=activation mode=entry_refined"));
+    connect(activateButton_, &QPushButton::clicked, this, &ActivationPage::onActivateClicked);
+    connect(reloadLicenseButton_, &QPushButton::clicked, this, &ActivationPage::onReloadLicenseClicked);
+    if (licenseService_ != nullptr) {
+        connect(licenseService_, &license::LicenseService::licenseStateChanged, this, [this](const license::LicenseState&) {
+            reloadData();
+        });
+    }
+
+    reloadData();
+    LOG_DEBUG(LogCategory::Config, QStringLiteral("page constructed name=activation mode=license_v2"));
 }
 
 void ActivationPage::setupUi()
@@ -202,8 +231,7 @@ QWidget* ActivationPage::buildVersionSection()
     sectionLayout->addWidget(createInfoRow(QStringLiteral("版本通道"), &channelValueLabel_));
     sectionLayout->addWidget(createInfoRow(QStringLiteral("运行模式"), &runModeValueLabel_));
 
-    auto* hintLabel =
-        new QLabel(QStringLiteral("该区域仅展示状态信息，不触发授权或升级变更。"), section);
+    auto* hintLabel = new QLabel(QStringLiteral("该区域仅展示状态信息，不触发授权或升级变更。"), section);
     hintLabel->setObjectName(QStringLiteral("activationHintText"));
     hintLabel->setWordWrap(true);
     sectionLayout->addWidget(hintLabel);
@@ -241,6 +269,8 @@ QWidget* ActivationPage::buildLicenseStatusSection()
 
     sectionLayout->addWidget(createInfoRow(QStringLiteral("授权类型"), &licenseTypeValueLabel_));
     sectionLayout->addWidget(createInfoRow(QStringLiteral("有效期"), &licenseExpireValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("授权编号"), &licenseSerialValueLabel_));
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("水印编号"), &watermarkValueLabel_));
 
     licenseStatusHintLabel_ = new QLabel(section);
     licenseStatusHintLabel_->setObjectName(QStringLiteral("licenseStatusHint"));
@@ -262,7 +292,6 @@ QWidget* ActivationPage::buildDeviceCodeSection()
     deviceCodeLineEdit_->setReadOnly(true);
     deviceCodeLineEdit_->setMinimumHeight(38);
     deviceCodeLineEdit_->setClearButtonEnabled(false);
-    deviceCodeLineEdit_->setPlaceholderText(QStringLiteral("待接入设备码生成逻辑"));
     sectionLayout->addWidget(deviceCodeLineEdit_);
 
     auto* hintLabel = new QLabel(QStringLiteral("设备码是授权识别码，请勿手动修改。"), section);
@@ -296,8 +325,13 @@ QWidget* ActivationPage::buildActivationInputSection()
     activateButton_->setObjectName(QStringLiteral("activationPrimaryButton"));
     activateButton_->setCursor(Qt::PointingHandCursor);
 
+    reloadLicenseButton_ = new QPushButton(QStringLiteral("重新检测授权"), inputRow);
+    reloadLicenseButton_->setObjectName(QStringLiteral("activationSecondaryButton"));
+    reloadLicenseButton_->setCursor(Qt::PointingHandCursor);
+
     inputLayout->addWidget(activationCodeLineEdit_, 1);
     inputLayout->addWidget(activateButton_, 0);
+    inputLayout->addWidget(reloadLicenseButton_, 0);
     sectionLayout->addWidget(inputRow);
 
     auto* hintLabel = new QLabel(QStringLiteral("如未激活，请先确认设备码与激活码是否匹配。"), section);
@@ -305,7 +339,7 @@ QWidget* ActivationPage::buildActivationInputSection()
     hintLabel->setWordWrap(true);
     sectionLayout->addWidget(hintLabel);
 
-    auto* supportHint = new QLabel(QStringLiteral("遇到问题可联系支持，并提供设备码和当前授权状态。"), section);
+    auto* supportHint = new QLabel(QStringLiteral("遇到问题可联系支持，并提供设备码与当前授权状态。"), section);
     supportHint->setObjectName(QStringLiteral("activationMetaText"));
     supportHint->setWordWrap(true);
     sectionLayout->addWidget(supportHint);
@@ -338,7 +372,7 @@ QWidget* ActivationPage::buildUpgradeSection()
     actionLayout->addStretch(1);
     sectionLayout->addWidget(actionRow);
 
-    auto* hintLabel = new QLabel(QStringLiteral("当前仅提供入口骨架，后续可接入真实升级方案详情。"), section);
+    auto* hintLabel = new QLabel(QStringLiteral("当前版本聚焦离线授权闭环，后续可接入真实签名与升级方案。"), section);
     hintLabel->setObjectName(QStringLiteral("activationHintText"));
     hintLabel->setWordWrap(true);
     sectionLayout->addWidget(hintLabel);
@@ -352,69 +386,177 @@ void ActivationPage::reloadData()
         return;
     }
 
+    const license::LicenseState state = licenseService_ == nullptr ? license::LicenseState() : licenseService_->currentState();
     versionValueLabel_->setText(UiConstants::kStatusVersion);
     channelValueLabel_->setText(QStringLiteral("本地离线通道"));
-    runModeValueLabel_->setText(QStringLiteral("%1 · 单机运行").arg(UiConstants::kStatusOffline));
+    runModeValueLabel_->setText(state.isFull ? QStringLiteral("本地离线模式 · 正式版")
+                                             : QStringLiteral("本地离线模式 · 体验版"));
 
-    licenseTypeValueLabel_->setText(QStringLiteral("待接入"));
-    licenseExpireValueLabel_->setText(QStringLiteral("当前未提供"));
+    licenseTypeValueLabel_->setText(state.isFull ? QStringLiteral("正式版") : QStringLiteral("体验版"));
+    licenseExpireValueLabel_->setText(state.expireAt.trimmed().isEmpty() ? QStringLiteral("当前未提供")
+                                                                         : state.expireAt.trimmed());
+    licenseSerialValueLabel_->setText(state.licenseSerial.trimmed().isEmpty() ? QStringLiteral("—")
+                                                                              : state.licenseSerial.trimmed());
+    watermarkValueLabel_->setText(state.watermarkId.trimmed().isEmpty() ? QStringLiteral("—")
+                                                                        : state.watermarkId.trimmed());
 
-    deviceCodeLineEdit_->setText(QStringLiteral("DEVICE-CODE-PLACEHOLDER"));
-    activationCodeLineEdit_->clear();
+    QString deviceCode = state.deviceFingerprint.trimmed();
+    if (deviceCode.isEmpty() && deviceFingerprintService_ != nullptr) {
+        deviceCode = deviceFingerprintService_->deviceFingerprint();
+    }
+    deviceCodeLineEdit_->setText(deviceCode.isEmpty() ? QStringLiteral("设备码暂不可用") : deviceCode);
 
-    upgradeDescriptionLabel_->setText(QStringLiteral("当前版本可通过“查看升级方案”了解后续版本策略、授权差异和接入计划。"));
+    upgradeDescriptionLabel_->setText(
+        QStringLiteral("当前版本采用本地离线激活：输入激活码后自动写入 license/license.dat，重启后按授权文件恢复状态。"));
 
-    licenseUiState_ = LicenseUiState::Inactive;
-    updateLicenseStateUi();
+    if (state.isFull) {
+        transientActivationError_.clear();
+    }
+    updateLicenseStateUi(state);
 }
 
-void ActivationPage::updateLicenseStateUi()
+void ActivationPage::onActivateClicked()
+{
+    if (licenseService_ == nullptr || deviceFingerprintService_ == nullptr || activationCodeService_ == nullptr) {
+        transientActivationError_ = QStringLiteral("授权服务未就绪，请重启应用后重试。");
+        reloadData();
+        return;
+    }
+
+    const QString activationCode = activationCodeLineEdit_->text().trimmed();
+    if (activationCode.isEmpty()) {
+        transientActivationError_ = QStringLiteral("请输入激活码后再执行激活。");
+        reloadData();
+        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        return;
+    }
+
+    const license::ActivationCodeParseResult parseResult = activationCodeService_->parseActivationCode(activationCode);
+    if (!parseResult.ok) {
+        transientActivationError_ = parseResult.errorMessage.trimmed().isEmpty() ? QStringLiteral("激活码解析失败。")
+                                                                                 : parseResult.errorMessage.trimmed();
+        reloadData();
+        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        return;
+    }
+
+    const QString currentDevice = deviceFingerprintService_->deviceFingerprint();
+    const license::ActivationValidationResult validation = activationCodeService_->validateActivationCode(
+        parseResult.payload, parseResult.originalPayloadJson, parseResult.check8, currentDevice);
+    if (!validation.ok) {
+        transientActivationError_ = validation.errorMessage.trimmed().isEmpty() ? QStringLiteral("激活码校验失败。")
+                                                                                : validation.errorMessage.trimmed();
+        reloadData();
+        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        return;
+    }
+
+    const QByteArray licenseContent = activationCodeService_->buildLicenseFileContent(
+        parseResult.payload, validation.resolvedFeatures, parseResult.prefix, parseResult.check8);
+
+    QString writeError;
+    if (!licenseService_->writeLicenseFile(licenseContent, &writeError)) {
+        transientActivationError_ = writeError.trimmed().isEmpty() ? QStringLiteral("写入授权文件失败。")
+                                                                   : writeError.trimmed();
+        reloadData();
+        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        return;
+    }
+
+    transientActivationError_.clear();
+    activationCodeLineEdit_->clear();
+    licenseService_->reload();
+
+    QMessageBox::information(this, QStringLiteral("激活成功"), QStringLiteral("授权已生效，当前设备已切换为正式版。"));
+}
+
+void ActivationPage::onReloadLicenseClicked()
+{
+    transientActivationError_.clear();
+    if (licenseService_ != nullptr) {
+        licenseService_->reload();
+    }
+    reloadData();
+}
+
+void ActivationPage::updateLicenseStateUi(const license::LicenseState& state)
 {
     if (licenseStatusValueLabel_ == nullptr || licenseStatusHintLabel_ == nullptr) {
         return;
     }
 
     QString statusText;
-    QString hintText;
     QString statusClass;
 
-    switch (licenseUiState_) {
-    case LicenseUiState::Active:
-        statusText = QStringLiteral("已激活");
-        hintText = QStringLiteral("当前设备已绑定有效授权，可继续正常使用。");
-        statusClass = QStringLiteral("licenseStatusActive");
-        break;
-    case LicenseUiState::Inactive:
-        statusText = QStringLiteral("未激活");
-        hintText = QStringLiteral("尚未检测到有效授权。请先确认设备码，再输入激活码完成激活。");
-        statusClass = QStringLiteral("licenseStatusInactive");
-        break;
-    case LicenseUiState::Unknown:
-        statusText = QStringLiteral("状态待确认");
-        hintText = QStringLiteral("当前版本尚未接入完整状态查询，后续会展示真实授权状态。");
-        statusClass = QStringLiteral("licenseStatusUnknown");
-        break;
-    case LicenseUiState::Error:
-        statusText = QStringLiteral("状态异常");
-        hintText = QStringLiteral("授权状态读取失败，请稍后重试或联系支持。");
+    if (!transientActivationError_.trimmed().isEmpty() && !state.isFull) {
+        statusText = QStringLiteral("激活失败");
         statusClass = QStringLiteral("licenseStatusError");
-        break;
+    } else {
+        switch (state.status) {
+        case license::LicenseStatus::ValidFull:
+            statusText = QStringLiteral("已激活");
+            statusClass = QStringLiteral("licenseStatusActive");
+            break;
+        case license::LicenseStatus::DeviceMismatch:
+            statusText = QStringLiteral("设备不匹配");
+            statusClass = QStringLiteral("licenseStatusError");
+            break;
+        case license::LicenseStatus::ReadError:
+            statusText = QStringLiteral("读取失败");
+            statusClass = QStringLiteral("licenseStatusError");
+            break;
+        case license::LicenseStatus::ParseError:
+        case license::LicenseStatus::Invalid:
+            statusText = QStringLiteral("授权无效");
+            statusClass = QStringLiteral("licenseStatusError");
+            break;
+        case license::LicenseStatus::ActivationCodeInvalid:
+            statusText = QStringLiteral("激活失败");
+            statusClass = QStringLiteral("licenseStatusError");
+            break;
+        case license::LicenseStatus::WriteError:
+            statusText = QStringLiteral("写入失败");
+            statusClass = QStringLiteral("licenseStatusError");
+            break;
+        case license::LicenseStatus::Missing:
+        case license::LicenseStatus::Trial:
+            statusText = QStringLiteral("未激活");
+            statusClass = QStringLiteral("licenseStatusInactive");
+            break;
+        case license::LicenseStatus::Unknown:
+        default:
+            statusText = QStringLiteral("状态待确认");
+            statusClass = QStringLiteral("licenseStatusUnknown");
+            break;
+        }
     }
 
     licenseStatusValueLabel_->setText(statusText);
     licenseStatusValueLabel_->setProperty("statusClass", statusClass);
-    licenseStatusHintLabel_->setText(hintText);
+    licenseStatusHintLabel_->setText(licenseStatusHintText(state));
     licenseStatusHintLabel_->setProperty("statusClass", statusClass);
 
-    auto refreshStyle = [](QWidget* widget) {
-        if (widget == nullptr || widget->style() == nullptr) {
-            return;
-        }
-        widget->style()->unpolish(widget);
-        widget->style()->polish(widget);
-        widget->update();
-    };
-
-    refreshStyle(licenseStatusValueLabel_);
-    refreshStyle(licenseStatusHintLabel_);
+    repolishWidget(licenseStatusValueLabel_);
+    repolishWidget(licenseStatusHintLabel_);
 }
+
+QString ActivationPage::licenseStatusHintText(const license::LicenseState& state) const
+{
+    if (!transientActivationError_.trimmed().isEmpty() && !state.isFull) {
+        return transientActivationError_.trimmed();
+    }
+
+    const QString message = state.message.trimmed();
+    const QString technicalReason = state.technicalReason.trimmed();
+    if (!message.isEmpty()) {
+        return technicalReason.isEmpty() ? message : QStringLiteral("%1（%2）").arg(message, technicalReason);
+    }
+    if (!technicalReason.isEmpty()) {
+        return technicalReason;
+    }
+    if (state.isFull) {
+        return QStringLiteral("当前设备已检测到有效正式版授权。");
+    }
+    return QStringLiteral("尚未检测到有效授权，请先确认设备码，再输入激活码。");
+}
+

@@ -22,12 +22,30 @@
 #include <QWidget>
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), searchService_(&indexRepository_), suggestService_(&indexRepository_)
+    : QMainWindow(parent),
+      searchService_(&indexRepository_),
+      suggestService_(&indexRepository_),
+      licenseService_(&deviceFingerprintService_)
 {
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("main_window ctor_begin"));
 
     resize(UiConstants::kDefaultWindowWidth, UiConstants::kDefaultWindowHeight);
     setWindowTitle(UiConstants::kAppTitle);
+
+    licenseService_.initialize();
+    featureGate_.setLicenseState(licenseService_.currentState());
+    connect(&licenseService_, &license::LicenseService::licenseStateChanged, this, [this](const license::LicenseState& state) {
+        featureGate_.setLicenseState(state);
+        if (activationPage_ != nullptr) {
+            activationPage_->reloadData();
+        }
+        if (settingsPage_ != nullptr) {
+            settingsPage_->reloadData();
+        }
+        if (favoritesPage_ != nullptr) {
+            favoritesPage_->reloadData();
+        }
+    });
 
     loadSearchData();
     setupUi();
@@ -115,11 +133,13 @@ void MainWindow::setupPages()
                                  &suggestService_,
                                  &contentRepository_,
                                  &indexRepository_,
+                                 &featureGate_,
+                                 &licenseService_,
                                  pageStack_);
     pageStack_->addWidget(searchPage_);
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("registered page index=%1 name=search").arg(UiConstants::kPageSearch));
 
-    favoritesPage_ = new FavoritesPage(&contentRepository_, &indexRepository_, pageStack_);
+    favoritesPage_ = new FavoritesPage(&contentRepository_, &indexRepository_, &featureGate_, &licenseService_, pageStack_);
     pageStack_->addWidget(favoritesPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=favorites").arg(UiConstants::kPageFavorites));
@@ -128,11 +148,11 @@ void MainWindow::setupPages()
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=recent_searches").arg(UiConstants::kPageRecentSearches));
     settingsPage_ =
-        new SettingsPage(&indexRepository_, &contentRepository_, indexLoaded_, contentLoaded_, pageStack_);
+        new SettingsPage(&indexRepository_, &contentRepository_, &licenseService_, indexLoaded_, contentLoaded_, pageStack_);
     pageStack_->addWidget(settingsPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=settings").arg(UiConstants::kPageSettings));
-    activationPage_ = new ActivationPage(pageStack_);
+    activationPage_ = new ActivationPage(&licenseService_, &deviceFingerprintService_, &activationCodeService_, pageStack_);
     pageStack_->addWidget(activationPage_);
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=activation").arg(UiConstants::kPageActivation));
@@ -173,6 +193,17 @@ void MainWindow::setupPages()
         });
 
         connect(favoritesPage_, &FavoritesPage::favoritesChanged, this, [this]() {
+            if (homePage_ != nullptr) {
+                homePage_->reloadData();
+            }
+        });
+    }
+
+    if (searchPage_ != nullptr) {
+        connect(searchPage_, &SearchPage::favoritesChanged, this, [this]() {
+            if (favoritesPage_ != nullptr) {
+                favoritesPage_->reloadData();
+            }
             if (homePage_ != nullptr) {
                 homePage_->reloadData();
             }
