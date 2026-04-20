@@ -38,6 +38,13 @@
 namespace {
 
 constexpr int kResultItemDocIdRole = Qt::UserRole + 1;
+const QString kDetailTimingIdleText = QStringLiteral("详情耗时：--");
+const QString kDetailTimingLoadingText = QStringLiteral("详情加载中...");
+const QString kDetailTimingFailedText = QStringLiteral("详情加载失败");
+const QString kDetailTimingColorIdle = QStringLiteral("#7a7f87");
+const QString kDetailTimingColorLoading = QStringLiteral("#8e959f");
+const QString kDetailTimingColorSuccess = QStringLiteral("#5f666f");
+const QString kDetailTimingColorFailed = QStringLiteral("#b06f5a");
 
 int findComboDataIndex(const QComboBox* combo, const QString& value)
 {
@@ -131,6 +138,7 @@ void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->reset();
     }
+    resetDetailTimingSessions(true);
 
     if (!indexReady_) {
         updateStatusLine(QStringLiteral("索引未就绪，当前无法搜索。"),
@@ -273,6 +281,7 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
         if (detailRenderCoordinator_ != nullptr) {
             detailRenderCoordinator_->clearRenderedDetail();
         }
+        resetDetailTimingSessions(true);
         showDetailPlaceholder(QStringLiteral("请选择左侧结果查看详情。"));
         return;
     }
@@ -425,6 +434,11 @@ void SearchPage::buildUi()
     detailBrowser_->setVisible(false);
     rightLayout->addWidget(detailBrowser_, 1);
 
+    detailTimingLabel_ = new QLabel(rightPanel);
+    detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    rightLayout->addWidget(detailTimingLabel_);
+    updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);
+
     webDetailEnabled_ = detailHtmlRenderer_ != nullptr && detailHtmlRenderer_->isReady();
     if (webDetailEnabled_) {
         detailPane_ = std::make_unique<ui::detail::DetailPane>(detailWebView_, detailBrowser_, detailHtmlRenderer_.get());
@@ -491,7 +505,10 @@ void SearchPage::connectSignals()
                        quint64 requestId,
                        qint64 selectionTimestampMs,
                        const QString& phase,
-                       const QString& extra) { logDetailPerf(detailId, requestId, selectionTimestampMs, phase, extra); });
+                       const QString& extra) {
+                    logDetailPerf(detailId, requestId, selectionTimestampMs, phase, extra);
+                    handleDetailPerfPhase(detailId, requestId, selectionTimestampMs, phase, extra);
+                });
     }
 }
 
@@ -553,6 +570,7 @@ void SearchPage::resetToEmptyState()
 {
     updateStatusLine(QStringLiteral("请输入关键词开始搜索。"),
                      QStringLiteral("支持实时建议、模块/分类/标签筛选、结果详情联动。"));
+    resetDetailTimingSessions(true);
     showDetailPlaceholder(QStringLiteral("左侧输入关键词后可查看搜索结果和详情。"));
 }
 
@@ -802,6 +820,8 @@ void SearchPage::enqueueDetailRenderRequest(const QString& docId)
         return;
     }
 
+    startDetailTimingSession(normalizedDocId, requestId, selectionTimestampMs);
+
     if (creation.supersededRequestId > 0) {
         logDetailPerf(normalizedDocId,
                       requestId,
@@ -853,6 +873,10 @@ void SearchPage::flushPendingDetailRequest()
                       selectionTimestampMs,
                       QStringLiteral("request_superseded"),
                       QStringLiteral("reason=stale_before_render"));
+        markDetailTimingStaleIgnored(docId,
+                                     requestId,
+                                     selectionTimestampMs,
+                                     QStringLiteral("reason=stale_before_render"));
         return;
     }
 
@@ -864,6 +888,15 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
     const QString normalizedDocId = docId.trimmed();
     if (normalizedDocId.isEmpty()) {
         showDetailError(QStringLiteral("当前结果缺少结论 ID，无法显示详情。"));
+        logDetailPerf(QStringLiteral("-"),
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_failed"),
+                      QStringLiteral("reason=empty_doc_id"));
+        markDetailTimingFailed(QStringLiteral("-"),
+                               requestId,
+                               selectionTimestampMs,
+                               QStringLiteral("reason=empty_doc_id"));
         return;
     }
 
@@ -874,6 +907,10 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
                       selectionTimestampMs,
                       QStringLiteral("request_superseded"),
                       QStringLiteral("reason=stale_before_payload"));
+        markDetailTimingStaleIgnored(normalizedDocId,
+                                     requestId,
+                                     selectionTimestampMs,
+                                     QStringLiteral("reason=stale_before_payload"));
         return;
     }
 
@@ -881,6 +918,15 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         showDetailError(QStringLiteral("内容仓库未就绪，无法显示详情。"));
         LOG_WARN(LogCategory::DetailRender,
                  QStringLiteral("detail skipped because content repo unavailable docId=%1").arg(normalizedDocId));
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_failed"),
+                      QStringLiteral("reason=content_repo_unavailable"));
+        markDetailTimingFailed(normalizedDocId,
+                               requestId,
+                               selectionTimestampMs,
+                               QStringLiteral("reason=content_repo_unavailable"));
         return;
     }
 
@@ -896,6 +942,15 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         if (record == nullptr) {
             showDetailError(QStringLiteral("内容仓库中未找到结论 ID: %1").arg(normalizedDocId));
             LOG_WARN(LogCategory::DetailRender, QStringLiteral("content record not found docId=%1").arg(normalizedDocId));
+            logDetailPerf(normalizedDocId,
+                          requestId,
+                          selectionTimestampMs,
+                          QStringLiteral("request_failed"),
+                          QStringLiteral("reason=content_record_not_found"));
+            markDetailTimingFailed(normalizedDocId,
+                                   requestId,
+                                   selectionTimestampMs,
+                                   QStringLiteral("reason=content_record_not_found"));
             return;
         }
 
@@ -908,6 +963,15 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
             LOG_WARN(LogCategory::DetailRender,
                      QStringLiteral("detail adapter returned invalid viewData docId=%1 error=%2")
                          .arg(normalizedDocId, errorMessage));
+            logDetailPerf(normalizedDocId,
+                          requestId,
+                          selectionTimestampMs,
+                          QStringLiteral("request_failed"),
+                          QStringLiteral("reason=invalid_view_data"));
+            markDetailTimingFailed(normalizedDocId,
+                                   requestId,
+                                   selectionTimestampMs,
+                                   QStringLiteral("reason=invalid_view_data"));
             return;
         }
 
@@ -926,6 +990,11 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
                       .arg(dataPrepareMs)
                       .arg(cacheHit ? QStringLiteral("hit") : QStringLiteral("miss"))
                       .arg(detailView.sections.size()));
+    logDetailPerf(normalizedDocId,
+                  requestId,
+                  selectionTimestampMs,
+                  QStringLiteral("data_ready"),
+                  QStringLiteral("cache=%1").arg(cacheHit ? QStringLiteral("hit") : QStringLiteral("miss")));
 
     if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId)) {
         // Payload is ready but already obsolete; keep only the newest request alive.
@@ -934,6 +1003,10 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
                       selectionTimestampMs,
                       QStringLiteral("request_superseded"),
                       QStringLiteral("reason=stale_after_payload"));
+        markDetailTimingStaleIgnored(normalizedDocId,
+                                     requestId,
+                                     selectionTimestampMs,
+                                     QStringLiteral("reason=stale_after_payload"));
         return;
     }
 
@@ -961,6 +1034,7 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
                   selectionTimestampMs,
                   QStringLiteral("total"),
                   QStringLiteral("dt=%1ms mode=text_fallback").arg(detailElapsedMs(selectionTimestampMs)));
+    markDetailTimingSuccess(normalizedDocId, requestId, selectionTimestampMs);
 }
 
 void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView)
@@ -1013,6 +1087,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     const QString fallbackMessage = message.trimmed().isEmpty()
                                         ? QStringLiteral("请选择一条结果查看详情。")
                                         : message.trimmed();
+    resetDetailTimingSessions(true);
     if (detailRenderCoordinator_ != nullptr) {
         detailRenderCoordinator_->clearRenderedDetail();
     }
@@ -1083,6 +1158,297 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
     requestContext.requestId = requestId;
     requestContext.selectionTimestampMs = selectionTimestampMs;
     detailPane_->renderDetail(requestContext);
+}
+
+void SearchPage::startDetailTimingSession(const QString& docId, quint64 requestId, qint64 selectionTimestampMs)
+{
+    const QString normalizedDocId = docId.trimmed();
+    if (normalizedDocId.isEmpty() || requestId == 0 || selectionTimestampMs <= 0) {
+        return;
+    }
+
+    if (activeDetailTimingRequestId_ > 0 && activeDetailTimingRequestId_ != requestId) {
+        auto activeIt = detailTimingSessions_.find(activeDetailTimingRequestId_);
+        if (activeIt != detailTimingSessions_.end() && activeIt->status == DetailTimingStatus::Loading) {
+            activeIt->status = DetailTimingStatus::Stale;
+        }
+    }
+
+    DetailTimingSession session;
+    session.requestId = requestId;
+    session.detailId = normalizedDocId;
+    session.selectionTimestampMs = selectionTimestampMs;
+    session.elapsedTimer.start();
+    session.status = DetailTimingStatus::Loading;
+
+    detailTimingSessions_.insert(requestId, session);
+    activeDetailTimingRequestId_ = requestId;
+    updateDetailTimingLabel(kDetailTimingLoadingText, kDetailTimingColorLoading);
+
+    logDetailPerf(normalizedDocId, requestId, selectionTimestampMs, QStringLiteral("request_start"));
+
+    const quint64 keepAfterRequestId = requestId > 96 ? requestId - 96 : 0;
+    for (auto it = detailTimingSessions_.begin(); it != detailTimingSessions_.end();) {
+        if (it.key() < keepAfterRequestId && it.key() != activeDetailTimingRequestId_) {
+            it = detailTimingSessions_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void SearchPage::markDetailTimingFailed(const QString& docId,
+                                        quint64 requestId,
+                                        qint64 selectionTimestampMs,
+                                        const QString& reason)
+{
+    if (requestId == 0) {
+        return;
+    }
+
+    auto it = detailTimingSessions_.find(requestId);
+    if (it == detailTimingSessions_.end()) {
+        DetailTimingSession session;
+        session.requestId = requestId;
+        session.detailId = docId.trimmed();
+        session.selectionTimestampMs = selectionTimestampMs;
+        session.elapsedTimer.start();
+        session.status = DetailTimingStatus::Loading;
+        detailTimingSessions_.insert(requestId, session);
+        it = detailTimingSessions_.find(requestId);
+    }
+
+    if (it == detailTimingSessions_.end()) {
+        return;
+    }
+
+    if (!docId.trimmed().isEmpty()) {
+        it->detailId = docId.trimmed();
+    }
+    if (it->selectionTimestampMs <= 0 && selectionTimestampMs > 0) {
+        it->selectionTimestampMs = selectionTimestampMs;
+    }
+    if (!it->elapsedTimer.isValid()) {
+        it->elapsedTimer.start();
+    }
+
+    const qint64 elapsedMs = it->selectionTimestampMs > 0 ? detailElapsedMs(it->selectionTimestampMs)
+                                                           : std::max<qint64>(0, it->elapsedTimer.elapsed());
+    it->finalElapsedMs = elapsedMs;
+    it->status = DetailTimingStatus::Failed;
+
+    if (activeDetailTimingRequestId_ != requestId) {
+        it->status = DetailTimingStatus::Stale;
+        return;
+    }
+
+    Q_UNUSED(reason);
+    updateDetailTimingLabel(kDetailTimingFailedText, kDetailTimingColorFailed);
+}
+
+void SearchPage::markDetailTimingSuccess(const QString& docId, quint64 requestId, qint64 selectionTimestampMs)
+{
+    if (requestId == 0) {
+        return;
+    }
+
+    auto it = detailTimingSessions_.find(requestId);
+    if (it == detailTimingSessions_.end()) {
+        DetailTimingSession session;
+        session.requestId = requestId;
+        session.detailId = docId.trimmed();
+        session.selectionTimestampMs = selectionTimestampMs;
+        session.elapsedTimer.start();
+        session.status = DetailTimingStatus::Loading;
+        detailTimingSessions_.insert(requestId, session);
+        it = detailTimingSessions_.find(requestId);
+    }
+
+    if (it == detailTimingSessions_.end()) {
+        return;
+    }
+
+    if (!docId.trimmed().isEmpty()) {
+        it->detailId = docId.trimmed();
+    }
+    if (it->selectionTimestampMs <= 0 && selectionTimestampMs > 0) {
+        it->selectionTimestampMs = selectionTimestampMs;
+    }
+    if (!it->elapsedTimer.isValid()) {
+        it->elapsedTimer.start();
+    }
+
+    const qint64 elapsedMs = it->selectionTimestampMs > 0 ? detailElapsedMs(it->selectionTimestampMs)
+                                                           : std::max<qint64>(0, it->elapsedTimer.elapsed());
+    it->finalElapsedMs = elapsedMs;
+    if (it->jsRenderDoneMs < 0) {
+        it->jsRenderDoneMs = elapsedMs;
+    }
+
+    // Only the active request is allowed to update UI timing text.
+    if (activeDetailTimingRequestId_ != requestId
+        || (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId))) {
+        it->status = DetailTimingStatus::Stale;
+        logDetailPerf(it->detailId,
+                      requestId,
+                      it->selectionTimestampMs,
+                      QStringLiteral("request_stale_ignored"),
+                      QStringLiteral("reason=completion_for_non_active_request active=%1").arg(activeDetailTimingRequestId_));
+        return;
+    }
+
+    it->status = DetailTimingStatus::Success;
+
+    QString statusText = QStringLiteral("详情耗时：%1 ms").arg(elapsedMs);
+#ifndef NDEBUG
+    if (it->dispatchToWebStartMs >= 0 && it->jsRenderDoneMs >= it->dispatchToWebStartMs) {
+        const qint64 renderMs = std::max<qint64>(0, it->jsRenderDoneMs - it->dispatchToWebStartMs);
+        statusText = QStringLiteral("详情耗时：%1 ms（Web: %2 ms，Render: %3 ms）")
+                         .arg(elapsedMs)
+                         .arg(it->dispatchToWebStartMs)
+                         .arg(renderMs);
+    }
+#endif
+    updateDetailTimingLabel(statusText, kDetailTimingColorSuccess);
+
+    logDetailPerf(it->detailId,
+                  requestId,
+                  it->selectionTimestampMs,
+                  QStringLiteral("detail_display_done"),
+                  QStringLiteral("dt=%1ms").arg(elapsedMs));
+}
+
+void SearchPage::markDetailTimingStaleIgnored(const QString& docId,
+                                              quint64 requestId,
+                                              qint64 selectionTimestampMs,
+                                              const QString& reason)
+{
+    if (requestId == 0) {
+        return;
+    }
+
+    auto it = detailTimingSessions_.find(requestId);
+    if (it == detailTimingSessions_.end()) {
+        DetailTimingSession session;
+        session.requestId = requestId;
+        session.detailId = docId.trimmed();
+        session.selectionTimestampMs = selectionTimestampMs;
+        session.elapsedTimer.start();
+        session.status = DetailTimingStatus::Stale;
+        detailTimingSessions_.insert(requestId, session);
+    } else {
+        it->status = DetailTimingStatus::Stale;
+        if (!docId.trimmed().isEmpty()) {
+            it->detailId = docId.trimmed();
+        }
+        if (it->selectionTimestampMs <= 0 && selectionTimestampMs > 0) {
+            it->selectionTimestampMs = selectionTimestampMs;
+        }
+    }
+
+    logDetailPerf(docId.trimmed().isEmpty() ? QStringLiteral("-") : docId.trimmed(),
+                  requestId,
+                  selectionTimestampMs,
+                  QStringLiteral("request_stale_ignored"),
+                  reason.trimmed().isEmpty() ? QStringLiteral("reason=stale_request") : reason.trimmed());
+}
+
+void SearchPage::handleDetailPerfPhase(const QString& detailId,
+                                       quint64 requestId,
+                                       qint64 selectionTimestampMs,
+                                       const QString& phase,
+                                       const QString& extra)
+{
+    const QString normalizedPhase = phase.trimmed();
+    if (requestId == 0 || normalizedPhase.isEmpty()) {
+        return;
+    }
+
+    auto it = detailTimingSessions_.find(requestId);
+    if (it == detailTimingSessions_.end()) {
+        DetailTimingSession session;
+        session.requestId = requestId;
+        session.detailId = detailId.trimmed();
+        session.selectionTimestampMs = selectionTimestampMs;
+        session.elapsedTimer.start();
+        session.status = DetailTimingStatus::Loading;
+        detailTimingSessions_.insert(requestId, session);
+        it = detailTimingSessions_.find(requestId);
+    }
+    if (it == detailTimingSessions_.end()) {
+        return;
+    }
+
+    if (!detailId.trimmed().isEmpty()) {
+        it->detailId = detailId.trimmed();
+    }
+    if (it->selectionTimestampMs <= 0 && selectionTimestampMs > 0) {
+        it->selectionTimestampMs = selectionTimestampMs;
+    }
+    if (!it->elapsedTimer.isValid()) {
+        it->elapsedTimer.start();
+    }
+
+    const qint64 elapsedMs = it->selectionTimestampMs > 0 ? detailElapsedMs(it->selectionTimestampMs)
+                                                           : std::max<qint64>(0, it->elapsedTimer.elapsed());
+
+    if (normalizedPhase == QStringLiteral("dispatch_to_web_start")) {
+        it->dispatchToWebStartMs = elapsedMs;
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("web_load_finished")) {
+        it->webLoadFinishedMs = elapsedMs;
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("js_render_start")) {
+        it->jsRenderStartMs = elapsedMs;
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("js_render_done")) {
+        it->jsRenderDoneMs = elapsedMs;
+        markDetailTimingSuccess(it->detailId, requestId, it->selectionTimestampMs);
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("render_complete")) {
+        // Backward-compatible fallback for builds where js_render_done is not emitted.
+        if (it->jsRenderDoneMs < 0) {
+            it->jsRenderDoneMs = elapsedMs;
+            markDetailTimingSuccess(it->detailId, requestId, it->selectionTimestampMs);
+        }
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("request_failed") || normalizedPhase == QStringLiteral("js_render_failed")) {
+        markDetailTimingFailed(it->detailId, requestId, it->selectionTimestampMs, extra);
+        return;
+    }
+    if (normalizedPhase == QStringLiteral("request_stale_ignored")
+        || normalizedPhase == QStringLiteral("request_superseded")
+        || normalizedPhase == QStringLiteral("render_aborted_due_to_newer_request")) {
+        it->status = DetailTimingStatus::Stale;
+    }
+}
+
+void SearchPage::resetDetailTimingSessions(bool clearLabelToIdle)
+{
+    detailTimingSessions_.clear();
+    activeDetailTimingRequestId_ = 0;
+    if (clearLabelToIdle) {
+        updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);
+    }
+}
+
+void SearchPage::updateDetailTimingLabel(const QString& text, const QString& colorHex)
+{
+    if (detailTimingLabel_ == nullptr) {
+        return;
+    }
+
+    detailTimingLabel_->setText(text);
+    detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    const QString normalizedColor = colorHex.trimmed().isEmpty() ? kDetailTimingColorIdle : colorHex.trimmed();
+    detailTimingLabel_->setStyleSheet(
+        QStringLiteral("QLabel { color: %1; font-size: 12px; padding: 2px 6px; }").arg(normalizedColor));
 }
 
 bool SearchPage::lookupCachedDetail(const QString& docId,
@@ -1187,6 +1553,22 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     LOG_ERROR(LogCategory::WebViewKatex,
               QStringLiteral("disable web detail mode and fallback to QTextBrowser reason=%1")
                   .arg(reason.trimmed().isEmpty() ? QStringLiteral("unknown") : reason.trimmed()));
+
+    if (activeDetailTimingRequestId_ > 0) {
+        const auto timingIt = detailTimingSessions_.constFind(activeDetailTimingRequestId_);
+        const QString activeDetailId = timingIt == detailTimingSessions_.constEnd() ? QString() : timingIt->detailId;
+        const qint64 activeSelectionTs = timingIt == detailTimingSessions_.constEnd() ? 0 : timingIt->selectionTimestampMs;
+        logDetailPerf(activeDetailId.trimmed().isEmpty() ? QStringLiteral("-") : activeDetailId,
+                      activeDetailTimingRequestId_,
+                      activeSelectionTs,
+                      QStringLiteral("request_failed"),
+                      QStringLiteral("reason=web_mode_disabled"));
+        markDetailTimingFailed(activeDetailId,
+                               activeDetailTimingRequestId_,
+                               activeSelectionTs,
+                               QStringLiteral("reason=web_mode_disabled"));
+    }
+
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }

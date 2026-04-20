@@ -1083,6 +1083,9 @@
       dom.root.dataset.requestId = String(requestId);
       dom.root.dataset.sessionId = String(sessionId || runtime.currentSessionId || 0);
     }
+    if (requestId) {
+      reportPerf("js_render_done", { requestId: requestId, detailId: runtime.currentDetailId });
+    }
     reportPerf("render_complete", { requestId: requestId, detailId: runtime.currentDetailId });
   }
 
@@ -1152,9 +1155,15 @@
     const session = beginRenderSession(payload);
     if (!session.ok) {
       setState("error", "详情请求参数无效。");
+      reportPerf("js_render_failed", {
+        requestId: session.requestId,
+        detailId: session.detailId,
+        reason: session.error || "invalid_request_payload"
+      });
       return { ok: false, accepted: false, error: session.error, requestId: session.requestId, detailId: session.detailId };
     }
 
+    reportPerf("js_render_start", { requestId: session.requestId, detailId: session.detailId });
     renderLightSections(payload);
     flushLightPaint(session.requestId, session.sessionId, function () {
       if (abortIfStale(session.requestId) || isSessionStale(session.sessionId)) {

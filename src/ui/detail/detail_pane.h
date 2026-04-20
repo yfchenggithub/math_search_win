@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <QHash>
 #include <QtGlobal>
 
 class QTextBrowser;
@@ -54,7 +55,11 @@ private:
     void dispatchNow(const RequestContext& request);
     void emitPerf(const RequestContext& request, const QString& phase, const QString& extra = QString());
     void clearPendingRequest();
-    void handleJsConsoleMessage(const QString& message) const;
+    void handleJsConsoleMessage(const QString& message);
+    void rememberRequestContext(const RequestContext& request);
+    qint64 selectionTimestampForRequest(quint64 requestId) const;
+    QString detailIdForRequest(quint64 requestId, const QString& fallback) const;
+    void pruneRequestContextCache();
 
 private:
     QWebEngineView* webView_ = nullptr;
@@ -66,6 +71,7 @@ private:
     quint64 latestDispatchedRequestId_ = 0;
     bool hasPendingRequest_ = false;
     RequestContext pendingRequest_;
+    QHash<quint64, RequestContext> requestContextById_;
 };
 
 }  // namespace ui::detail

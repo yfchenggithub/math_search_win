@@ -2,6 +2,7 @@
 
 #include "domain/models/search_result_models.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QString>
@@ -73,6 +74,27 @@ private:
         DifficultyDesc,
     };
 
+    enum class DetailTimingStatus {
+        Idle = 0,
+        Loading,
+        Success,
+        Failed,
+        Stale,
+    };
+
+    struct DetailTimingSession {
+        quint64 requestId = 0;
+        QString detailId;
+        qint64 selectionTimestampMs = 0;
+        QElapsedTimer elapsedTimer;
+        qint64 dispatchToWebStartMs = -1;
+        qint64 webLoadFinishedMs = -1;
+        qint64 jsRenderStartMs = -1;
+        qint64 jsRenderDoneMs = -1;
+        qint64 finalElapsedMs = -1;
+        DetailTimingStatus status = DetailTimingStatus::Idle;
+    };
+
     void buildUi();
     void connectSignals();
     void rebuildFilterOptions();
@@ -94,6 +116,23 @@ private:
                               const QString& docId = QString(),
                               quint64 requestId = 0,
                               qint64 selectionTimestampMs = 0);
+    void startDetailTimingSession(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
+    void markDetailTimingFailed(const QString& docId,
+                                quint64 requestId,
+                                qint64 selectionTimestampMs,
+                                const QString& reason = QString());
+    void markDetailTimingSuccess(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
+    void markDetailTimingStaleIgnored(const QString& docId,
+                                      quint64 requestId,
+                                      qint64 selectionTimestampMs,
+                                      const QString& reason = QString());
+    void handleDetailPerfPhase(const QString& detailId,
+                               quint64 requestId,
+                               qint64 selectionTimestampMs,
+                               const QString& phase,
+                               const QString& extra);
+    void resetDetailTimingSessions(bool clearLabelToIdle = false);
+    void updateDetailTimingLabel(const QString& text, const QString& colorHex);
 
     bool lookupCachedDetail(const QString& docId,
                             domain::adapters::ConclusionDetailViewData* detailView,
@@ -155,6 +194,7 @@ private:
     QPushButton* searchButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
+    QLabel* detailTimingLabel_ = nullptr;
     QListWidget* suggestionList_ = nullptr;
     QComboBox* moduleFilterCombo_ = nullptr;
     QComboBox* categoryFilterCombo_ = nullptr;
@@ -169,4 +209,7 @@ private:
     std::unique_ptr<ui::detail::DetailRenderCoordinator> detailRenderCoordinator_;
     std::unique_ptr<ui::detail::DetailViewDataMapper> detailViewDataMapper_;
     std::unique_ptr<ui::detail::DetailHtmlRenderer> detailHtmlRenderer_;
+
+    QHash<quint64, DetailTimingSession> detailTimingSessions_;
+    quint64 activeDetailTimingRequestId_ = 0;
 };
