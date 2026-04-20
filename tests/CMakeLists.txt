@@ -4,6 +4,16 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/logging/logger.h
     ${PROJECT_SOURCE_DIR}/src/core/logging/logger.cpp
     ${PROJECT_SOURCE_DIR}/src/core/logging/log_categories.h
+    ${PROJECT_SOURCE_DIR}/src/license/license_state.h
+    ${PROJECT_SOURCE_DIR}/src/license/license_state.cpp
+    ${PROJECT_SOURCE_DIR}/src/license/device_fingerprint_service.h
+    ${PROJECT_SOURCE_DIR}/src/license/device_fingerprint_service.cpp
+    ${PROJECT_SOURCE_DIR}/src/license/activation_code_service.h
+    ${PROJECT_SOURCE_DIR}/src/license/activation_code_service.cpp
+    ${PROJECT_SOURCE_DIR}/src/license/license_service.h
+    ${PROJECT_SOURCE_DIR}/src/license/license_service.cpp
+    ${PROJECT_SOURCE_DIR}/src/license/feature_gate.h
+    ${PROJECT_SOURCE_DIR}/src/license/feature_gate.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_index_models.h
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_index_models.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_result_models.h
@@ -112,4 +122,40 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
         $<TARGET_FILE:math_search_storage_tests>
+)
+
+add_executable(math_search_activation_code_tests
+    activation/test_activation_code_service.cpp
+)
+configure_math_search_test_target(math_search_activation_code_tests)
+add_test(
+    NAME activation_code_service_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_activation_code_tests>
+)
+
+add_executable(math_search_license_service_tests
+    activation/test_license_service.cpp
+)
+configure_math_search_test_target(math_search_license_service_tests)
+add_test(
+    NAME license_service_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_license_service_tests>
+)
+
+add_executable(math_search_activation_page_tests
+    activation/test_activation_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/activation_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/style/app_style.cpp
+)
+configure_math_search_test_target(math_search_activation_page_tests)
+target_link_libraries(math_search_activation_page_tests PRIVATE Qt6::Widgets)
+add_test(
+    NAME activation_page_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Widgets>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_activation_page_tests>
 )
