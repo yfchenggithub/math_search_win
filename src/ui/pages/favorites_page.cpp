@@ -11,7 +11,7 @@
 
 FavoritesPage::FavoritesPage(QWidget* parent) : QWidget(parent)
 {
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("FavoritesPage constructed (static MVP placeholder)"));
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("page constructed name=favorites mode=placeholder"));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);

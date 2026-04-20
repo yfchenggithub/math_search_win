@@ -268,11 +268,12 @@ void DetailPane::dispatchNow(const RequestContext& request)
             emitPerf(request,
                      QStringLiteral("request_failed"),
                      QStringLiteral("reason=%1").arg(error.isEmpty() ? QStringLiteral("runtime_unknown") : error));
-            LOG_WARN(LogCategory::WebViewKatex,
-                     QStringLiteral("detail runtime render error id=%1 req=%2 error=%3")
-                         .arg(request.detailId)
-                         .arg(request.requestId)
-                         .arg(error.isEmpty() ? QStringLiteral("unknown") : error));
+            LOG_WARN_F(LogCategory::WebViewKatex,
+                       "DetailPane::onRenderCallback",
+                       QStringLiteral("render callback_error detail_id=%1 request_id=%2 error=%3")
+                           .arg(request.detailId)
+                           .arg(request.requestId)
+                           .arg(error.isEmpty() ? QStringLiteral("unknown") : error));
         }
     });
 

@@ -25,8 +25,8 @@ DetailHtmlRenderer::DetailHtmlRenderer()
     const QString detailCssPath = QDir(detailDirectory_).filePath(QStringLiteral("detail.css"));
     const QString detailJsPath = QDir(detailDirectory_).filePath(QStringLiteral("detail.js"));
 
-    LOG_INFO(LogCategory::WebViewKatex,
-             QStringLiteral("detail renderer init appRoot=%1 detailDir=%2").arg(appRoot, detailDirectory_));
+    LOG_DEBUG(LogCategory::WebViewKatex,
+              QStringLiteral("renderer init app_root=%1 detail_dir=%2").arg(appRoot, detailDirectory_));
 
     const QStringList requiredFiles = {
         detailTemplatePath_,
@@ -43,7 +43,7 @@ DetailHtmlRenderer::DetailHtmlRenderer()
         if (!info.exists() || !info.isFile()) {
             missingFiles.push_back(path);
         } else {
-            LOG_DEBUG(LogCategory::WebViewKatex, QStringLiteral("detail renderer resource ready path=%1").arg(path));
+            LOG_DEBUG(LogCategory::WebViewKatex, QStringLiteral("renderer resource_ready path=%1").arg(path));
         }
     }
 
@@ -88,8 +88,9 @@ DetailHtmlRenderer::DetailHtmlRenderer()
     lastError_.clear();
 
     LOG_INFO(LogCategory::WebViewKatex,
-             QStringLiteral("detail renderer ready template=%1 url=%2")
+             QStringLiteral("renderer ready template=%1 template_url=%2")
                  .arg(detailTemplatePath_, detailTemplateUrl_.toString()));
+    LOG_INFO(LogCategory::PerfWebView, QStringLiteral("event=renderer_ready mode=detail_html"));
 }
 
 bool DetailHtmlRenderer::isReady() const

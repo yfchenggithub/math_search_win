@@ -19,11 +19,16 @@ class MainWindow : public QMainWindow {
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    bool isIndexReady() const;
+    bool isContentReady() const;
+    bool isWebReady() const;
+    int pageCount() const;
 
 private slots:
     void switchPage(int pageIndex);
 
 private:
+    void switchPageWithTrigger(int pageIndex, const QString& trigger);
     void setupUi();
     void setupPages();
     void loadSearchData();
@@ -38,6 +43,8 @@ private:
 
     bool indexLoaded_ = false;
     bool contentLoaded_ = false;
+    bool webReady_ = false;
+    int currentPageIndex_ = -1;
     QString startupStatusLine_;
 
     NavigationSidebar* navigationSidebar_ = nullptr;

@@ -12,7 +12,7 @@
 
 ActivationPage::ActivationPage(QWidget* parent) : QWidget(parent)
 {
-    LOG_INFO(LogCategory::Config, QStringLiteral("ActivationPage constructed (license workflow placeholder)"));
+    LOG_DEBUG(LogCategory::Config, QStringLiteral("page constructed name=activation mode=placeholder"));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);

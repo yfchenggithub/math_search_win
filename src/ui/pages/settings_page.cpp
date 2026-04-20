@@ -9,8 +9,8 @@
 
 SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
 {
-    LOG_INFO(LogCategory::Config, QStringLiteral("SettingsPage constructed"));
-    LOG_INFO(LogCategory::DataLoader, QStringLiteral("data loader integration is pending in MVP shell stage"));
+    LOG_DEBUG(LogCategory::Config, QStringLiteral("page constructed name=settings mode=placeholder"));
+    LOG_DEBUG(LogCategory::DataLoader, QStringLiteral("data_loader_state stage=pending"));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);

@@ -39,7 +39,9 @@ NavigationSidebar::NavigationSidebar(QWidget* parent)
     layout->addStretch();
 
     connect(buttonGroup_, &QButtonGroup::idClicked, this, [this](int pageIndex) {
-        LOG_INFO(LogCategory::UiNavigation, QStringLiteral("navigation clicked pageIndex=%1").arg(pageIndex));
+        LOG_INFO_F(LogCategory::UiNavigation,
+                   "NavigationSidebar::onPageClicked",
+                   QStringLiteral("navigation clicked to=%1").arg(QString::fromUtf8(UiConstants::pageName(pageIndex))));
         emit pageRequested(pageIndex);
     });
 
@@ -50,11 +52,15 @@ void NavigationSidebar::setCurrentIndex(int index)
 {
     if (auto* button = buttonGroup_->button(index)) {
         button->setChecked(true);
-        LOG_DEBUG(LogCategory::UiNavigation, QStringLiteral("setCurrentIndex index=%1 checked=true").arg(index));
+        LOG_DEBUG(LogCategory::UiNavigation,
+                  QStringLiteral("navigation state_updated to=%1 checked=true")
+                      .arg(QString::fromUtf8(UiConstants::pageName(index))));
         return;
     }
 
-    LOG_WARN(LogCategory::UiNavigation, QStringLiteral("setCurrentIndex missing button index=%1").arg(index));
+    LOG_WARN(LogCategory::UiNavigation,
+             QStringLiteral("navigation state_update_failed to=%1 reason=button_missing")
+                 .arg(QString::fromUtf8(UiConstants::pageName(index))));
 }
 
 void NavigationSidebar::addNavButton(QVBoxLayout* layout, const QString& text, int pageIndex)
@@ -64,5 +70,7 @@ void NavigationSidebar::addNavButton(QVBoxLayout* layout, const QString& text, i
     button->setMinimumHeight(34);
     layout->addWidget(button);
     buttonGroup_->addButton(button, pageIndex);
-    LOG_DEBUG(LogCategory::UiNavigation, QStringLiteral("addNavButton pageIndex=%1 text=%2").arg(pageIndex).arg(text));
+    LOG_DEBUG(LogCategory::UiNavigation,
+              QStringLiteral("navigation item_registered page=%1 text=%2")
+                  .arg(QString::fromUtf8(UiConstants::pageName(pageIndex)), text));
 }

@@ -51,6 +51,7 @@ public:
                         const infrastructure::data::ConclusionIndexRepository* indexRepository,
                         QWidget* parent = nullptr);
 
+    bool isDetailWebReady() const;
     void setBackendStatus(bool indexReady, bool contentReady);
     void setInitialQuery(const QString& query);
     void setInitialModule(const QString& module);

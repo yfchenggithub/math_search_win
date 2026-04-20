@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
@@ -141,6 +142,9 @@ void runIndexProbeIfEnabled()
 
 int main(int argc, char *argv[])
 {
+    QElapsedTimer startupTimer;
+    startupTimer.start();
+
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("math_search"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("local.offline"));
@@ -148,26 +152,36 @@ int main(int argc, char *argv[])
 
     logging::Logger::instance().initialize();
     LOG_INFO(LogCategory::AppStartup,
-             QStringLiteral("application startup app=%1 logDir=%2")
+             QStringLiteral("startup begin app=%1 log_dir=%2")
                  .arg(QCoreApplication::applicationName(), logging::Logger::instance().logDirectory()));
     runContentProbeIfEnabled();
     runIndexProbeIfEnabled();
     if (probeOnlyEnabled()) {
-        LOG_INFO(LogCategory::AppShutdown, QStringLiteral("probe-only mode complete, exiting before UI startup"));
+        LOG_INFO(LogCategory::AppShutdown, QStringLiteral("probe_only complete action=exit_before_ui"));
         logging::Logger::instance().shutdown();
         return 0;
     }
 
     QObject::connect(&app, &QCoreApplication::aboutToQuit, []() {
-        LOG_INFO(LogCategory::AppShutdown, QStringLiteral("aboutToQuit signal received"));
+        LOG_INFO_F(LogCategory::AppShutdown, "main::onAboutToQuit", QStringLiteral("shutdown signal=about_to_quit"));
     });
 
     MainWindow window;
     window.show();
-    LOG_INFO(LogCategory::AppStartup, QStringLiteral("main window created and shown"));
+    LOG_INFO(LogCategory::AppStartup, QStringLiteral("main window shown"));
+
+    const qint64 startupElapsedMs = startupTimer.elapsed();
+    LOG_INFO(LogCategory::AppStartup,
+             QStringLiteral("startup complete elapsed_ms=%1 indexReady=%2 contentReady=%3 webReady=%4 pageCount=%5")
+                 .arg(startupElapsedMs)
+                 .arg(window.isIndexReady() ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(window.isContentReady() ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(window.isWebReady() ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(window.pageCount()));
+    LOG_INFO(LogCategory::PerfStartup, QStringLiteral("event=startup_complete elapsed_ms=%1").arg(startupElapsedMs));
 
     const int exitCode = app.exec();
-    LOG_INFO(LogCategory::AppShutdown, QStringLiteral("application exited exitCode=%1").arg(exitCode));
+    LOG_INFO(LogCategory::AppShutdown, QStringLiteral("shutdown complete exit_code=%1").arg(exitCode));
     logging::Logger::instance().shutdown();
     return exitCode;
 }

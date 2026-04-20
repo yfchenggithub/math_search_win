@@ -21,8 +21,11 @@ inline constexpr const char* SearchEngine = "search.engine";
 inline constexpr const char* SearchIndex = "search.index";
 inline constexpr const char* DetailRender = "detail.render";
 inline constexpr const char* WebViewKatex = "webview.katex";
+inline constexpr const char* PerfStartup = "perf.startup";
+inline constexpr const char* PerfSearch = "perf.search";
+inline constexpr const char* PerfDetail = "perf.detail";
+inline constexpr const char* PerfWebView = "perf.webview";
 inline constexpr const char* Config = "config";
 inline constexpr const char* FileIo = "file.io";
 
 }  // namespace LogCategory
-

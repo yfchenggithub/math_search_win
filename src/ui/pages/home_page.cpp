@@ -14,7 +14,7 @@
 
 HomePage::HomePage(QWidget* parent) : QWidget(parent)
 {
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("HomePage constructed (static MVP placeholder)"));
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("page constructed name=home mode=placeholder"));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);

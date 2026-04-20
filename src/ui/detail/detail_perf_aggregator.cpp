@@ -407,19 +407,21 @@ SlowLevel classifySlowStage(qint64 dtMs)
 
 QString DetailPerfLogFormatter::formatBegin(const QString& detailId, quint64 requestId)
 {
-    return QStringLiteral("[DETAIL][BEGIN] req=%1 id=%2").arg(requestId).arg(normalizedDetailId(detailId));
+    return QStringLiteral("event=detail_begin request_id=%1 detail_id=%2")
+        .arg(requestId)
+        .arg(normalizedDetailId(detailId));
 }
 
 QString DetailPerfLogFormatter::formatStage(const DetailPerfStageEvent& event)
 {
     QStringList tokens;
-    tokens.append(QStringLiteral("[DETAIL][STAGE]"));
-    tokens.append(QStringLiteral("req=%1").arg(event.requestId));
-    tokens.append(QStringLiteral("id=%1").arg(normalizedDetailId(event.detailId)));
+    tokens.append(QStringLiteral("event=detail_stage"));
+    tokens.append(QStringLiteral("request_id=%1").arg(event.requestId));
+    tokens.append(QStringLiteral("detail_id=%1").arg(normalizedDetailId(event.detailId)));
     tokens.append(QStringLiteral("phase=%1").arg(event.displayPhase));
-    tokens.append(QStringLiteral("at=%1ms").arg(event.atMs));
+    tokens.append(QStringLiteral("at_ms=%1").arg(event.atMs));
     if (event.dtMs >= 0) {
-        tokens.append(QStringLiteral("dt=%1ms").arg(event.dtMs));
+        tokens.append(QStringLiteral("stage_ms=%1").arg(event.dtMs));
     }
 
     if (event.displayPhase == QStringLiteral("payload_ready")) {
@@ -441,13 +443,13 @@ QString DetailPerfLogFormatter::formatStage(const DetailPerfStageEvent& event)
 QString DetailPerfLogFormatter::formatSlow(const DetailPerfStageEvent& event, int ratioPercent)
 {
     QStringList tokens;
-    tokens.append(QStringLiteral("[DETAIL][SLOW]"));
-    tokens.append(QStringLiteral("req=%1").arg(event.requestId));
-    tokens.append(QStringLiteral("id=%1").arg(normalizedDetailId(event.detailId)));
+    tokens.append(QStringLiteral("event=detail_stage_slow"));
+    tokens.append(QStringLiteral("request_id=%1").arg(event.requestId));
+    tokens.append(QStringLiteral("detail_id=%1").arg(normalizedDetailId(event.detailId)));
     tokens.append(QStringLiteral("phase=%1").arg(event.displayPhase));
-    tokens.append(QStringLiteral("dt=%1ms").arg(event.dtMs));
+    tokens.append(QStringLiteral("stage_ms=%1").arg(event.dtMs));
     if (ratioPercent >= 0) {
-        tokens.append(QStringLiteral("ratio=%1%").arg(ratioPercent));
+        tokens.append(QStringLiteral("ratio_percent=%1").arg(ratioPercent));
     }
     return tokens.join(QLatin1Char(' '));
 }
@@ -459,12 +461,12 @@ QString DetailPerfLogFormatter::formatCancel(quint64 oldRequestId,
                                              const QString& reason)
 {
     QStringList tokens;
-    tokens.append(QStringLiteral("[DETAIL][CANCEL]"));
-    tokens.append(QStringLiteral("old_req=%1").arg(oldRequestId));
-    tokens.append(QStringLiteral("old_id=%1").arg(normalizedDetailId(oldDetailId)));
+    tokens.append(QStringLiteral("event=detail_cancel"));
+    tokens.append(QStringLiteral("old_request_id=%1").arg(oldRequestId));
+    tokens.append(QStringLiteral("old_detail_id=%1").arg(normalizedDetailId(oldDetailId)));
     if (newRequestId > 0) {
-        tokens.append(QStringLiteral("new_req=%1").arg(newRequestId));
-        tokens.append(QStringLiteral("new_id=%1").arg(normalizedDetailId(newDetailId)));
+        tokens.append(QStringLiteral("new_request_id=%1").arg(newRequestId));
+        tokens.append(QStringLiteral("new_detail_id=%1").arg(normalizedDetailId(newDetailId)));
     }
     tokens.append(QStringLiteral("reason=%1").arg(normalizeCancelReason(reason)));
     return tokens.join(QLatin1Char(' '));
@@ -473,9 +475,9 @@ QString DetailPerfLogFormatter::formatCancel(quint64 oldRequestId,
 QString DetailPerfLogFormatter::formatCancel(quint64 requestId, const QString& detailId, const QString& reason)
 {
     QStringList tokens;
-    tokens.append(QStringLiteral("[DETAIL][CANCEL]"));
-    tokens.append(QStringLiteral("req=%1").arg(requestId));
-    tokens.append(QStringLiteral("id=%1").arg(normalizedDetailId(detailId)));
+    tokens.append(QStringLiteral("event=detail_cancel"));
+    tokens.append(QStringLiteral("request_id=%1").arg(requestId));
+    tokens.append(QStringLiteral("detail_id=%1").arg(normalizedDetailId(detailId)));
     tokens.append(QStringLiteral("reason=%1").arg(normalizeCancelReason(reason)));
     return tokens.join(QLatin1Char(' '));
 }
@@ -483,37 +485,37 @@ QString DetailPerfLogFormatter::formatCancel(quint64 requestId, const QString& d
 QString DetailPerfLogFormatter::formatEnd(const DetailPerfSummary& summary)
 {
     QStringList tokens;
-    tokens.append(QStringLiteral("[DETAIL][END]"));
-    tokens.append(QStringLiteral("req=%1").arg(summary.requestId));
-    tokens.append(QStringLiteral("id=%1").arg(normalizedDetailId(summary.detailId)));
+    tokens.append(QStringLiteral("event=detail_complete"));
+    tokens.append(QStringLiteral("request_id=%1").arg(summary.requestId));
+    tokens.append(QStringLiteral("detail_id=%1").arg(normalizedDetailId(summary.detailId)));
     tokens.append(QStringLiteral("status=%1").arg(summary.status.trimmed().isEmpty() ? QStringLiteral("ok") : summary.status.trimmed()));
 
     if (summary.totalMs >= 0) {
-        tokens.append(QStringLiteral("total=%1ms").arg(summary.totalMs));
+        tokens.append(QStringLiteral("elapsed_ms=%1").arg(summary.totalMs));
     }
     if (summary.fmpMs >= 0) {
-        tokens.append(QStringLiteral("fmp=%1ms").arg(summary.fmpMs));
+        tokens.append(QStringLiteral("fmp_ms=%1").arg(summary.fmpMs));
     }
     if (summary.lightMs >= 0) {
-        tokens.append(QStringLiteral("light=%1ms").arg(summary.lightMs));
+        tokens.append(QStringLiteral("light_ms=%1").arg(summary.lightMs));
     }
     if (summary.visibleKatexMs >= 0) {
-        tokens.append(QStringLiteral("visible_katex=%1ms").arg(summary.visibleKatexMs));
+        tokens.append(QStringLiteral("visible_katex_ms=%1").arg(summary.visibleKatexMs));
     }
     if (summary.heavyMs >= 0) {
-        tokens.append(QStringLiteral("heavy=%1ms").arg(summary.heavyMs));
+        tokens.append(QStringLiteral("heavy_ms=%1").arg(summary.heavyMs));
     }
     if (summary.deferredKatexMs >= 0) {
-        tokens.append(QStringLiteral("deferred_katex=%1ms").arg(summary.deferredKatexMs));
+        tokens.append(QStringLiteral("deferred_katex_ms=%1").arg(summary.deferredKatexMs));
     }
     if (!summary.bottleneckPhase.trimmed().isEmpty()) {
         tokens.append(QStringLiteral("bottleneck=%1").arg(summary.bottleneckPhase));
     }
     if (summary.bottleneckDtMs >= 0) {
-        tokens.append(QStringLiteral("bottleneck_dt=%1ms").arg(summary.bottleneckDtMs));
+        tokens.append(QStringLiteral("bottleneck_ms=%1").arg(summary.bottleneckDtMs));
     }
     if (summary.bottleneckRatioPercent >= 0) {
-        tokens.append(QStringLiteral("bottleneck_ratio=%1%").arg(summary.bottleneckRatioPercent));
+        tokens.append(QStringLiteral("bottleneck_ratio_percent=%1").arg(summary.bottleneckRatioPercent));
     }
     if (!summary.cacheState.trimmed().isEmpty()) {
         tokens.append(QStringLiteral("cache=%1").arg(summary.cacheState));
@@ -561,7 +563,7 @@ void DetailPerfAggregator::markSuperseded(quint64 oldRequestId,
         it->supersededByDetailId = normalizedDetailId(newDetailId);
     }
 
-    LOG_DEBUG(LogCategory::DetailRender,
+    LOG_DEBUG(LogCategory::PerfDetail,
               DetailPerfLogFormatter::formatCancel(
                   oldRequestId, resolvedOldDetailId, newRequestId, normalizedDetailId(newDetailId), QStringLiteral("superseded")));
 
@@ -634,7 +636,7 @@ void DetailPerfAggregator::finishRequest(const QString& detailId,
     }
 
     const DetailPerfSummary summary = buildSummary(state, status, atMs);
-    LOG_DEBUG(LogCategory::DetailRender, DetailPerfLogFormatter::formatEnd(summary));
+    LOG_DEBUG(LogCategory::PerfDetail, DetailPerfLogFormatter::formatEnd(summary));
 
     active_.remove(requestId);
 }
@@ -657,7 +659,7 @@ void DetailPerfAggregator::cancelRequest(const QString& detailId, quint64 reques
     }
 
     const QString resolvedDetailId = detailId.trimmed().isEmpty() ? it->detailId : detailId.trimmed();
-    LOG_DEBUG(LogCategory::DetailRender,
+    LOG_DEBUG(LogCategory::PerfDetail,
               DetailPerfLogFormatter::formatCancel(requestId, resolvedDetailId, it->finishReason));
     active_.erase(it);
 }
@@ -701,7 +703,7 @@ DetailPerfRequestState* DetailPerfAggregator::ensureState(const QString& detailI
 
     if (emitBeginIfNeeded && !it->began) {
         it->began = true;
-        LOG_DEBUG(LogCategory::DetailRender, DetailPerfLogFormatter::formatBegin(it->detailId, requestId));
+        LOG_DEBUG(LogCategory::PerfDetail, DetailPerfLogFormatter::formatBegin(it->detailId, requestId));
     }
 
     return &it.value();
@@ -814,7 +816,7 @@ void DetailPerfAggregator::updateSummaryFromEvent(DetailPerfRequestState* state,
 
 void DetailPerfAggregator::emitStageLogs(const DetailPerfRequestState& state, const DetailPerfStageEvent& event) const
 {
-    LOG_DEBUG(LogCategory::DetailRender, DetailPerfLogFormatter::formatStage(event));
+    LOG_DEBUG(LogCategory::PerfDetail, DetailPerfLogFormatter::formatStage(event));
 
     if (!event.isSlow || event.dtMs < 0) {
         return;
@@ -826,7 +828,7 @@ void DetailPerfAggregator::emitStageLogs(const DetailPerfRequestState& state, co
         const qint64 denominator = state.totalMs > 0 ? state.totalMs : event.atMs;
         slowRatio = ratioPercent(event.dtMs, denominator);
     }
-    LOG_DEBUG(LogCategory::DetailRender, DetailPerfLogFormatter::formatSlow(event, slowRatio));
+    LOG_DEBUG(LogCategory::PerfDetail, DetailPerfLogFormatter::formatSlow(event, slowRatio));
 }
 
 DetailPerfSummary DetailPerfAggregator::buildSummary(DetailPerfRequestState* state,

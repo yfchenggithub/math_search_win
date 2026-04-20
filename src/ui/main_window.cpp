@@ -24,7 +24,7 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), searchService_(&indexRepository_), suggestService_(&indexRepository_)
 {
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("MainWindow constructor begin"));
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("main_window ctor_begin"));
 
     resize(UiConstants::kDefaultWindowWidth, UiConstants::kDefaultWindowHeight);
     setWindowTitle(UiConstants::kAppTitle);
@@ -35,33 +35,39 @@ MainWindow::MainWindow(QWidget* parent)
 
     if (searchPage_ != nullptr) {
         searchPage_->setBackendStatus(indexLoaded_, contentLoaded_);
+        webReady_ = searchPage_->isDetailWebReady();
     }
 
-    connect(navigationSidebar_, &NavigationSidebar::pageRequested, this, &MainWindow::switchPage);
-    switchPage(UiConstants::kPageHome);
+    connect(navigationSidebar_, &NavigationSidebar::pageRequested, this, [this](int pageIndex) {
+        switchPageWithTrigger(pageIndex, QStringLiteral("navigation"));
+    });
+    switchPageWithTrigger(UiConstants::kPageHome, QStringLiteral("startup_default"));
 
     const QString dataPath = AppPaths::dataDir();
     if (QDir(dataPath).exists()) {
-        LOG_INFO(LogCategory::DataLoader, QStringLiteral("data directory ready path=%1").arg(dataPath));
+        LOG_DEBUG(LogCategory::DataLoader, QStringLiteral("directory ready name=data path=%1").arg(dataPath));
     } else {
         LOG_WARN(LogCategory::DataLoader, QStringLiteral("data directory missing path=%1").arg(dataPath));
     }
 
     const QString cachePath = AppPaths::cacheDir();
     if (QDir(cachePath).exists()) {
-        LOG_INFO(LogCategory::FileIo, QStringLiteral("cache directory ready path=%1").arg(cachePath));
+        LOG_DEBUG(LogCategory::FileIo, QStringLiteral("directory ready name=cache path=%1").arg(cachePath));
     } else {
         LOG_WARN(LogCategory::FileIo, QStringLiteral("cache directory missing path=%1").arg(cachePath));
     }
 
     const QString licensePath = AppPaths::licenseDir();
     if (QDir(licensePath).exists()) {
-        LOG_INFO(LogCategory::Config, QStringLiteral("license directory ready path=%1").arg(licensePath));
+        LOG_DEBUG(LogCategory::Config, QStringLiteral("directory ready name=license path=%1").arg(licensePath));
     } else {
         LOG_WARN(LogCategory::Config, QStringLiteral("license directory missing path=%1").arg(licensePath));
     }
 
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("MainWindow constructor complete"));
+    LOG_INFO(LogCategory::UiMainWindow,
+             QStringLiteral("ui ready page_count=%1 web_ready=%2")
+                 .arg(pageStack_ == nullptr ? 0 : pageStack_->count())
+                 .arg(webReady_ ? QStringLiteral("true") : QStringLiteral("false")));
 }
 
 void MainWindow::setupUi()
@@ -125,7 +131,7 @@ void MainWindow::setupPages()
     LOG_DEBUG(LogCategory::UiMainWindow,
               QStringLiteral("registered page index=%1 name=activation").arg(UiConstants::kPageActivation));
 
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("setupPages complete pageCount=%1").arg(pageStack_->count()));
+    LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("setup_pages done page_count=%1").arg(pageStack_->count()));
 }
 
 void MainWindow::loadSearchData()
@@ -134,13 +140,13 @@ void MainWindow::loadSearchData()
     contentLoaded_ = contentRepository_.loadFromFile();
 
     if (indexLoaded_) {
-        LOG_INFO(LogCategory::SearchIndex,
-                 QStringLiteral("index loaded docs=%1 terms=%2 prefixes=%3 modules=%4 path=%5")
-                     .arg(indexRepository_.docCount())
-                     .arg(indexRepository_.termCount())
-                     .arg(indexRepository_.prefixCount())
-                     .arg(indexRepository_.modules().size())
-                     .arg(indexRepository_.activeIndexPath()));
+        LOG_DEBUG(LogCategory::SearchIndex,
+                  QStringLiteral("index loaded docs=%1 terms=%2 prefixes=%3 modules=%4 path=%5")
+                      .arg(indexRepository_.docCount())
+                      .arg(indexRepository_.termCount())
+                      .arg(indexRepository_.prefixCount())
+                      .arg(indexRepository_.modules().size())
+                      .arg(indexRepository_.activeIndexPath()));
     } else {
         const auto& diagnostics = indexRepository_.diagnostics();
         LOG_ERROR(LogCategory::SearchIndex,
@@ -149,12 +155,12 @@ void MainWindow::loadSearchData()
     }
 
     if (contentLoaded_) {
-        LOG_INFO(LogCategory::DataLoader,
-                 QStringLiteral("content loaded records=%1 modules=%2 tags=%3 path=%4")
-                     .arg(contentRepository_.size())
-                     .arg(contentRepository_.modules().size())
-                     .arg(contentRepository_.tags().size())
-                     .arg(contentRepository_.activeContentPath()));
+        LOG_DEBUG(LogCategory::DataLoader,
+                  QStringLiteral("content loaded records=%1 modules=%2 tags=%3 path=%4")
+                      .arg(contentRepository_.size())
+                      .arg(contentRepository_.modules().size())
+                      .arg(contentRepository_.tags().size())
+                      .arg(contentRepository_.activeContentPath()));
     } else {
         const auto& diagnostics = contentRepository_.diagnostics();
         LOG_ERROR(LogCategory::DataLoader,
@@ -163,6 +169,14 @@ void MainWindow::loadSearchData()
                       .arg(diagnostics.warnings.size())
                       .arg(diagnostics.skippedCount));
     }
+
+    LOG_INFO(LogCategory::DataLoader,
+             QStringLiteral("data loaded index_ready=%1 content_ready=%2 index_docs=%3 content_records=%4 modules=%5")
+                 .arg(indexLoaded_ ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(contentLoaded_ ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(indexLoaded_ ? QString::number(indexRepository_.docCount()) : QStringLiteral("0"))
+                 .arg(contentLoaded_ ? QString::number(contentRepository_.size()) : QStringLiteral("0"))
+                 .arg(indexLoaded_ ? QString::number(indexRepository_.modules().size()) : QStringLiteral("0")));
 
     if (indexLoaded_ && contentLoaded_) {
         startupStatusLine_ =
@@ -203,20 +217,58 @@ void MainWindow::updateBottomStatusBar() const
 
 void MainWindow::switchPage(int pageIndex)
 {
+    switchPageWithTrigger(pageIndex, QStringLiteral("navigation"));
+}
+
+void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
+{
     if (!pageStack_ || pageIndex < 0 || pageIndex >= pageStack_->count()) {
         const int pageCount = pageStack_ ? pageStack_->count() : 0;
         LOG_WARN(LogCategory::UiMainWindow,
-                 QStringLiteral("switchPage ignored invalid pageIndex=%1 pageCount=%2 pageStackNull=%3")
-                     .arg(pageIndex)
+                 QStringLiteral("page switch ignored to=%1 trigger=%2 page_count=%3 page_stack_null=%4")
+                     .arg(QString::fromUtf8(UiConstants::pageName(pageIndex)))
+                     .arg(trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed())
                      .arg(pageCount)
                      .arg(pageStack_ == nullptr ? QStringLiteral("true") : QStringLiteral("false")));
         return;
     }
 
+    const QString fromPage = QString::fromUtf8(UiConstants::pageName(currentPageIndex_));
+    const QString toPage = QString::fromUtf8(UiConstants::pageName(pageIndex));
+
     pageStack_->setCurrentIndex(pageIndex);
     navigationSidebar_->setCurrentIndex(pageIndex);
     topBar_->setPageTitle(titleForPage(pageIndex), subtitleForPage(pageIndex));
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("switchPage success pageIndex=%1").arg(pageIndex));
+    currentPageIndex_ = pageIndex;
+
+    const QString triggerText = trigger.trimmed().isEmpty() ? QStringLiteral("unknown") : trigger.trimmed();
+    const QString message = QStringLiteral("page switched from=%1 to=%2 trigger=%3")
+                                .arg(fromPage.isEmpty() ? QStringLiteral("unknown") : fromPage, toPage, triggerText);
+    if (triggerText == QStringLiteral("startup_default")) {
+        LOG_DEBUG(LogCategory::UiMainWindow, message);
+    } else {
+        LOG_INFO(LogCategory::UiMainWindow, message);
+    }
+}
+
+bool MainWindow::isIndexReady() const
+{
+    return indexLoaded_;
+}
+
+bool MainWindow::isContentReady() const
+{
+    return contentLoaded_;
+}
+
+bool MainWindow::isWebReady() const
+{
+    return webReady_;
+}
+
+int MainWindow::pageCount() const
+{
+    return pageStack_ == nullptr ? 0 : pageStack_->count();
 }
 
 QString MainWindow::titleForPage(int pageIndex) const

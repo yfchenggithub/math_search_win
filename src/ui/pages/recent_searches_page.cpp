@@ -11,7 +11,8 @@
 
 RecentSearchesPage::RecentSearchesPage(QWidget* parent) : QWidget(parent)
 {
-    LOG_INFO(LogCategory::UiMainWindow, QStringLiteral("RecentSearchesPage constructed (history persistence not wired yet)"));
+    LOG_DEBUG(LogCategory::UiMainWindow,
+              QStringLiteral("page constructed name=recent_searches mode=placeholder"));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);

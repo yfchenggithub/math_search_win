@@ -16,7 +16,7 @@
  *      logging::Logger::instance().shutdown();
  *
  * Log format:
- *   yyyy-MM-dd HH:mm:ss.zzz | LEVEL | category | file:line | function | tid=... | message
+ *   yyyy-MM-dd HH:mm:ss.zzz | L | category | file:line | func_short | message
  *
  * Default behavior:
  * - Debug build default level: DEBUG and above.
@@ -38,6 +38,14 @@
  * - MATH_SEARCH_LOG_TO_CONSOLE
  *   Boolean: 1/0, true/false, yes/no, on/off
  * - MATH_SEARCH_LOG_TO_FILE
+ *   Boolean: 1/0, true/false, yes/no, on/off
+ * - MATH_SEARCH_LOG_SHOW_THREAD_ID
+ *   Boolean: 1/0, true/false, yes/no, on/off
+ * - MATH_SEARCH_LOG_COMPACT_PATH
+ *   Boolean: 1/0, true/false, yes/no, on/off
+ * - MATH_SEARCH_LOG_SHORT_FUNC
+ *   Boolean: 1/0, true/false, yes/no, on/off
+ * - MATH_SEARCH_LOG_DEBUG_VERBOSE
  *   Boolean: 1/0, true/false, yes/no, on/off
  *
  * PowerShell examples (set before launching app):
@@ -73,6 +81,13 @@ enum class LogLevel : int {
     Fatal = 5
 };
 
+struct LoggerOptions {
+    bool showThreadId = false;
+    bool compactPath = true;
+    bool useShortFunctionName = true;
+    bool debugVerboseMode = false;
+};
+
 class Logger final {
 public:
     static Logger& instance();
@@ -85,9 +100,12 @@ public:
              const QString& message,
              const char* file,
              int line,
-             const char* function);
+             const char* function,
+             const char* displayFunction = nullptr);
 
     bool isEnabled(LogLevel level) const;
+    void setOptions(const LoggerOptions& options);
+    LoggerOptions options() const;
 
     LogLevel minLevel() const;
     QString logDirectory() const;
@@ -104,6 +122,9 @@ private:
 };
 
 QString logLevelToString(LogLevel level);
+QString logLevelToLetter(LogLevel level);
+QString shortFunctionName(const char* rawFunction, const char* displayFunction = nullptr);
+QString compactPathForLog(const QString& rawPath, bool diagnosticsContext = false);
 
 inline QString toQString(const QString& value)
 {
@@ -147,14 +168,15 @@ inline void logWithContext(LogLevel level,
                            const MessageT& message,
                            const char* file,
                            int line,
-                           const char* function)
+                           const char* function,
+                           const char* displayFunction = nullptr)
 {
     Logger& logger = Logger::instance();
     logger.initialize();
     if (!logger.isEnabled(level)) {
         return;
     }
-    logger.log(level, toQString(category), toQString(message), file, line, function);
+    logger.log(level, toQString(category), toQString(message), file, line, function, displayFunction);
 }
 
 #define LOG_TRACE(category, message) \
@@ -174,5 +196,59 @@ inline void logWithContext(LogLevel level,
 
 #define LOG_FATAL(category, message) \
     ::logging::logWithContext(::logging::LogLevel::Fatal, (category), (message), __FILE__, __LINE__, Q_FUNC_INFO)
+
+#define LOG_TRACE_F(category, displayFunction, message)                                                                  \
+    ::logging::logWithContext(::logging::LogLevel::Trace,                                                               \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
+
+#define LOG_DEBUG_F(category, displayFunction, message)                                                                  \
+    ::logging::logWithContext(::logging::LogLevel::Debug,                                                               \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
+
+#define LOG_INFO_F(category, displayFunction, message)                                                                   \
+    ::logging::logWithContext(::logging::LogLevel::Info,                                                                \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
+
+#define LOG_WARN_F(category, displayFunction, message)                                                                   \
+    ::logging::logWithContext(::logging::LogLevel::Warn,                                                                \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
+
+#define LOG_ERROR_F(category, displayFunction, message)                                                                  \
+    ::logging::logWithContext(::logging::LogLevel::Error,                                                               \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
+
+#define LOG_FATAL_F(category, displayFunction, message)                                                                  \
+    ::logging::logWithContext(::logging::LogLevel::Fatal,                                                               \
+                              (category),                                                                               \
+                              (message),                                                                                \
+                              __FILE__,                                                                                 \
+                              __LINE__,                                                                                 \
+                              Q_FUNC_INFO,                                                                              \
+                              (displayFunction))
 
 }  // namespace logging

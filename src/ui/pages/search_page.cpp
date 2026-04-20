@@ -98,10 +98,10 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     detailRenderCoordinator_ = std::make_unique<ui::detail::DetailRenderCoordinator>();
     detailViewDataMapper_ = std::make_unique<ui::detail::DetailViewDataMapper>();
 
-    LOG_INFO(LogCategory::SearchEngine,
-             QStringLiteral("SearchPage constructed searchServiceNull=%1 suggestServiceNull=%2")
-                 .arg(searchService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false"))
-                 .arg(suggestService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false")));
+    LOG_DEBUG(LogCategory::SearchEngine,
+              QStringLiteral("page constructed name=search search_service_null=%1 suggest_service_null=%2")
+                  .arg(searchService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false"))
+                  .arg(suggestService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false")));
 
     detailSelectionCoalesceTimer_ = new QTimer(this);
     detailSelectionCoalesceTimer_->setSingleShot(true);
@@ -114,15 +114,20 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     resetToEmptyState();
 }
 
+bool SearchPage::isDetailWebReady() const
+{
+    return webDetailEnabled_;
+}
+
 void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
 {
     indexReady_ = indexReady;
     contentReady_ = contentReady;
 
-    LOG_INFO(LogCategory::SearchEngine,
-             QStringLiteral("setBackendStatus indexReady=%1 contentReady=%2")
-                 .arg(indexReady_ ? QStringLiteral("true") : QStringLiteral("false"))
-                 .arg(contentReady_ ? QStringLiteral("true") : QStringLiteral("false")));
+    LOG_DEBUG(LogCategory::SearchEngine,
+              QStringLiteral("backend status_updated index_ready=%1 content_ready=%2")
+                  .arg(indexReady_ ? QStringLiteral("true") : QStringLiteral("false"))
+                  .arg(contentReady_ ? QStringLiteral("true") : QStringLiteral("false")));
 
     rebuildFilterOptions();
     lastSuggestSignature_.clear();
@@ -195,7 +200,7 @@ void SearchPage::setInitialModule(const QString& module)
     const int targetIndex = findComboDataIndex(moduleFilterCombo_, trimmedModule);
     if (targetIndex < 0) {
         LOG_WARN(LogCategory::SearchEngine,
-                 QStringLiteral("setInitialModule ignored unknown module=%1").arg(trimmedModule));
+                 QStringLiteral("initial_module ignored reason=unknown_module module=%1").arg(trimmedModule));
         return;
     }
 
@@ -263,7 +268,8 @@ void SearchPage::onSuggestionClicked(QListWidgetItem* item)
         return;
     }
 
-    LOG_INFO(LogCategory::SearchEngine, QStringLiteral("suggestion clicked text=%1").arg(suggestionText));
+    LOG_INFO(LogCategory::SearchEngine,
+             QStringLiteral("suggestion clicked text=%1 trigger=suggestion_click").arg(suggestionText));
 
     suppressSuggestRefresh_ = true;
     queryInput_->setText(suggestionText);
@@ -288,7 +294,7 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
 
     const QString docId = currentItem->data(kResultItemDocIdRole).toString().trimmed();
     if (docId.isEmpty()) {
-        LOG_WARN(LogCategory::DetailRender, QStringLiteral("result item missing doc id"));
+        LOG_WARN(LogCategory::DetailRender, QStringLiteral("detail select_failed reason=missing_doc_id"));
         showDetailError(QStringLiteral("当前结果缺少结论 ID，无法显示详情。"));
         return;
     }
@@ -355,7 +361,7 @@ void SearchPage::onClearFiltersClicked()
         tagFilterCombo_->setCurrentIndex(0);
     }
 
-    LOG_INFO(LogCategory::SearchEngine, QStringLiteral("filters cleared"));
+    LOG_INFO(LogCategory::SearchEngine, QStringLiteral("filters cleared trigger=manual"));
     onFilterChanged();
 }
 
@@ -447,13 +453,14 @@ void SearchPage::buildUi()
 
     if (webDetailEnabled_) {
         detailWebView_->setVisible(true);
-        LOG_INFO(LogCategory::WebViewKatex,
-                 QStringLiteral("SearchPage detail web mode enabled detailDir=%1 template=%2")
-                     .arg(detailHtmlRenderer_->detailDirectory(), detailHtmlRenderer_->detailTemplatePath()));
+        LOG_DEBUG(LogCategory::WebViewKatex,
+                  QStringLiteral("web_mode enabled detail_dir=%1 template=%2")
+                      .arg(detailHtmlRenderer_->detailDirectory(), detailHtmlRenderer_->detailTemplatePath()));
+        LOG_DEBUG(LogCategory::PerfWebView, QStringLiteral("event=web_mode_enabled mode=web"));
     } else {
         detailBrowser_->setVisible(true);
         LOG_WARN(LogCategory::WebViewKatex,
-                 QStringLiteral("SearchPage detail web mode disabled reason=%1")
+                 QStringLiteral("renderer unavailable mode=text_fallback reason=%1")
                      .arg(detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
                                                          : detailHtmlRenderer_->lastError()));
     }
@@ -494,7 +501,9 @@ void SearchPage::connectSignals()
     if (detailPane_ != nullptr) {
         connect(detailPane_.get(), &ui::detail::DetailPane::shellReadyChanged, this, [this](bool ready) {
             if (ready) {
-                LOG_INFO(LogCategory::WebViewKatex, QStringLiteral("detail shell loaded"));
+                LOG_INFO_F(LogCategory::PerfWebView,
+                           "SearchPage::onDetailShellLoaded",
+                           QStringLiteral("event=detail_shell_loaded"));
             }
         });
         connect(detailPane_.get(), &ui::detail::DetailPane::webModeFailed, this, &SearchPage::activateTextFallbackMode);
@@ -596,7 +605,9 @@ void SearchPage::runSuggest(const QString& query)
     if (!indexReady_ || suggestService_ == nullptr) {
         clearSuggestions();
         updateStatusLine(QStringLiteral("索引未就绪，无法生成建议。"));
-        LOG_WARN(LogCategory::SearchEngine, QStringLiteral("runSuggest skipped indexReady=%1").arg(indexReady_));
+        LOG_WARN(LogCategory::SearchEngine,
+                 QStringLiteral("suggest skipped reason=backend_unavailable index_ready=%1")
+                     .arg(indexReady_ ? QStringLiteral("true") : QStringLiteral("false")));
         return;
     }
 
@@ -641,8 +652,8 @@ void SearchPage::runSuggest(const QString& query)
                          .arg(result.items.size())
                          .arg(elapsedMs));
 
-    LOG_DEBUG(LogCategory::SearchEngine,
-              QStringLiteral("suggest done query=%1 total=%2 elapsed=%3ms")
+    LOG_DEBUG(LogCategory::PerfSearch,
+              QStringLiteral("event=suggest_done query=%1 total=%2 elapsed_ms=%3")
                   .arg(normalizedQuery)
                   .arg(result.items.size())
                   .arg(elapsedMs));
@@ -666,13 +677,14 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                          QStringLiteral("请检查索引加载日志。"));
         showDetailError(QStringLiteral("索引未就绪，当前无法展示结果详情。"));
         LOG_ERROR(LogCategory::SearchEngine,
-                  QStringLiteral("runSearch failed due to missing search backend query=%1").arg(normalizedQuery));
+                  QStringLiteral("search failed reason=backend_unavailable query=%1").arg(normalizedQuery));
         return;
     }
 
     const QString signature = buildSearchSignature(normalizedQuery);
     if (signature == lastSearchSignature_) {
-        LOG_DEBUG(LogCategory::SearchEngine, QStringLiteral("runSearch skipped duplicate signature query=%1").arg(normalizedQuery));
+        LOG_DEBUG(LogCategory::SearchEngine,
+                  QStringLiteral("search skipped reason=duplicate_signature query=%1").arg(normalizedQuery));
         return;
     }
 
@@ -717,8 +729,8 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                              .arg(filterSummary));
         showDetailPlaceholder(QStringLiteral("没有找到相关结论。建议尝试更短关键词或清空筛选。"));
 
-        LOG_INFO(LogCategory::SearchEngine,
-                 QStringLiteral("search done query=%1 total=0 elapsed=%2ms trigger=%3")
+        LOG_INFO(LogCategory::PerfSearch,
+                 QStringLiteral("event=search_done query=%1 total=0 elapsed_ms=%2 trigger=%3")
                      .arg(normalizedQuery)
                      .arg(elapsedMs)
                      .arg(triggerSource));
@@ -732,8 +744,8 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
                          .arg(elapsedMs)
                          .arg(filterSummary));
 
-    LOG_INFO(LogCategory::SearchEngine,
-             QStringLiteral("search done query=%1 total=%2 elapsed=%3ms trigger=%4")
+    LOG_INFO(LogCategory::PerfSearch,
+             QStringLiteral("event=search_done query=%1 total=%2 elapsed_ms=%3 trigger=%4")
                  .arg(normalizedQuery)
                  .arg(currentHits_.size())
                  .arg(elapsedMs)
@@ -801,8 +813,8 @@ void SearchPage::enqueueDetailRenderRequest(const QString& docId)
 
     if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isSameAsRendered(normalizedDocId)
         && !hasPendingDetailRequest_ && (detailPane_ == nullptr || !detailPane_->hasPendingRequest())) {
-        LOG_DEBUG(LogCategory::DetailRender,
-                  QStringLiteral("skip duplicate detail selection docId=%1").arg(normalizedDocId));
+        LOG_DEBUG(LogCategory::PerfDetail,
+                  QStringLiteral("event=detail_select_skipped reason=already_rendered doc_id=%1").arg(normalizedDocId));
         return;
     }
 
@@ -918,7 +930,7 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
     if (!contentReady_ || contentRepository_ == nullptr) {
         showDetailError(QStringLiteral("内容仓库未就绪，无法显示详情。"));
         LOG_WARN(LogCategory::DetailRender,
-                 QStringLiteral("detail skipped because content repo unavailable docId=%1").arg(normalizedDocId));
+                 QStringLiteral("detail skipped reason=content_repo_unavailable doc_id=%1").arg(normalizedDocId));
         logDetailPerf(normalizedDocId,
                       requestId,
                       selectionTimestampMs,
@@ -942,7 +954,8 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         const auto* record = contentRepository_->getById(normalizedDocId);
         if (record == nullptr) {
             showDetailError(QStringLiteral("内容仓库中未找到结论 ID: %1").arg(normalizedDocId));
-            LOG_WARN(LogCategory::DetailRender, QStringLiteral("content record not found docId=%1").arg(normalizedDocId));
+            LOG_WARN(LogCategory::DetailRender,
+                     QStringLiteral("detail skipped reason=content_record_not_found doc_id=%1").arg(normalizedDocId));
             logDetailPerf(normalizedDocId,
                           requestId,
                           selectionTimestampMs,
@@ -962,7 +975,7 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
                                              : detailView.errorMessage.trimmed();
             showDetailError(errorMessage);
             LOG_WARN(LogCategory::DetailRender,
-                     QStringLiteral("detail adapter returned invalid viewData docId=%1 error=%2")
+                     QStringLiteral("detail skipped reason=invalid_view_data doc_id=%1 error=%2")
                          .arg(normalizedDocId, errorMessage));
             logDetailPerf(normalizedDocId,
                           requestId,
@@ -1595,8 +1608,11 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     }
 
     LOG_ERROR(LogCategory::WebViewKatex,
-              QStringLiteral("disable web detail mode and fallback to QTextBrowser reason=%1")
+              QStringLiteral("web_mode disabled fallback=text_browser reason=%1")
                   .arg(reason.trimmed().isEmpty() ? QStringLiteral("unknown") : reason.trimmed()));
+    LOG_INFO(LogCategory::PerfWebView,
+             QStringLiteral("event=web_mode_disabled reason=%1")
+                 .arg(reason.trimmed().isEmpty() ? QStringLiteral("unknown") : reason.trimmed()));
 
     if (activeDetailTimingRequestId_ > 0) {
         const auto timingIt = detailTimingSessions_.constFind(activeDetailTimingRequestId_);
