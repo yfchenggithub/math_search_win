@@ -17,13 +17,24 @@ struct DetailSectionViewData {
     bool visible = true;
 };
 
+struct DetailVariableViewData {
+    QString name;
+    QString latex;
+    QString description;
+    bool required = false;
+};
+
 struct ConclusionDetailViewData {
     QString title;
     QString conclusionId;
     QString module;
     QString moduleKey;
+    QString category;
     QStringList tags;
     QString summary;
+    QString conditionText;
+    QString remarkText;
+    QVector<DetailVariableViewData> variables;
     QVector<DetailSectionViewData> sections;
     bool isValid = false;
     QString errorMessage;

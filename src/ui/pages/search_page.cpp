@@ -9,12 +9,17 @@
 #include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
 #include "ui/detail/detail_html_renderer.h"
+#include "ui/detail/detail_pane.h"
+#include "ui/detail/detail_render_coordinator.h"
+#include "ui/detail/detail_view_data_mapper.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -23,6 +28,7 @@
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QTextBrowser>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWebEngineView>
 
@@ -82,14 +88,21 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
     detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();
+    detailRenderCoordinator_ = std::make_unique<ui::detail::DetailRenderCoordinator>();
+    detailViewDataMapper_ = std::make_unique<ui::detail::DetailViewDataMapper>();
 
     LOG_INFO(LogCategory::SearchEngine,
              QStringLiteral("SearchPage constructed searchServiceNull=%1 suggestServiceNull=%2")
                  .arg(searchService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(suggestService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false")));
 
+    detailSelectionCoalesceTimer_ = new QTimer(this);
+    detailSelectionCoalesceTimer_->setSingleShot(true);
+    detailSelectionCoalesceTimer_->setInterval(kDetailSelectionCoalesceMs);
+
     buildUi();
     connectSignals();
+    ensureDetailShellLoaded();
     rebuildFilterOptions();
     resetToEmptyState();
 }
@@ -107,6 +120,17 @@ void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
     rebuildFilterOptions();
     lastSuggestSignature_.clear();
     lastSearchSignature_.clear();
+    hasPendingDetailRequest_ = false;
+    clearDetailCaches();
+    pendingDetailDocId_.clear();
+    pendingDetailRequestId_ = 0;
+    pendingDetailSelectionTimestampMs_ = 0;
+    if (detailSelectionCoalesceTimer_ != nullptr) {
+        detailSelectionCoalesceTimer_->stop();
+    }
+    if (detailRenderCoordinator_ != nullptr) {
+        detailRenderCoordinator_->reset();
+    }
 
     if (!indexReady_) {
         updateStatusLine(QStringLiteral("索引未就绪，当前无法搜索。"),
@@ -239,14 +263,16 @@ void SearchPage::onSuggestionClicked(QListWidgetItem* item)
     runSearch(suggestionText, QStringLiteral("suggest_click"));
 }
 
-void SearchPage::onResultSelectionChanged()
+void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
 {
-    if (resultList_ == nullptr) {
-        return;
-    }
-
-    QListWidgetItem* currentItem = resultList_->currentItem();
     if (currentItem == nullptr) {
+        hasPendingDetailRequest_ = false;
+        pendingDetailDocId_.clear();
+        pendingDetailRequestId_ = 0;
+        pendingDetailSelectionTimestampMs_ = 0;
+        if (detailRenderCoordinator_ != nullptr) {
+            detailRenderCoordinator_->clearRenderedDetail();
+        }
         showDetailPlaceholder(QStringLiteral("请选择左侧结果查看详情。"));
         return;
     }
@@ -258,8 +284,7 @@ void SearchPage::onResultSelectionChanged()
         return;
     }
 
-    LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("result selected docId=%1").arg(docId));
-    renderDetailForDocId(docId);
+    enqueueDetailRenderRequest(docId);
 }
 
 void SearchPage::onFilterChanged()
@@ -402,10 +427,15 @@ void SearchPage::buildUi()
 
     webDetailEnabled_ = detailHtmlRenderer_ != nullptr && detailHtmlRenderer_->isReady();
     if (webDetailEnabled_) {
+        detailPane_ = std::make_unique<ui::detail::DetailPane>(detailWebView_, detailBrowser_, detailHtmlRenderer_.get());
+        webDetailEnabled_ = detailPane_ != nullptr && detailPane_->isWebModeEnabled();
+    }
+
+    if (webDetailEnabled_) {
         detailWebView_->setVisible(true);
         LOG_INFO(LogCategory::WebViewKatex,
-                 QStringLiteral("SearchPage detail web mode enabled detailDir=%1")
-                     .arg(detailHtmlRenderer_->detailDirectory()));
+                 QStringLiteral("SearchPage detail web mode enabled detailDir=%1 template=%2")
+                     .arg(detailHtmlRenderer_->detailDirectory(), detailHtmlRenderer_->detailTemplatePath()));
     } else {
         detailBrowser_->setVisible(true);
         LOG_WARN(LogCategory::WebViewKatex,
@@ -432,7 +462,14 @@ void SearchPage::connectSignals()
     connect(suggestionList_, &QListWidget::itemClicked, this, &SearchPage::onSuggestionClicked);
     connect(suggestionList_, &QListWidget::itemActivated, this, &SearchPage::onSuggestionClicked);
 
-    connect(resultList_, &QListWidget::itemSelectionChanged, this, &SearchPage::onResultSelectionChanged);
+    connect(resultList_,
+            &QListWidget::currentItemChanged,
+            this,
+            [this](QListWidgetItem* current, QListWidgetItem*) { onResultSelectionChanged(current); });
+
+    if (detailSelectionCoalesceTimer_ != nullptr) {
+        connect(detailSelectionCoalesceTimer_, &QTimer::timeout, this, &SearchPage::flushPendingDetailRequest);
+    }
 
     connect(moduleFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
     connect(categoryFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
@@ -440,14 +477,21 @@ void SearchPage::connectSignals()
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
 
-    if (detailWebView_ != nullptr) {
-        connect(detailWebView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
-            if (ok) {
-                return;
+    if (detailPane_ != nullptr) {
+        connect(detailPane_.get(), &ui::detail::DetailPane::shellReadyChanged, this, [this](bool ready) {
+            if (ready) {
+                LOG_INFO(LogCategory::WebViewKatex, QStringLiteral("detail shell loaded"));
             }
-            LOG_WARN(LogCategory::WebViewKatex, QStringLiteral("detail webview loadFinished(false), fallback to QTextBrowser"));
-            activateTextFallbackMode(QStringLiteral("QWebEngineView failed to load detail html"));
         });
+        connect(detailPane_.get(), &ui::detail::DetailPane::webModeFailed, this, &SearchPage::activateTextFallbackMode);
+        connect(detailPane_.get(),
+                &ui::detail::DetailPane::perfPhase,
+                this,
+                [this](const QString& detailId,
+                       quint64 requestId,
+                       qint64 selectionTimestampMs,
+                       const QString& phase,
+                       const QString& extra) { logDetailPerf(detailId, requestId, selectionTimestampMs, phase, extra); });
     }
 }
 
@@ -729,59 +773,194 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
     }
 }
 
-void SearchPage::renderDetailForDocId(const QString& docId)
+void SearchPage::enqueueDetailRenderRequest(const QString& docId)
 {
-    if (docId.trimmed().isEmpty()) {
+    const QString normalizedDocId = docId.trimmed();
+    if (normalizedDocId.isEmpty()) {
+        return;
+    }
+
+    if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isSameAsRendered(normalizedDocId)
+        && !hasPendingDetailRequest_ && (detailPane_ == nullptr || !detailPane_->hasPendingRequest())) {
+        LOG_DEBUG(LogCategory::DetailRender,
+                  QStringLiteral("skip duplicate detail selection docId=%1").arg(normalizedDocId));
+        return;
+    }
+
+    if (hasPendingDetailRequest_ && pendingDetailDocId_ == normalizedDocId) {
+        return;
+    }
+
+    if (detailRenderCoordinator_ == nullptr) {
+        return;
+    }
+
+    const ui::detail::DetailRenderRequestCreation creation = detailRenderCoordinator_->createRequest(normalizedDocId);
+    const quint64 requestId = creation.request.requestId;
+    const qint64 selectionTimestampMs = creation.request.selectionTimestampMs;
+    if (requestId == 0 || selectionTimestampMs <= 0) {
+        return;
+    }
+
+    if (creation.supersededRequestId > 0) {
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_superseded"),
+                      QStringLiteral("superseded_req=%1 superseded_id=%2")
+                          .arg(creation.supersededRequestId)
+                          .arg(creation.supersededDetailId));
+    }
+
+    pendingDetailDocId_ = normalizedDocId;
+    pendingDetailRequestId_ = requestId;
+    pendingDetailSelectionTimestampMs_ = selectionTimestampMs;
+    hasPendingDetailRequest_ = true;
+
+    logDetailPerf(normalizedDocId, requestId, selectionTimestampMs, QStringLiteral("selection_received"));
+    logDetailPerf(normalizedDocId, requestId, selectionTimestampMs, QStringLiteral("detail_request_created"));
+
+    if (detailSelectionCoalesceTimer_ != nullptr) {
+        detailSelectionCoalesceTimer_->start();
+    } else {
+        flushPendingDetailRequest();
+    }
+}
+
+void SearchPage::flushPendingDetailRequest()
+{
+    if (!hasPendingDetailRequest_) {
+        return;
+    }
+
+    const QString docId = pendingDetailDocId_;
+    const quint64 requestId = pendingDetailRequestId_;
+    const qint64 selectionTimestampMs = pendingDetailSelectionTimestampMs_;
+
+    hasPendingDetailRequest_ = false;
+    pendingDetailDocId_.clear();
+    pendingDetailRequestId_ = 0;
+    pendingDetailSelectionTimestampMs_ = 0;
+
+    if (docId.isEmpty()) {
+        return;
+    }
+
+    if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId)) {
+        // Selection changed while this request was waiting in the coalescing queue.
+        logDetailPerf(docId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_superseded"),
+                      QStringLiteral("reason=stale_before_render"));
+        return;
+    }
+
+    renderDetailForRequest(docId, requestId, selectionTimestampMs);
+}
+
+void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId, qint64 selectionTimestampMs)
+{
+    const QString normalizedDocId = docId.trimmed();
+    if (normalizedDocId.isEmpty()) {
         showDetailError(QStringLiteral("当前结果缺少结论 ID，无法显示详情。"));
+        return;
+    }
+
+    if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId)) {
+        // Drop stale work before touching repositories so rapid A/B/C/D switches stay responsive.
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_superseded"),
+                      QStringLiteral("reason=stale_before_payload"));
         return;
     }
 
     if (!contentReady_ || contentRepository_ == nullptr) {
         showDetailError(QStringLiteral("内容仓库未就绪，无法显示详情。"));
         LOG_WARN(LogCategory::DetailRender,
-                 QStringLiteral("detail skipped because content repo unavailable docId=%1").arg(docId));
+                 QStringLiteral("detail skipped because content repo unavailable docId=%1").arg(normalizedDocId));
         return;
     }
 
-    const auto* record = contentRepository_->getById(docId);
-    if (record == nullptr) {
-        showDetailError(QStringLiteral("内容仓库中未找到结论 ID: %1").arg(docId));
-        LOG_WARN(LogCategory::DetailRender, QStringLiteral("content record not found docId=%1").arg(docId));
-        return;
-    }
+    QElapsedTimer dataPrepareTimer;
+    dataPrepareTimer.start();
 
-    const domain::adapters::ConclusionDetailViewData detailView = domain::adapters::ConclusionDetailAdapter::toViewData(*record);
-    if (!detailView.isValid) {
-        const QString errorMessage = detailView.errorMessage.trimmed().isEmpty()
-                                         ? QStringLiteral("详情数据暂时不可用")
-                                         : detailView.errorMessage.trimmed();
-        showDetailError(errorMessage);
-        LOG_WARN(LogCategory::DetailRender,
-                 QStringLiteral("detail adapter returned invalid viewData docId=%1 error=%2")
-                     .arg(docId, errorMessage));
-        return;
-    }
+    domain::adapters::ConclusionDetailViewData detailView;
+    QJsonObject contentPayload;
+    bool cacheHit = lookupCachedDetail(normalizedDocId, &detailView, &contentPayload);
 
-    LOG_DEBUG(LogCategory::DetailRender,
-              QStringLiteral("detail refresh begin docId=%1 sections=%2")
-                  .arg(docId)
-                  .arg(detailView.sections.size()));
-
-    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
-        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderContent(detailView);
-        if (loadDetailHtmlIntoWebView(renderResult)) {
-            LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail rendered via webengine docId=%1").arg(docId));
+    if (!cacheHit) {
+        const auto* record = contentRepository_->getById(normalizedDocId);
+        if (record == nullptr) {
+            showDetailError(QStringLiteral("内容仓库中未找到结论 ID: %1").arg(normalizedDocId));
+            LOG_WARN(LogCategory::DetailRender, QStringLiteral("content record not found docId=%1").arg(normalizedDocId));
             return;
         }
 
-        LOG_WARN(LogCategory::WebViewKatex,
-                 QStringLiteral("detail web render failed docId=%1 error=%2")
-                     .arg(docId, renderResult.errorMessage));
-        activateTextFallbackMode(renderResult.errorMessage);
+        detailView = domain::adapters::ConclusionDetailAdapter::toViewData(*record);
+        if (!detailView.isValid) {
+            const QString errorMessage = detailView.errorMessage.trimmed().isEmpty()
+                                             ? QStringLiteral("详情数据暂时不可用")
+                                             : detailView.errorMessage.trimmed();
+            showDetailError(errorMessage);
+            LOG_WARN(LogCategory::DetailRender,
+                     QStringLiteral("detail adapter returned invalid viewData docId=%1 error=%2")
+                         .arg(normalizedDocId, errorMessage));
+            return;
+        }
+
+        if (detailViewDataMapper_ != nullptr) {
+            contentPayload = detailViewDataMapper_->buildContentPayload(detailView, 0);
+        }
+        cacheDetail(normalizedDocId, detailView, contentPayload);
+    }
+
+    const qint64 dataPrepareMs = dataPrepareTimer.elapsed();
+    logDetailPerf(normalizedDocId,
+                  requestId,
+                  selectionTimestampMs,
+                  QStringLiteral("detail_payload_ready"),
+                  QStringLiteral("dt=%1ms cache=%2 sections=%3")
+                      .arg(dataPrepareMs)
+                      .arg(cacheHit ? QStringLiteral("hit") : QStringLiteral("miss"))
+                      .arg(detailView.sections.size()));
+
+    if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isRequestStale(requestId)) {
+        // Payload is ready but already obsolete; keep only the newest request alive.
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("request_superseded"),
+                      QStringLiteral("reason=stale_after_payload"));
+        return;
+    }
+
+    if (webDetailEnabled_ && detailPane_ != nullptr && detailViewDataMapper_ != nullptr) {
+        QJsonObject payload = contentPayload;
+        if (payload.isEmpty()) {
+            payload = detailViewDataMapper_->buildContentPayload(detailView, 0);
+        }
+        payload.insert(QStringLiteral("requestId"), static_cast<qint64>(requestId));
+        payload.insert(QStringLiteral("detailId"), normalizedDocId);
+
+        dispatchPayloadToWeb(payload, normalizedDocId, requestId, selectionTimestampMs);
+        if (detailRenderCoordinator_ != nullptr) {
+            detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
+        }
+        return;
     }
 
     renderDetailInFallbackBrowser(detailView);
-    LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail rendered via QTextBrowser fallback docId=%1").arg(docId));
+    if (detailRenderCoordinator_ != nullptr) {
+        detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
+    }
+    logDetailPerf(normalizedDocId,
+                  requestId,
+                  selectionTimestampMs,
+                  QStringLiteral("total"),
+                  QStringLiteral("dt=%1ms mode=text_fallback").arg(detailElapsedMs(selectionTimestampMs)));
 }
 
 void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView)
@@ -834,16 +1013,14 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     const QString fallbackMessage = message.trimmed().isEmpty()
                                         ? QStringLiteral("请选择一条结果查看详情。")
                                         : message.trimmed();
+    if (detailRenderCoordinator_ != nullptr) {
+        detailRenderCoordinator_->clearRenderedDetail();
+    }
 
-    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
-        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderEmptyState(fallbackMessage);
-        if (loadDetailHtmlIntoWebView(renderResult)) {
-            LOG_DEBUG(LogCategory::DetailRender, QStringLiteral("detail empty state rendered via webengine"));
-            return;
-        }
-        LOG_WARN(LogCategory::WebViewKatex,
-                 QStringLiteral("detail empty state render failed, fallback reason=%1").arg(renderResult.errorMessage));
-        activateTextFallbackMode(renderResult.errorMessage);
+    if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
+        const QJsonObject payload = detailViewDataMapper_->buildEmptyPayload(fallbackMessage);
+        dispatchPayloadToWeb(payload);
+        return;
     }
 
     if (detailBrowser_ == nullptr) {
@@ -862,16 +1039,14 @@ void SearchPage::showDetailError(const QString& message)
     const QString fallbackMessage = message.trimmed().isEmpty()
                                         ? QStringLiteral("详情暂时无法显示。")
                                         : message.trimmed();
+    if (detailRenderCoordinator_ != nullptr) {
+        detailRenderCoordinator_->clearRenderedDetail();
+    }
 
-    if (webDetailEnabled_ && detailHtmlRenderer_ != nullptr) {
-        const ui::detail::DetailHtmlRenderResult renderResult = detailHtmlRenderer_->renderErrorState(fallbackMessage);
-        if (loadDetailHtmlIntoWebView(renderResult)) {
-            LOG_WARN(LogCategory::DetailRender, QStringLiteral("detail error state rendered via webengine message=%1").arg(fallbackMessage));
-            return;
-        }
-        LOG_WARN(LogCategory::WebViewKatex,
-                 QStringLiteral("detail error state render failed, fallback reason=%1").arg(renderResult.errorMessage));
-        activateTextFallbackMode(renderResult.errorMessage);
+    if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
+        const QJsonObject payload = detailViewDataMapper_->buildErrorPayload(fallbackMessage);
+        dispatchPayloadToWeb(payload);
+        return;
     }
 
     if (detailBrowser_ == nullptr) {
@@ -885,23 +1060,117 @@ void SearchPage::showDetailError(const QString& message)
     }
 }
 
-bool SearchPage::loadDetailHtmlIntoWebView(const ui::detail::DetailHtmlRenderResult& renderResult)
+void SearchPage::ensureDetailShellLoaded()
 {
-    if (!webDetailEnabled_ || detailWebView_ == nullptr) {
-        return false;
+    if (!webDetailEnabled_ || detailPane_ == nullptr) {
+        return;
     }
-    if (!renderResult.success) {
+    detailPane_->ensureShellLoaded();
+}
+
+void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
+                                      const QString& docId,
+                                      quint64 requestId,
+                                      qint64 selectionTimestampMs)
+{
+    if (!webDetailEnabled_ || detailPane_ == nullptr) {
+        return;
+    }
+    ui::detail::DetailPane::RequestContext requestContext;
+    requestContext.payload = payload;
+    requestContext.detailId = docId.trimmed().isEmpty() ? payload.value(QStringLiteral("detailId")).toString().trimmed()
+                                                        : docId.trimmed();
+    requestContext.requestId = requestId;
+    requestContext.selectionTimestampMs = selectionTimestampMs;
+    detailPane_->renderDetail(requestContext);
+}
+
+bool SearchPage::lookupCachedDetail(const QString& docId,
+                                    domain::adapters::ConclusionDetailViewData* detailView,
+                                    QJsonObject* contentPayload)
+{
+    if (detailView == nullptr || contentPayload == nullptr) {
         return false;
     }
 
-    detailWebView_->setHtml(renderResult.html, renderResult.baseUrl);
-    detailWebView_->setVisible(true);
-    if (detailBrowser_ != nullptr) {
-        detailBrowser_->setVisible(false);
+    const auto detailIt = detailViewCache_.constFind(docId);
+    const auto payloadIt = detailPayloadCache_.constFind(docId);
+    if (detailIt == detailViewCache_.constEnd() || payloadIt == detailPayloadCache_.constEnd()) {
+        return false;
     }
-    LOG_DEBUG(LogCategory::WebViewKatex,
-              QStringLiteral("detail html loaded into webview baseUrl=%1").arg(renderResult.baseUrl.toString()));
+
+    *detailView = detailIt.value();
+    *contentPayload = payloadIt.value();
+    touchDetailCacheKey(docId);
     return true;
+}
+
+void SearchPage::cacheDetail(const QString& docId,
+                             const domain::adapters::ConclusionDetailViewData& detailView,
+                             const QJsonObject& contentPayload)
+{
+    if (docId.trimmed().isEmpty()) {
+        return;
+    }
+
+    detailViewCache_.insert(docId, detailView);
+    detailPayloadCache_.insert(docId, contentPayload);
+    touchDetailCacheKey(docId);
+
+    while (detailCacheLru_.size() > kDetailCacheCapacity) {
+        const QString evictedDocId = detailCacheLru_.front();
+        detailCacheLru_.pop_front();
+        detailViewCache_.remove(evictedDocId);
+        detailPayloadCache_.remove(evictedDocId);
+    }
+}
+
+void SearchPage::touchDetailCacheKey(const QString& docId)
+{
+    if (docId.isEmpty()) {
+        return;
+    }
+    detailCacheLru_.removeAll(docId);
+    detailCacheLru_.push_back(docId);
+}
+
+void SearchPage::clearDetailCaches()
+{
+    detailViewCache_.clear();
+    detailPayloadCache_.clear();
+    detailCacheLru_.clear();
+}
+
+void SearchPage::logDetailPerf(const QString& docId,
+                               quint64 requestId,
+                               qint64 selectionTimestampMs,
+                               const QString& phase,
+                               const QString& extra) const
+{
+    if (docId.trimmed().isEmpty() || requestId == 0 || selectionTimestampMs <= 0 || phase.trimmed().isEmpty()) {
+        return;
+    }
+
+    QString line =
+        QStringLiteral("[perf][detail] id=%1 req=%2 phase=%3 t=%4ms")
+            .arg(docId.trimmed())
+            .arg(requestId)
+            .arg(phase.trimmed())
+            .arg(detailElapsedMs(selectionTimestampMs));
+    if (!extra.trimmed().isEmpty()) {
+        line.append(QStringLiteral(" "));
+        line.append(extra.trimmed());
+    }
+    LOG_DEBUG(LogCategory::DetailRender, line);
+}
+
+qint64 SearchPage::detailElapsedMs(qint64 selectionTimestampMs) const
+{
+    if (selectionTimestampMs <= 0) {
+        return 0;
+    }
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    return std::max<qint64>(0, nowMs - selectionTimestampMs);
 }
 
 void SearchPage::activateTextFallbackMode(const QString& reason)
@@ -911,6 +1180,10 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     }
 
     webDetailEnabled_ = false;
+    if (detailPane_ != nullptr) {
+        detailPane_->disableWebMode();
+    }
+
     LOG_ERROR(LogCategory::WebViewKatex,
               QStringLiteral("disable web detail mode and fallback to QTextBrowser reason=%1")
                   .arg(reason.trimmed().isEmpty() ? QStringLiteral("unknown") : reason.trimmed()));

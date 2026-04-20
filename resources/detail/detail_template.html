@@ -4,56 +4,47 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Conclusion Detail</title>
-
   <link rel="stylesheet" href="../katex/katex.min.css" />
   <link rel="stylesheet" href="./detail.css" />
-
   <script>
-    window.__DETAIL_INITIAL_DATA__ = __DETAIL_PAYLOAD__;
+    window.__DETAIL_INITIAL_DATA__ = {
+      state: "empty",
+      requestId: 0,
+      detailId: "",
+      message: "请从左侧结果中选择一条结论查看详情。",
+      sections: [],
+      vars: []
+    };
   </script>
   <script defer src="../katex/katex.min.js"></script>
   <script defer src="../katex/contrib/auto-render.min.js"></script>
   <script defer src="./detail.js"></script>
 </head>
 <body>
-  <div id="detailPage" class="detail-page">
-    <main class="detail-page-shell">
-      <div class="detail-page-scroll">
-        <article class="detail-page-article">
+  <main id="detail-root" class="detail-root" data-request-id="0" data-session-id="0">
+    <section id="detail-empty-state" class="detail-state detail-state-empty">
+      <h2 class="detail-state-title">请选择一条结论</h2>
+      <p id="detail-empty-text" class="detail-state-text">请从左侧结果中选择一条结论查看详情。</p>
+    </section>
 
-          <section id="detailEmptyState" class="detail-state detail-state-empty" hidden>
-            <div class="detail-state-title">请选择一个结论</div>
-            <div id="detailEmptyText" class="detail-state-text">在左侧结果列表中点击一条结论，这里会显示详细内容。</div>
-          </section>
+    <section id="detail-error-state" class="detail-state detail-state-error" hidden>
+      <h2 class="detail-state-title">详情暂时不可用</h2>
+      <p id="detail-error-text" class="detail-state-text"></p>
+    </section>
 
-          <section id="detailErrorState" class="detail-state detail-state-error" hidden>
-            <div class="detail-state-title">详情暂时无法显示</div>
-            <div id="detailErrorText" class="detail-state-text"></div>
-          </section>
+    <article id="detail-content" class="detail-content" hidden>
+      <header id="detail-header" class="detail-header">
+        <h1 id="detail-title" class="detail-title">未命名结论</h1>
+        <div id="detail-meta" class="detail-meta"></div>
+        <div id="detail-tags" class="detail-tags"></div>
+      </header>
 
-          <section id="detailContent" class="detail-page-content" hidden>
-            <header class="detail-header">
-              <div class="detail-header-main">
-                <h1 id="detailTitle" class="detail-header-title"></h1>
-                <div class="detail-header-subtitle">
-                  <span id="detailConclusionId" class="detail-meta-item detail-meta-id"></span>
-                  <span id="detailModule" class="detail-meta-item detail-meta-module"></span>
-                </div>
-              </div>
-
-              <div id="detailTags" class="detail-tag-list"></div>
-            </header>
-
-            <section id="detailSummaryBlock" class="detail-summary-block" hidden>
-              <div class="detail-summary-text" id="detailSummaryText"></div>
-            </section>
-
-            <div id="detailSections" class="detail-sections"></div>
-          </section>
-
-        </article>
-      </div>
-    </main>
-  </div>
+      <section id="detail-core" class="detail-fixed-section"></section>
+      <section id="detail-condition" class="detail-fixed-section"></section>
+      <section id="detail-remarks" class="detail-fixed-section"></section>
+      <section id="detail-vars" class="detail-fixed-section"></section>
+      <div id="detail-sections" class="detail-sections"></div>
+    </article>
+  </main>
 </body>
 </html>

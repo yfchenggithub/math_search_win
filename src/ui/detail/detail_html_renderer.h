@@ -1,19 +1,10 @@
 #pragma once
 
-#include "domain/adapters/conclusion_detail_adapter.h"
-
 #include <QJsonObject>
 #include <QString>
 #include <QUrl>
 
 namespace ui::detail {
-
-struct DetailHtmlRenderResult {
-    bool success = false;
-    QString html;
-    QUrl baseUrl;
-    QString errorMessage;
-};
 
 class DetailHtmlRenderer final {
 public:
@@ -22,20 +13,16 @@ public:
     bool isReady() const;
     QString lastError() const;
     QString detailDirectory() const;
+    QString detailTemplatePath() const;
+    QUrl detailTemplateUrl() const;
 
-    DetailHtmlRenderResult renderEmptyState(const QString& message = QString()) const;
-    DetailHtmlRenderResult renderErrorState(const QString& message) const;
-    DetailHtmlRenderResult renderContent(const domain::adapters::ConclusionDetailViewData& detail) const;
-
-private:
-    DetailHtmlRenderResult renderPayload(const QJsonObject& payload) const;
-    static QJsonObject toJson(const domain::adapters::ConclusionDetailViewData& detail);
+    QString buildInitScript() const;
+    QString buildRenderScript(const QJsonObject& payload) const;
 
 private:
     QString detailDirectory_;
-    QString templatePath_;
-    QString templateHtml_;
-    QUrl baseUrl_;
+    QString detailTemplatePath_;
+    QUrl detailTemplateUrl_;
     QString lastError_;
     bool ready_ = false;
 };

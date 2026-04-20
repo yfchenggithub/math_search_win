@@ -7,7 +7,7 @@ chcp 65001 | Out-Null
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $env:PATH = "D:\Qt\6.11.0\msvc2022_64\bin;$env:PATH"
-$env:QT_DEBUG_PLUGINS = "1"
+# $env:QT_DEBUG_PLUGINS = "1"
 # Optional: enable content-side probe logs on startup.
 # $env:MATH_SEARCH_CONTENT_PROBE = "1"
 

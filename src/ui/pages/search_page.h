@@ -2,6 +2,8 @@
 
 #include "domain/models/search_result_models.h"
 
+#include <QHash>
+#include <QJsonObject>
 #include <QString>
 #include <QWidget>
 #include <memory>
@@ -13,6 +15,7 @@ class QListWidget;
 class QListWidgetItem;
 class QPushButton;
 class QTextBrowser;
+class QTimer;
 class QWebEngineView;
 
 namespace domain::services {
@@ -31,7 +34,9 @@ struct ConclusionDetailViewData;
 
 namespace ui::detail {
 class DetailHtmlRenderer;
-struct DetailHtmlRenderResult;
+class DetailPane;
+class DetailRenderCoordinator;
+class DetailViewDataMapper;
 }
 
 class SearchPage : public QWidget {
@@ -54,10 +59,11 @@ private slots:
     void onQueryReturnPressed();
     void onSearchButtonClicked();
     void onSuggestionClicked(QListWidgetItem* item);
-    void onResultSelectionChanged();
+    void onResultSelectionChanged(QListWidgetItem* currentItem);
     void onFilterChanged();
     void onSortChanged();
     void onClearFiltersClicked();
+    void flushPendingDetailRequest();
 
 private:
     enum class SortMode {
@@ -77,12 +83,33 @@ private:
     void runSearch(const QString& query, const QString& triggerSource);
     void clearSuggestions();
     void renderResults(const QVector<domain::models::SearchHit>& hits);
-    void renderDetailForDocId(const QString& docId);
+    void enqueueDetailRenderRequest(const QString& docId);
+    void renderDetailForRequest(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
     void renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView);
     void showDetailPlaceholder(const QString& message);
     void showDetailError(const QString& message);
-    bool loadDetailHtmlIntoWebView(const ui::detail::DetailHtmlRenderResult& renderResult);
     void activateTextFallbackMode(const QString& reason);
+    void ensureDetailShellLoaded();
+    void dispatchPayloadToWeb(const QJsonObject& payload,
+                              const QString& docId = QString(),
+                              quint64 requestId = 0,
+                              qint64 selectionTimestampMs = 0);
+
+    bool lookupCachedDetail(const QString& docId,
+                            domain::adapters::ConclusionDetailViewData* detailView,
+                            QJsonObject* contentPayload);
+    void cacheDetail(const QString& docId,
+                     const domain::adapters::ConclusionDetailViewData& detailView,
+                     const QJsonObject& contentPayload);
+    void touchDetailCacheKey(const QString& docId);
+    void clearDetailCaches();
+
+    void logDetailPerf(const QString& docId,
+                       quint64 requestId,
+                       qint64 selectionTimestampMs,
+                       const QString& phase,
+                       const QString& extra = QString()) const;
+    qint64 detailElapsedMs(qint64 selectionTimestampMs) const;
     void applySort(QVector<domain::models::SearchHit>* hits) const;
     SortMode currentSortMode() const;
 
@@ -107,6 +134,18 @@ private:
     bool contentReady_ = false;
     bool suppressSuggestRefresh_ = false;
     bool webDetailEnabled_ = false;
+    bool hasPendingDetailRequest_ = false;
+
+    static constexpr int kDetailCacheCapacity = 160;
+    static constexpr int kDetailSelectionCoalesceMs = 18;
+
+    QString pendingDetailDocId_;
+    quint64 pendingDetailRequestId_ = 0;
+    qint64 pendingDetailSelectionTimestampMs_ = 0;
+
+    QHash<QString, domain::adapters::ConclusionDetailViewData> detailViewCache_;
+    QHash<QString, QJsonObject> detailPayloadCache_;
+    QStringList detailCacheLru_;
 
     QString lastSuggestSignature_;
     QString lastSearchSignature_;
@@ -123,7 +162,11 @@ private:
     QComboBox* sortCombo_ = nullptr;
     QPushButton* clearFiltersButton_ = nullptr;
     QListWidget* resultList_ = nullptr;
+    QTimer* detailSelectionCoalesceTimer_ = nullptr;
     QWebEngineView* detailWebView_ = nullptr;
     QTextBrowser* detailBrowser_ = nullptr;
+    std::unique_ptr<ui::detail::DetailPane> detailPane_;
+    std::unique_ptr<ui::detail::DetailRenderCoordinator> detailRenderCoordinator_;
+    std::unique_ptr<ui::detail::DetailViewDataMapper> detailViewDataMapper_;
     std::unique_ptr<ui::detail::DetailHtmlRenderer> detailHtmlRenderer_;
 };

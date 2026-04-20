@@ -63,6 +63,12 @@ add_executable(math_search_win
     src/ui/pages/activation_page.cpp
     src/ui/detail/detail_html_renderer.h
     src/ui/detail/detail_html_renderer.cpp
+    src/ui/detail/detail_pane.h
+    src/ui/detail/detail_pane.cpp
+    src/ui/detail/detail_render_coordinator.h
+    src/ui/detail/detail_render_coordinator.cpp
+    src/ui/detail/detail_view_data_mapper.h
+    src/ui/detail/detail_view_data_mapper.cpp
 )
 
 target_include_directories(math_search_win PRIVATE src)
