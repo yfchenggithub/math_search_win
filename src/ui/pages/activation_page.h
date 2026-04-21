@@ -30,6 +30,7 @@ public:
 private slots:
     void onActivateClicked();
     void onReloadLicenseClicked();
+    void onViewUpgradePlanClicked();
 
 private:
     void setupUi();
@@ -87,4 +88,3 @@ private:
 
     QString transientActivationError_;
 };
-

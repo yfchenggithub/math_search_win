@@ -103,6 +103,14 @@ QString detailMetaTextForPlaceholder(const QString& message)
     return QStringLiteral("等待选择结果");
 }
 
+bool shouldRecordSearchHistory(const QString& triggerSource)
+{
+    const QString normalizedTrigger = triggerSource.trimmed().toLower();
+    return normalizedTrigger == QStringLiteral("button")
+        || normalizedTrigger == QStringLiteral("return")
+        || normalizedTrigger == QStringLiteral("suggest_click");
+}
+
 }  // namespace
 
 SearchPage::SearchPage(domain::services::SearchService* searchService,
@@ -339,6 +347,11 @@ void SearchPage::openConclusionById(const QString& conclusionId)
                  .arg(normalizedId, doc->title.trimmed()));
 }
 
+void SearchPage::refreshFavoriteState()
+{
+    refreshFavoriteButtonState();
+}
+
 void SearchPage::onQueryTextChanged(const QString& text)
 {
     if (suppressSuggestRefresh_) {
@@ -510,8 +523,10 @@ void SearchPage::onFavoriteButtonClicked()
     }
 
     if (favoritesRepository_.contains(docId)) {
-        updateStatusLine(QStringLiteral("该结论已在收藏中。"), QStringLiteral("docId=%1").arg(docId));
+        favoritesRepository_.remove(docId);
+        updateStatusLine(QStringLiteral("已取消收藏。"), QStringLiteral("docId=%1").arg(docId));
         refreshFavoriteButtonState(docId);
+        emit favoritesChanged();
         return;
     }
 
@@ -1031,6 +1046,14 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
         updateResultEmptyState(QStringLiteral("搜索未开放"), QStringLiteral("请先在激活页完成授权。"));
         showDetailPlaceholder(QStringLiteral("当前授权不支持详情查看。"));
         return;
+    }
+
+    if (shouldRecordSearchHistory(triggerSource)) {
+        if (!historyRepository_.load()) {
+            LOG_WARN(LogCategory::FileIo, QStringLiteral("history load failed before add query=%1").arg(normalizedQuery));
+        }
+        historyRepository_.addQuery(normalizedQuery, triggerSource);
+        emit historyChanged();
     }
 
     const QString signature = buildSearchSignature(normalizedQuery);
@@ -2138,9 +2161,9 @@ void SearchPage::refreshFavoriteButtonState(const QString& docId)
     }
 
     const bool alreadyFavorited = favoritesRepository_.contains(targetId);
-    favoriteButton_->setText(alreadyFavorited ? QStringLiteral("已收藏") : QStringLiteral("收藏当前结论"));
-    favoriteButton_->setEnabled(!alreadyFavorited);
-    favoriteButton_->setToolTip(alreadyFavorited ? QStringLiteral("该结论已加入收藏。")
+    favoriteButton_->setText(alreadyFavorited ? QStringLiteral("取消收藏") : QStringLiteral("收藏当前结论"));
+    favoriteButton_->setEnabled(true);
+    favoriteButton_->setToolTip(alreadyFavorited ? QStringLiteral("点击将当前结论从收藏中移除。")
                                                  : QStringLiteral("点击将当前结论加入收藏。"));
 }
 

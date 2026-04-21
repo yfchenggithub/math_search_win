@@ -159,3 +159,29 @@ add_test(
         "PATH=$<TARGET_FILE_DIR:Qt6::Widgets>;$ENV{PATH}"
         $<TARGET_FILE:math_search_activation_page_tests>
 )
+
+add_executable(math_search_page_wiring_tests
+    ui/test_page_wiring.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/home_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/recent_searches_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/favorites_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/recent_search_item_widget.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/favorites/favorite_item_card.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/style/app_style.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/render_section.h
+    ${PROJECT_SOURCE_DIR}/src/domain/models/render_section.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/conclusion_record.h
+    ${PROJECT_SOURCE_DIR}/src/domain/models/conclusion_record.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/canonical_content_loader.h
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/canonical_content_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.h
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
+)
+configure_math_search_test_target(math_search_page_wiring_tests)
+target_link_libraries(math_search_page_wiring_tests PRIVATE Qt6::Widgets)
+add_test(
+    NAME page_wiring_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Widgets>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_page_wiring_tests>
+)

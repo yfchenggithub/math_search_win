@@ -49,6 +49,7 @@ ActivationPage::ActivationPage(license::LicenseService* licenseService,
 
     connect(activateButton_, &QPushButton::clicked, this, &ActivationPage::onActivateClicked);
     connect(reloadLicenseButton_, &QPushButton::clicked, this, &ActivationPage::onReloadLicenseClicked);
+    connect(viewUpgradePlanButton_, &QPushButton::clicked, this, &ActivationPage::onViewUpgradePlanClicked);
     if (licenseService_ != nullptr) {
         connect(licenseService_, &license::LicenseService::licenseStateChanged, this, [this](const license::LicenseState&) {
             reloadData();
@@ -479,6 +480,13 @@ void ActivationPage::onReloadLicenseClicked()
     reloadData();
 }
 
+void ActivationPage::onViewUpgradePlanClicked()
+{
+    QMessageBox::information(this,
+                             QStringLiteral("升级方案"),
+                             QStringLiteral("升级方案入口已预留，当前版本暂未接入在线升级流程。"));
+}
+
 void ActivationPage::updateLicenseStateUi(const license::LicenseState& state)
 {
     if (licenseStatusValueLabel_ == nullptr || licenseStatusHintLabel_ == nullptr) {
@@ -559,4 +567,3 @@ QString ActivationPage::licenseStatusHintText(const license::LicenseState& state
     }
     return QStringLiteral("尚未检测到有效授权，请先确认设备码，再输入激活码。");
 }
-

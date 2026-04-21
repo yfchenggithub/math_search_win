@@ -193,6 +193,9 @@ void MainWindow::setupPages()
         });
 
         connect(favoritesPage_, &FavoritesPage::favoritesChanged, this, [this]() {
+            if (searchPage_ != nullptr) {
+                searchPage_->refreshFavoriteState();
+            }
             if (homePage_ != nullptr) {
                 homePage_->reloadData();
             }
@@ -206,6 +209,15 @@ void MainWindow::setupPages()
             }
             if (homePage_ != nullptr) {
                 homePage_->reloadData();
+            }
+        });
+
+        connect(searchPage_, &SearchPage::historyChanged, this, [this]() {
+            if (homePage_ != nullptr) {
+                homePage_->reloadData();
+            }
+            if (recentSearchesPage_ != nullptr) {
+                recentSearchesPage_->reloadData();
             }
         });
     }
@@ -354,6 +366,9 @@ void MainWindow::switchPageWithTrigger(int pageIndex, const QString& trigger)
 
     if (pageIndex == UiConstants::kPageRecentSearches && recentSearchesPage_ != nullptr) {
         recentSearchesPage_->reloadData();
+    }
+    if (pageIndex == UiConstants::kPageSearch && searchPage_ != nullptr) {
+        searchPage_->refreshFavoriteState();
     }
     if (pageIndex == UiConstants::kPageFavorites && favoritesPage_ != nullptr) {
         favoritesPage_->reloadData();

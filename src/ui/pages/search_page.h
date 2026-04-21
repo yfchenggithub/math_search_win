@@ -2,6 +2,7 @@
 
 #include "domain/models/search_result_models.h"
 #include "domain/repositories/favorites_repository.h"
+#include "domain/repositories/history_repository.h"
 #include "ui/detail/detail_perf_aggregator.h"
 
 #include <QElapsedTimer>
@@ -66,9 +67,11 @@ public:
     void setInitialModule(const QString& module);
     void triggerSearchFromRecent(const QString& query, const QString& module = QString());
     void openConclusionById(const QString& conclusionId);
+    void refreshFavoriteState();
 
 signals:
     void favoritesChanged();
+    void historyChanged();
 
 private slots:
     void onQueryTextChanged(const QString& text);
@@ -196,6 +199,7 @@ private:
     const license::FeatureGate* featureGate_ = nullptr;
     const license::LicenseService* licenseService_ = nullptr;
     domain::repositories::FavoritesRepository favoritesRepository_;
+    domain::repositories::HistoryRepository historyRepository_;
 
     bool indexReady_ = false;
     bool contentReady_ = false;
