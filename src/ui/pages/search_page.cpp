@@ -10,9 +10,11 @@
 #include "infrastructure/data/conclusion_index_repository.h"
 #include "license/feature_gate.h"
 #include "license/license_service.h"
+#include "ui/detail/detail_fallback_content_builder.h"
 #include "ui/detail/detail_html_renderer.h"
 #include "ui/detail/detail_pane.h"
 #include "ui/detail/detail_render_coordinator.h"
+#include "ui/detail/detail_render_path_resolver.h"
 #include "ui/detail/detail_view_data_mapper.h"
 #include "ui/style/app_style.h"
 
@@ -63,25 +65,6 @@ int findComboDataIndex(const QComboBox* combo, const QString& value)
         }
     }
     return -1;
-}
-
-QString toHtmlParagraph(const QString& text)
-{
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty()) {
-        return {};
-    }
-    return QStringLiteral("<p>%1</p>").arg(trimmed.toHtmlEscaped().replace('\n', QStringLiteral("<br/>")));
-}
-
-QString firstNonEmpty(const QStringList& values)
-{
-    for (const QString& value : values) {
-        if (!value.trimmed().isEmpty()) {
-            return value.trimmed();
-        }
-    }
-    return {};
 }
 
 void repolishWidget(QWidget* widget)
@@ -1438,7 +1421,10 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
-    if (!isFeatureEnabled(license::Feature::FullDetail)) {
+    const ui::detail::DetailRenderPath renderPath = ui::detail::DetailRenderPathResolver::resolve(
+        isFeatureEnabled(license::Feature::FullDetail), webDetailEnabled_, detailPane_ != nullptr, detailViewDataMapper_ != nullptr);
+
+    if (renderPath == ui::detail::DetailRenderPath::TrialPreview) {
         showTrialDetailPreview(detailView, normalizedDocId);
         if (detailRenderCoordinator_ != nullptr) {
             detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
@@ -1452,7 +1438,7 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
-    if (webDetailEnabled_ && detailPane_ != nullptr && detailViewDataMapper_ != nullptr) {
+    if (renderPath == ui::detail::DetailRenderPath::Web) {
         QJsonObject payload = contentPayload;
         if (payload.isEmpty()) {
             payload = detailViewDataMapper_->buildContentPayload(detailView, 0);
@@ -1485,39 +1471,7 @@ void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::Conclusio
         return;
     }
 
-    QStringList html;
-    html.push_back(QStringLiteral("<h2>%1</h2>").arg(detailView.title.trimmed().toHtmlEscaped()));
-    html.push_back(QStringLiteral("<p><b>ID:</b> %1<br/><b>模块:</b> %2</p>")
-                       .arg(detailView.conclusionId.toHtmlEscaped(),
-                            detailView.module.toHtmlEscaped()));
-
-    if (!detailView.tags.isEmpty()) {
-        html.push_back(QStringLiteral("<p><b>标签:</b> %1</p>").arg(detailView.tags.join(QStringLiteral(" / ")).toHtmlEscaped()));
-    }
-    if (!detailView.summary.trimmed().isEmpty()) {
-        html.push_back(QStringLiteral("<h3>摘要</h3>"));
-        html.push_back(toHtmlParagraph(detailView.summary));
-    }
-
-    if (!detailView.sections.isEmpty()) {
-        html.push_back(QStringLiteral("<h3>正文</h3>"));
-        for (const domain::adapters::DetailSectionViewData& section : detailView.sections) {
-            if (!section.visible) {
-                continue;
-            }
-            const QString title = firstNonEmpty({section.title, section.key, QStringLiteral("内容")});
-            html.push_back(QStringLiteral("<h4>%1</h4>").arg(title.toHtmlEscaped()));
-            if (!section.html.trimmed().isEmpty()) {
-                html.push_back(section.html);
-            } else if (!section.text.trimmed().isEmpty()) {
-                html.push_back(toHtmlParagraph(section.text));
-            }
-        }
-    } else {
-        html.push_back(QStringLiteral("<p style=\"color:#666;\">暂无更多内容。</p>"));
-    }
-
-    detailBrowser_->setHtml(html.join(QString()));
+    detailBrowser_->setHtml(ui::detail::DetailFallbackContentBuilder::buildFallbackHtml(detailView));
     detailBrowser_->setVisible(true);
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
@@ -2172,48 +2126,9 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
     const QString reason = featureDisabledReason(license::Feature::FullDetail);
     updateDetailShellMeta(QStringLiteral("详情预览（体验版）"), QStringLiteral("warning"));
 
-    QStringList html;
-    html.push_back(QStringLiteral("<h2>%1</h2>").arg(detailView.title.trimmed().toHtmlEscaped()));
-    html.push_back(QStringLiteral("<p><b>ID:</b> %1</p>").arg(docId.toHtmlEscaped()));
-
-    const QString summary = detailView.summary.trimmed();
-    if (!summary.isEmpty()) {
-        html.push_back(QStringLiteral("<h3>摘要</h3>"));
-        html.push_back(toHtmlParagraph(summary));
-    }
-
-    QString snippet;
-    for (const domain::adapters::DetailSectionViewData& section : detailView.sections) {
-        if (!section.visible) {
-            continue;
-        }
-        const QString sectionText = section.text.trimmed();
-        const QString sectionHtml = section.html.trimmed();
-        if (!sectionText.isEmpty()) {
-            snippet = sectionText;
-            break;
-        }
-        if (!sectionHtml.isEmpty()) {
-            snippet = QString(sectionHtml).remove(QRegularExpression(QStringLiteral("<[^>]*>"))).trimmed();
-            if (!snippet.isEmpty()) {
-                break;
-            }
-        }
-    }
-    if (!snippet.isEmpty()) {
-        if (snippet.size() > 220) {
-            snippet = snippet.left(220).trimmed();
-            snippet.append(QStringLiteral("..."));
-        }
-        html.push_back(QStringLiteral("<h3>内容预览</h3>"));
-        html.push_back(toHtmlParagraph(snippet));
-    }
-
-    html.push_back(QStringLiteral("<p style=\"color:#9a3412;\"><b>%1</b></p>")
-                       .arg((reason.isEmpty() ? QStringLiteral("正式版解锁完整详情。") : reason).toHtmlEscaped()));
-
     if (detailBrowser_ != nullptr) {
-        detailBrowser_->setHtml(html.join(QString()));
+        detailBrowser_->setHtml(
+            ui::detail::DetailFallbackContentBuilder::buildTrialPreviewHtml(detailView, docId, reason, 220));
         detailBrowser_->setVisible(true);
     }
     if (detailWebView_ != nullptr) {

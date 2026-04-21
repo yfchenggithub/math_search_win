@@ -99,7 +99,9 @@ flowchart LR
 
   subgraph Web[详情 Web 渲染层]
     DPR[DetailRenderCoordinator]
+    DRP[DetailRenderPathResolver]
     DVM[DetailViewDataMapper]
+    DFB[DetailFallbackContentBuilder]
     DHR[DetailHtmlRenderer]
     DP[DetailPane]
     HTML[resources/detail/detail_template.html]
@@ -151,7 +153,9 @@ flowchart LR
   SR --> LSS --> CS
   LS --> LIC
 
-  P2 --> DPR --> DVM --> DP
+  P2 --> DPR --> DVM --> DRP
+  DRP --> DP
+  DRP --> DFB
   P2 --> DHR --> DP
   DP --> HTML
   DP --> JS
@@ -297,7 +301,9 @@ flowchart TD
   - `ConclusionContentRepository::getById()`
   - `ConclusionDetailAdapter::toViewData()`
   - `DetailViewDataMapper::buildContentPayload()`
-  - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`
+  - `DetailRenderPathResolver::resolve()`（`TrialPreview / Web / FallbackText` 分支选择）
+  - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`（Web 分支）
+  - `DetailFallbackContentBuilder::buildFallbackHtml/buildTrialPreviewHtml()`（文本回退和 trial 预览分支）
   - `DetailHtmlRenderer::buildRenderScript()` -> `window.DetailRuntime.renderDetail(...)`
 - Web 资源装配：
   - `resources/detail/detail_template.html`

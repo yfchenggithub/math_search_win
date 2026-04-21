@@ -126,6 +126,22 @@ add_test(
         $<TARGET_FILE:math_search_detail_perf_tests>
 )
 
+add_executable(math_search_detail_render_chain_tests
+    detail/test_detail_rendering_chain.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_coordinator.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_view_data_mapper.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_html_renderer.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_path_resolver.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_fallback_content_builder.cpp
+)
+configure_math_search_test_target(math_search_detail_render_chain_tests)
+add_test(
+    NAME detail_render_chain_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_detail_render_chain_tests>
+)
+
 add_executable(math_search_storage_tests
     storage/test_local_storage_repositories.cpp
 )

@@ -96,6 +96,10 @@ add_executable(math_search_win
     src/ui/detail/detail_pane.cpp
     src/ui/detail/detail_render_coordinator.h
     src/ui/detail/detail_render_coordinator.cpp
+    src/ui/detail/detail_render_path_resolver.h
+    src/ui/detail/detail_render_path_resolver.cpp
+    src/ui/detail/detail_fallback_content_builder.h
+    src/ui/detail/detail_fallback_content_builder.cpp
     src/ui/detail/detail_view_data_mapper.h
     src/ui/detail/detail_view_data_mapper.cpp
 )

@@ -102,10 +102,11 @@ flowchart TD
 - 详情请求先进入 `enqueueDetailRenderRequest()`，通过 `DetailRenderCoordinator` 生成 `requestId`。
 - 使用 `detailSelectionCoalesceTimer_`（18ms）合并高频选中切换。
 - `renderDetailForRequest()` 从 `ConclusionContentRepository` 取记录，`ConclusionDetailAdapter` 转 `ConclusionDetailViewData`，`DetailViewDataMapper` 生成 payload。
+- `DetailRenderPathResolver::resolve()` 统一决定当前请求走 `TrialPreview / Web / FallbackText` 分支。
 - 授权分支：
-  - 未开 `FullDetail` -> `showTrialDetailPreview()`（文本预览）
+  - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
   - 已开 `FullDetail` 且 Web 可用 -> `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()` -> `detail.js`
-  - Web 不可用/失败 -> `renderDetailInFallbackBrowser()`
+  - Web 不可用/失败 -> `renderDetailInFallbackBrowser()` -> `DetailFallbackContentBuilder::buildFallbackHtml()`
 - 性能链路：`DetailPane::perfPhase` 和 JS `[perf][detail]` 日志都会进入 `SearchPage::logDetailPerf()` -> `DetailPerfAggregator`。
 
 ```mermaid
@@ -116,7 +117,9 @@ sequenceDiagram
   participant CR as ConclusionContentRepository
   participant DA as ConclusionDetailAdapter
   participant M as DetailViewDataMapper
+  participant DRP as DetailRenderPathResolver
   participant DP as DetailPane
+  participant FB as DetailFallbackContentBuilder
   participant JS as resources/detail/detail.js
 
   U->>SP: 选中结果项
@@ -129,14 +132,17 @@ sequenceDiagram
   CR-->>SP: ConclusionRecord
   SP->>DA: toViewData(record)
   SP->>M: buildContentPayload(viewData)
-  alt FullDetail 禁用
+  SP->>DRP: resolve(fullDetailEnabled, webEnabled, paneReady, mapperReady)
+  alt TrialPreview
+    SP->>FB: buildTrialPreviewHtml(viewData, docId, reason)
     SP->>SP: showTrialDetailPreview()
-  else FullDetail 启用 + Web ready
+  else Web
     SP->>DP: renderDetail(payload)
     DP->>JS: DetailRuntime.renderDetail(payload)
     JS-->>DP: perf logs + callback
     DP-->>SP: perfPhase(...)
-  else Web 不可用
+  else FallbackText
+    SP->>FB: buildFallbackHtml(viewData)
     SP->>SP: renderDetailInFallbackBrowser()
   end
 ```

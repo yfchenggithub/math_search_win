@@ -61,9 +61,12 @@ powershell .\run-debug.ps1
   - `ConclusionContentRepository::getById()` 读 `data/canonical_content_v2.json`
   - `ConclusionDetailAdapter::toViewData()`
   - `DetailViewDataMapper::buildContentPayload()`
+- 分支决策：
+  - `DetailRenderPathResolver::resolve()` 决定 `TrialPreview / Web / FallbackText`
 - 渲染模式：
   - Web 模式：`DetailPane` + `resources/detail/detail_template.html` + `detail.js` + `katex`
-  - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser`）
+  - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser` + `DetailFallbackContentBuilder::buildFallbackHtml`）
+  - Trial 预览：`showTrialDetailPreview` + `DetailFallbackContentBuilder::buildTrialPreviewHtml`
 - 并发与抖动控制：
   - `DetailRenderCoordinator` 管 requestId/stale
   - `detailSelectionCoalesceTimer_` 18ms 合并快速切换

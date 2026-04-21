@@ -10,12 +10,12 @@
 | `src/domain/repositories` | 收藏/历史/设置业务仓库。 |
 | `src/infrastructure/storage` | 本地 JSON 读写与原子写盘。 |
 | `src/license` | 激活、license 校验、功能门控。 |
-| `src/ui/detail` | 详情 Web 渲染协同（请求管理、payload 映射、shell 分发、性能聚合）。 |
+| `src/ui/detail` | 详情渲染协同（请求管理、分支决策、payload 映射、fallback HTML 组装、shell 分发、性能聚合）。 |
 | `resources/detail` | 详情模板、样式、JS 运行时。 |
 | `resources/katex` | 数学公式渲染依赖。 |
 | `data` | 运行时业务数据（内容 + 索引）。 |
 | `cache` | 运行时持久化数据（收藏/历史/设置）。 |
-| `tests` | 搜索、建议、存储、授权、页面 wiring、详情性能测试。 |
+| `tests` | 搜索、建议、存储、授权、页面 wiring、详情性能与详情链路行为测试。 |
 
 ---
 
@@ -98,7 +98,9 @@
 |---|---|---|---|---|---|
 | `DetailHtmlRenderer` | `src/ui/detail/detail_html_renderer.h/.cpp` | 校验资源完整性，生成 JS init/render 脚本 | `SearchPage`、`DetailPane` | `resources/detail`、`resources/katex` | `isReady`、`buildInitScript`、`buildRenderScript` |
 | `DetailRenderCoordinator` | `src/ui/detail/detail_render_coordinator.h/.cpp` | 请求 ID、stale 判断、已渲染去重 | `SearchPage` | 时间戳 | `createRequest`、`isRequestStale`、`markRendered` |
+| `DetailRenderPathResolver` | `src/ui/detail/detail_render_path_resolver.h/.cpp` | 详情分支决策（Trial / Web / Fallback） | `SearchPage` | 功能门控状态 + Web 可用性 | `resolve` |
 | `DetailViewDataMapper` | `src/ui/detail/detail_view_data_mapper.h/.cpp` | 详情 ViewData -> Web payload | `SearchPage` | `ConclusionDetailViewData` | `buildContentPayload`、`buildEmptyPayload`、`buildErrorPayload` |
+| `DetailFallbackContentBuilder` | `src/ui/detail/detail_fallback_content_builder.h/.cpp` | 组装文本 fallback 与 trial 预览 HTML | `SearchPage` | `ConclusionDetailViewData` | `buildFallbackHtml`、`buildTrialPreviewHtml` |
 | `DetailPane` | `src/ui/detail/detail_pane.h/.cpp` | Web shell 加载、payload 分发、perf 回传 | `SearchPage` | `QWebEngineView`、`DetailHtmlRenderer` | `ensureShellLoaded`、`renderDetail`、`dispatchNow` |
 | `DetailPerfAggregator` | `src/ui/detail/detail_perf_aggregator.h/.cpp` | 渲染阶段归一化和统计日志聚合 | `SearchPage` | perf 事件流 | `recordPhase`、`finishRequest`、`cancelRequest` |
 
