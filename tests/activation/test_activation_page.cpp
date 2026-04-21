@@ -7,6 +7,7 @@
 #include <QtTest/QtTest>
 
 #include <QApplication>
+#include <QDate>
 #include <QDateTime>
 #include <QDialog>
 #include <QDir>
@@ -102,38 +103,42 @@ QString toBase64Url(const QByteArray& input)
     return encoded;
 }
 
-QString buildPayloadJson(const QString& deviceFingerprint)
+QString buildPayloadJson(const QString& deviceFingerprint, const QString& expireAt = {})
 {
+    const QString normalizedExpireAt = expireAt.trimmed();
     return QStringLiteral(
                "{\"v\":1,\"p\":\"msw\",\"s\":\"LIC-2026-0001\",\"w\":\"WM-0001\",\"e\":\"full\","
-               "\"d\":\"%1\",\"f\":[\"bsp\",\"fs\",\"fd\",\"fav\",\"af\"],\"iat\":\"2026-04-20\",\"exp\":\"\"}")
-        .arg(deviceFingerprint);
+               "\"d\":\"%1\",\"f\":[\"bsp\",\"fs\",\"fd\",\"fav\",\"af\"],\"iat\":\"2026-04-20\",\"exp\":\"%2\"}")
+        .arg(deviceFingerprint, normalizedExpireAt);
 }
 
-QString buildActivationCodeForDevice(const QString& deviceFingerprint)
+QString buildActivationCodeForDevice(const QString& deviceFingerprint, const QString& expireAt = {})
 {
-    const QString payloadJson = buildPayloadJson(deviceFingerprint);
+    const QString payloadJson = buildPayloadJson(deviceFingerprint, expireAt);
     const QByteArray payload = payloadJson.toUtf8();
     return QStringLiteral("MSW1.%1.%2").arg(toBase64Url(payload), crc32UpperHex(payload));
 }
 
-void closeAnyMessageBoxes()
+void closeAnyMessageBoxes(QString* capturedMessage = nullptr)
 {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
         auto* box = qobject_cast<QMessageBox*>(widget);
         if (box != nullptr) {
+            if (capturedMessage != nullptr && capturedMessage->trimmed().isEmpty()) {
+                *capturedMessage = box->text();
+            }
             box->done(QDialog::Accepted);
         }
     }
 }
 
-void scheduleAutoCloseMessageBoxes()
+void scheduleAutoCloseMessageBoxes(QString* capturedMessage = nullptr)
 {
-    QTimer::singleShot(0, []() {
-        closeAnyMessageBoxes();
+    QTimer::singleShot(0, [capturedMessage]() {
+        closeAnyMessageBoxes(capturedMessage);
     });
-    QTimer::singleShot(80, []() {
-        closeAnyMessageBoxes();
+    QTimer::singleShot(80, [capturedMessage]() {
+        closeAnyMessageBoxes(capturedMessage);
     });
 }
 
@@ -148,6 +153,7 @@ private slots:
     void page_usesCurrentDeviceFingerprintAndInactiveClassOnTrial();
     void activateButton_withEmptyInput_keepsTrialAndMarksError();
     void activateButton_withValidCode_writesLicenseAndSwitchesToFull();
+    void activateButton_withExpiredCodeOnFullLicense_showsFriendlyErrorMessage();
     void page_withNullServices_staysStableAndShowsUnknownThenError();
 };
 
@@ -238,6 +244,44 @@ void ActivationPageTest::activateButton_withValidCode_writesLicenseAndSwitchesTo
     const QString content = QString::fromUtf8(file.readAll());
     QVERIFY(content.contains(QStringLiteral("serial=LIC-2026-0001")));
     QVERIFY(content.contains(QStringLiteral("status=valid")));
+}
+
+void ActivationPageTest::activateButton_withExpiredCodeOnFullLicense_showsFriendlyErrorMessage()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const license::DeviceFingerprintService deviceService;
+    const license::ActivationCodeService activationCodeService;
+    license::LicenseService licenseService(&deviceService);
+    licenseService.initialize();
+
+    ActivationPage page(&licenseService, &deviceService, &activationCodeService);
+    auto* activationInput = page.findChild<QLineEdit*>(QStringLiteral("activationCodeField"));
+    auto* activateButton = page.findChild<QPushButton*>(QStringLiteral("activationPrimaryButton"));
+    QVERIFY(activationInput != nullptr);
+    QVERIFY(activateButton != nullptr);
+
+    const QString validCode = buildActivationCodeForDevice(deviceService.deviceFingerprint());
+    activationInput->setText(validCode);
+    scheduleAutoCloseMessageBoxes();
+    activateButton->click();
+    QTRY_VERIFY_WITH_TIMEOUT(licenseService.currentState().isFull, 1500);
+
+    const QString expiredDate = QDate::currentDate().addDays(-1).toString(QStringLiteral("yyyy-MM-dd"));
+    const QString expiredCode = buildActivationCodeForDevice(deviceService.deviceFingerprint(), expiredDate);
+    activationInput->setText(expiredCode);
+
+    QString capturedMessage;
+    scheduleAutoCloseMessageBoxes(&capturedMessage);
+    activateButton->click();
+
+    QVERIFY(licenseService.currentState().isFull);
+    QVERIFY(QFileInfo::exists(licenseService.licenseFilePath()));
+    QVERIFY2(!capturedMessage.trimmed().isEmpty(), "expired activation should show a readable failure message");
+    QVERIFY(capturedMessage.contains(expiredDate));
+    QVERIFY(capturedMessage.contains(QStringLiteral("过期")));
+    QVERIFY(capturedMessage.contains(QStringLiteral("失效")));
 }
 
 void ActivationPageTest::page_withNullServices_staysStableAndShowsUnknownThenError()

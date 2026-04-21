@@ -8,6 +8,7 @@
 #include "shared/constants.h"
 #include "ui/style/app_style.h"
 
+#include <QDate>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -31,6 +32,24 @@ void repolishWidget(QWidget* widget)
     widget->style()->unpolish(widget);
     widget->style()->polish(widget);
     widget->update();
+}
+
+QString fallbackActivationErrorMessage(const QString& message, const QString& fallback)
+{
+    const QString trimmed = message.trimmed();
+    return trimmed.isEmpty() ? fallback : trimmed;
+}
+
+QString friendlyExpiredActivationMessage(const QString& expireAt)
+{
+    const QString expireAtText = expireAt.trimmed();
+    const QDate expireDate = QDate::fromString(expireAtText, QStringLiteral("yyyy-MM-dd"));
+    if (!expireDate.isValid() || QDate::currentDate() <= expireDate) {
+        return {};
+    }
+
+    return QStringLiteral("激活失败：该激活码已于 %1 过期，当前已失效。")
+        .arg(expireDate.toString(QStringLiteral("yyyy-MM-dd")));
 }
 
 }  // namespace
@@ -418,6 +437,13 @@ void ActivationPage::reloadData()
 
 void ActivationPage::onActivateClicked()
 {
+    const auto showActivationFailure = [this](const QString& message, const QString& fallback) {
+        const QString displayMessage = fallbackActivationErrorMessage(message, fallback);
+        transientActivationError_ = displayMessage;
+        reloadData();
+        QMessageBox::warning(this, QStringLiteral("激活失败"), displayMessage);
+    };
+
     if (licenseService_ == nullptr || deviceFingerprintService_ == nullptr || activationCodeService_ == nullptr) {
         transientActivationError_ = QStringLiteral("授权服务未就绪，请重启应用后重试。");
         reloadData();
@@ -426,18 +452,14 @@ void ActivationPage::onActivateClicked()
 
     const QString activationCode = activationCodeLineEdit_->text().trimmed();
     if (activationCode.isEmpty()) {
-        transientActivationError_ = QStringLiteral("请输入激活码后再执行激活。");
-        reloadData();
-        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        showActivationFailure(QStringLiteral("请输入激活码后再执行激活。"),
+                              QStringLiteral("激活失败，请输入激活码后重试。"));
         return;
     }
 
     const license::ActivationCodeParseResult parseResult = activationCodeService_->parseActivationCode(activationCode);
     if (!parseResult.ok) {
-        transientActivationError_ = parseResult.errorMessage.trimmed().isEmpty() ? QStringLiteral("激活码解析失败。")
-                                                                                 : parseResult.errorMessage.trimmed();
-        reloadData();
-        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        showActivationFailure(parseResult.errorMessage, QStringLiteral("激活码解析失败。"));
         return;
     }
 
@@ -445,10 +467,12 @@ void ActivationPage::onActivateClicked()
     const license::ActivationValidationResult validation = activationCodeService_->validateActivationCode(
         parseResult.payload, parseResult.originalPayloadJson, parseResult.check8, currentDevice);
     if (!validation.ok) {
-        transientActivationError_ = validation.errorMessage.trimmed().isEmpty() ? QStringLiteral("激活码校验失败。")
-                                                                                : validation.errorMessage.trimmed();
-        reloadData();
-        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        const QString expiredMessage = friendlyExpiredActivationMessage(parseResult.payload.expireAt);
+        if (!expiredMessage.isEmpty()) {
+            showActivationFailure(expiredMessage, QStringLiteral("激活码已过期。"));
+        } else {
+            showActivationFailure(validation.errorMessage, QStringLiteral("激活码校验失败。"));
+        }
         return;
     }
 
@@ -457,10 +481,7 @@ void ActivationPage::onActivateClicked()
 
     QString writeError;
     if (!licenseService_->writeLicenseFile(licenseContent, &writeError)) {
-        transientActivationError_ = writeError.trimmed().isEmpty() ? QStringLiteral("写入授权文件失败。")
-                                                                   : writeError.trimmed();
-        reloadData();
-        QMessageBox::warning(this, QStringLiteral("激活失败"), transientActivationError_);
+        showActivationFailure(writeError, QStringLiteral("写入授权文件失败。"));
         return;
     }
 

@@ -88,6 +88,7 @@ private slots:
 
     void parseAndValidate_acceptsValidCode();
     void validateActivationCode_rejectsDeviceMismatch();
+    void validateActivationCode_rejectsProvidedExpiredCode();
     void validateActivationCode_rejectsCrcMismatch();
     void validateActivationCode_ignoresUnknownFeatureCodes();
 
@@ -178,6 +179,26 @@ void ActivationCodeServiceTest::validateActivationCode_rejectsDeviceMismatch()
                                                            QStringLiteral("WXYZ-0000-0000"));
     QVERIFY(!validation.ok);
     QVERIFY(!validation.errorMessage.trimmed().isEmpty());
+}
+
+void ActivationCodeServiceTest::validateActivationCode_rejectsProvidedExpiredCode()
+{
+    const QString expiredCode = QStringLiteral(
+        "MSW1.eyJ2IjoxLCJwIjoibXN3IiwicyI6IkxJQy0yMDI2LTAwMDEiLCJ3IjoiV00tMDAwMSIsImUiOiJmdWxsIiwiZCI6IjExNTUtRUJGQy02RUZDLThCRDIiLCJmIjpbImJzcCIsImZzIiwiZmQiLCJmYXYiLCJhZiJdLCJpYXQiOiIyMDI2LTA0LTIwIiwiZXhwIjoiMjAyNi0wNC0yMCJ9.D067C37A");
+    const QString deviceFingerprint = QStringLiteral("1155-EBFC-6EFC-8BD2");
+
+    const license::ActivationCodeService service;
+    const auto parseResult = service.parseActivationCode(expiredCode);
+    QVERIFY2(parseResult.ok, qPrintable(parseResult.errorMessage));
+    QCOMPARE(parseResult.payload.deviceFingerprint, deviceFingerprint);
+    QCOMPARE(parseResult.payload.expireAt, QStringLiteral("2026-04-20"));
+
+    const auto validation = service.validateActivationCode(parseResult.payload,
+                                                           parseResult.originalPayloadJson,
+                                                           parseResult.check8,
+                                                           deviceFingerprint);
+    QVERIFY(!validation.ok);
+    QVERIFY2(validation.errorMessage.contains(QStringLiteral("过期")), qPrintable(validation.errorMessage));
 }
 
 void ActivationCodeServiceTest::validateActivationCode_rejectsCrcMismatch()
