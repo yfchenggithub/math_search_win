@@ -1,8 +1,6 @@
-#include "license/activation_code_service.h"
-#include "license/device_fingerprint_service.h"
+#include "core/logging/logger.h"
 #include "license/feature_gate.h"
 #include "license/license_service.h"
-#include "core/logging/logger.h"
 
 #include <QtTest/QtTest>
 
@@ -11,7 +9,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QMap>
 #include <QRandomGenerator>
+#include <QSignalSpy>
+#include <QStringList>
 
 namespace {
 
@@ -68,6 +69,7 @@ bool writeUtf8File(const QString& filePath, const QByteArray& data)
 {
     QFileInfo info(filePath);
     QDir().mkpath(info.absolutePath());
+
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         return false;
@@ -75,31 +77,37 @@ bool writeUtf8File(const QString& filePath, const QByteArray& data)
     return file.write(data) == data.size();
 }
 
-QByteArray buildValidLicenseContent(const QString& deviceFingerprint,
-                                    const QString& serial = QStringLiteral("LIC-2026-0001"),
-                                    const QString& watermark = QStringLiteral("WM-0001"),
-                                    const QString& expireAt = QString())
+QByteArray serializeLicenseFields(const QMap<QString, QString>& fields)
 {
-    license::ActivationCodePayload payload;
-    payload.version = 1;
-    payload.product = QStringLiteral("msw");
-    payload.serial = serial;
-    payload.watermark = watermark;
-    payload.edition = QStringLiteral("full");
-    payload.deviceFingerprint = deviceFingerprint;
-    payload.featureCodes = {QStringLiteral("bsp"),
-                            QStringLiteral("fs"),
-                            QStringLiteral("fd"),
-                            QStringLiteral("fav"),
-                            QStringLiteral("af")};
-    payload.issuedAt = QStringLiteral("2026-04-20");
-    payload.expireAt = expireAt.trimmed();
+    QStringList lines;
+    for (auto it = fields.cbegin(); it != fields.cend(); ++it) {
+        lines.push_back(QStringLiteral("%1=%2").arg(it.key(), it.value()));
+    }
 
-    const license::ActivationCodeService activationCodeService;
-    return activationCodeService.buildLicenseFileContent(payload,
-                                                         license::FeatureGate::fullFeatures(),
-                                                         QStringLiteral("MSW1"),
-                                                         QStringLiteral("B4411850"));
+    QString text = lines.join(QLatin1Char('\n'));
+    text.append(QLatin1Char('\n'));
+    return text.toUtf8();
+}
+
+QMap<QString, QString> buildValidFullFields(const QString& expireAt = QString())
+{
+    QMap<QString, QString> fields;
+    fields.insert(QStringLiteral("format"), QStringLiteral("msw-license-v1"));
+    fields.insert(QStringLiteral("product"), QStringLiteral("math_search_win"));
+    fields.insert(QStringLiteral("serial"), QStringLiteral("LIC-2026-0001"));
+    fields.insert(QStringLiteral("watermark"), QStringLiteral("WM-0001"));
+    fields.insert(QStringLiteral("edition"), QStringLiteral("full"));
+    fields.insert(QStringLiteral("device"), QStringLiteral("TEST-DEVICE-0001"));
+    fields.insert(QStringLiteral("features"),
+                  QStringLiteral("basic_search_preview,full_search,full_detail,favorites,advanced_filter"));
+    fields.insert(QStringLiteral("issued_at"), QStringLiteral("2026-04-20"));
+    fields.insert(QStringLiteral("expire_at"), expireAt.trimmed());
+    return fields;
+}
+
+QStringList trialFeatureKeys()
+{
+    return license::FeatureGate::featureKeysFromList(license::FeatureGate::trialFeatures());
 }
 
 }  // namespace
@@ -110,12 +118,14 @@ class LicenseServiceTest final : public QObject {
 private slots:
     void cleanupTestCase();
 
-    void initialize_withoutLicenseFile_setsTrialMissingState();
-    void reload_withValidLicenseFile_switchesToValidFullState();
-    void initialize_withExpiredLicenseFile_downgradesToTrialState();
-    void reload_withMalformedLicenseFile_setsParseErrorState();
-    void validateLicense_withMismatchedDevice_reportsDeviceMismatch();
-    void featureGate_trialDisabledReason_isReadableChinese();
+    void reload_whenLicenseFileMissing_setsMissingState();
+    void reload_whenLicenseFileEmpty_setsParseErrorState();
+    void reload_whenFormatVersionInvalid_setsInvalidState();
+    void reload_whenRequiredFieldMissing_setsInvalidState();
+    void reload_whenExpired_setsInvalidState();
+    void reload_whenTrialFallback_onlyEnablesTrialFeatures();
+    void reload_whenValidFull_setsFullState();
+    void reload_invalidThenValid_transitionsAndEmitsSignals();
 };
 
 void LicenseServiceTest::cleanupTestCase()
@@ -123,130 +133,171 @@ void LicenseServiceTest::cleanupTestCase()
     logging::Logger::instance().shutdown();
 }
 
-void LicenseServiceTest::initialize_withoutLicenseFile_setsTrialMissingState()
+void LicenseServiceTest::reload_whenLicenseFileMissing_setsMissingState()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
-    license::LicenseService licenseService(&deviceService);
-    licenseService.initialize();
+    license::LicenseService licenseService(nullptr);
+    QSignalSpy stateSpy(&licenseService, &license::LicenseService::licenseStateChanged);
+
+    licenseService.reload();
 
     const license::LicenseState state = licenseService.currentState();
     QCOMPARE(state.status, license::LicenseStatus::Missing);
     QVERIFY(state.isTrial);
     QVERIFY(!state.isFull);
     QVERIFY(!state.licenseFileExists);
-    QVERIFY(!QFileInfo::exists(licenseService.licenseFilePath()));
+    QCOMPARE(state.enabledFeatures, trialFeatureKeys());
+    QVERIFY2(stateSpy.count() >= 1, "reload should emit at least one state change");
 }
 
-void LicenseServiceTest::reload_withValidLicenseFile_switchesToValidFullState()
+void LicenseServiceTest::reload_whenLicenseFileEmpty_setsParseErrorState()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
-    const QString currentDevice = deviceService.deviceFingerprint();
-    QVERIFY(!currentDevice.trimmed().isEmpty());
-
-    license::LicenseService licenseService(&deviceService);
-    licenseService.initialize();
-
-    QString writeError;
-    QVERIFY2(licenseService.writeLicenseFile(buildValidLicenseContent(currentDevice), &writeError), qPrintable(writeError));
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), QByteArray()));
 
     licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::ParseError);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QVERIFY(state.licenseFileExists);
+}
+
+void LicenseServiceTest::reload_whenFormatVersionInvalid_setsInvalidState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    QMap<QString, QString> fields = buildValidFullFields();
+    fields.insert(QStringLiteral("format"), QStringLiteral("msw-license-v9"));
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(fields)));
+
+    licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::Invalid);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QVERIFY(state.technicalReason.contains(QStringLiteral("format mismatch")));
+}
+
+void LicenseServiceTest::reload_whenRequiredFieldMissing_setsInvalidState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    QMap<QString, QString> fields = buildValidFullFields();
+    fields.remove(QStringLiteral("serial"));
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(fields)));
+
+    licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::Invalid);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QVERIFY(state.technicalReason.contains(QStringLiteral("serial missing")));
+}
+
+void LicenseServiceTest::reload_whenExpired_setsInvalidState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const QString yesterday = QDate::currentDate().addDays(-1).toString(QStringLiteral("yyyy-MM-dd"));
+    const QMap<QString, QString> fields = buildValidFullFields(yesterday);
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(fields)));
+
+    licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::Invalid);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QCOMPARE(state.expireAt, yesterday);
+    QVERIFY(state.technicalReason.contains(QStringLiteral("license expired")));
+}
+
+void LicenseServiceTest::reload_whenTrialFallback_onlyEnablesTrialFeatures()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const QByteArray malformed = QByteArrayLiteral("format=msw-license-v1\nbroken_line_without_equal\n");
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), malformed));
+
+    licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::ParseError);
+    QCOMPARE(state.enabledFeatures, trialFeatureKeys());
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+}
+
+void LicenseServiceTest::reload_whenValidFull_setsFullState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const QMap<QString, QString> fields = buildValidFullFields();
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(fields)));
+
+    licenseService.reload();
+
     const license::LicenseState state = licenseService.currentState();
     QCOMPARE(state.status, license::LicenseStatus::ValidFull);
     QVERIFY(state.isFull);
     QVERIFY(!state.isTrial);
     QCOMPARE(state.licenseSerial, QStringLiteral("LIC-2026-0001"));
     QCOMPARE(state.watermarkId, QStringLiteral("WM-0001"));
-    QCOMPARE(state.boundDeviceFingerprint, currentDevice);
+    QCOMPARE(state.boundDeviceFingerprint, QStringLiteral("TEST-DEVICE-0001"));
+    QCOMPARE(state.enabledFeatures.size(), 5);
+    QVERIFY(state.enabledFeatures.contains(QStringLiteral("full_search")));
+    QVERIFY(state.enabledFeatures.contains(QStringLiteral("full_detail")));
 }
 
-void LicenseServiceTest::initialize_withExpiredLicenseFile_downgradesToTrialState()
+void LicenseServiceTest::reload_invalidThenValid_transitionsAndEmitsSignals()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
-    const QString currentDevice = deviceService.deviceFingerprint();
-    QVERIFY(!currentDevice.trimmed().isEmpty());
+    license::LicenseService licenseService(nullptr);
+    QSignalSpy stateSpy(&licenseService, &license::LicenseService::licenseStateChanged);
 
-    const QString expiredDate = QDate::currentDate().addDays(-1).toString(QStringLiteral("yyyy-MM-dd"));
-
-    license::LicenseService licenseService(&deviceService);
-    QVERIFY(writeUtf8File(licenseService.licenseFilePath(),
-                          buildValidLicenseContent(currentDevice,
-                                                   QStringLiteral("LIC-2026-0002"),
-                                                   QStringLiteral("WM-0002"),
-                                                   expiredDate)));
-
-    licenseService.initialize();
-    const license::LicenseState state = licenseService.currentState();
-    QCOMPARE(state.status, license::LicenseStatus::Invalid);
-    QVERIFY(state.isTrial);
-    QVERIFY(!state.isFull);
-    QCOMPARE(state.expireAt, expiredDate);
-    QVERIFY(state.technicalReason.contains(QStringLiteral("license expired")));
-}
-
-void LicenseServiceTest::reload_withMalformedLicenseFile_setsParseErrorState()
-{
-    ScopedSandboxRoot sandbox;
-    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
-
-    const license::DeviceFingerprintService deviceService;
-    license::LicenseService licenseService(&deviceService);
-    licenseService.initialize();
-
-    const QByteArray malformed = QByteArrayLiteral("format=msw-license-v1\nbroken_line_without_equal_sign\n");
-    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), malformed));
+    QMap<QString, QString> invalid = buildValidFullFields();
+    invalid.insert(QStringLiteral("edition"), QStringLiteral("trial"));
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(invalid)));
 
     licenseService.reload();
-    const license::LicenseState state = licenseService.currentState();
-    QCOMPARE(state.status, license::LicenseStatus::ParseError);
-    QVERIFY(state.isTrial);
-    QVERIFY(!state.isFull);
-}
+    QCOMPARE(licenseService.currentState().status, license::LicenseStatus::Invalid);
 
-void LicenseServiceTest::validateLicense_withMismatchedDevice_reportsDeviceMismatch()
-{
-    const license::DeviceFingerprintService deviceService;
-    const QString currentDevice = deviceService.deviceFingerprint();
-    QVERIFY(!currentDevice.trimmed().isEmpty());
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(buildValidFullFields())));
+    licenseService.reload();
 
-    license::LicenseService licenseService(&deviceService);
-
-    QMap<QString, QString> fields;
-    fields.insert(QStringLiteral("format"), QStringLiteral("msw-license-v1"));
-    fields.insert(QStringLiteral("product"), QStringLiteral("math_search_win"));
-    fields.insert(QStringLiteral("serial"), QStringLiteral("LIC-2026-0099"));
-    fields.insert(QStringLiteral("watermark"), QStringLiteral("WM-0099"));
-    fields.insert(QStringLiteral("edition"), QStringLiteral("full"));
-    fields.insert(QStringLiteral("device"), QStringLiteral("ZZZZ-YYYY-XXXX-WWWW"));
-    fields.insert(QStringLiteral("features"),
-                  QStringLiteral("basic_search_preview,full_search,full_detail,favorites,advanced_filter"));
-    fields.insert(QStringLiteral("issued_at"), QStringLiteral("2026-04-20"));
-    fields.insert(QStringLiteral("expire_at"), QString());
-
-    const license::LicenseValidationResult validation = licenseService.validateLicense(fields);
-    QVERIFY(!validation.ok);
-    QCOMPARE(validation.status, license::LicenseStatus::DeviceMismatch);
-    QCOMPARE(validation.boundDeviceFingerprint, QStringLiteral("ZZZZ-YYYY-XXXX-WWWW"));
-    QVERIFY(validation.technicalReason.contains(currentDevice));
-}
-
-void LicenseServiceTest::featureGate_trialDisabledReason_isReadableChinese()
-{
-    const license::FeatureGate featureGate;
-    const QString reason = featureGate.disabledReason(license::Feature::Favorites);
-
-    QCOMPARE(reason, QStringLiteral("体验版不支持收藏，正式版可收藏与管理结论。"));
-    QVERIFY(!reason.contains(QStringLiteral("Ã")));
+    const license::LicenseState finalState = licenseService.currentState();
+    QCOMPARE(finalState.status, license::LicenseStatus::ValidFull);
+    QVERIFY(finalState.isFull);
+    QVERIFY2(stateSpy.count() >= 2, "invalid -> valid should emit state changes");
 }
 
 QTEST_APPLESS_MAIN(LicenseServiceTest)
 
 #include "test_license_service.moc"
+

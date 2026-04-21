@@ -159,6 +159,17 @@ add_test(
         $<TARGET_FILE:math_search_license_service_tests>
 )
 
+add_executable(math_search_feature_gate_tests
+    activation/test_feature_gate.cpp
+)
+configure_math_search_test_target(math_search_feature_gate_tests)
+add_test(
+    NAME feature_gate_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_feature_gate_tests>
+)
+
 add_executable(math_search_activation_page_tests
     activation/test_activation_page.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/pages/activation_page.cpp

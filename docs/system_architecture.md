@@ -187,7 +187,7 @@ flowchart LR
   - `ConclusionContentRepository`
   - `SearchService`（绑定 index repo）
   - `SuggestService`（绑定 index repo）
-  - `LicenseService`（绑定 `DeviceFingerprintService`）
+  - `LicenseService`（绑定 `DeviceFingerprintService`，测试可注入固定指纹）
   - `FeatureGate`
 - 构造函数中关键步骤：
   1. `licenseService_.initialize()`。
@@ -381,7 +381,7 @@ flowchart TD
 - `LicenseService`：license 读取/解析/校验/状态机。
 - `ActivationCodeService`：激活码解析校验 + license 内容构造。
 - `FeatureGate`：功能开关映射（trial/full）。
-- `DeviceFingerprintService`：生成设备指纹。
+- `DeviceFingerprintService`：生成设备指纹；支持构造注入固定指纹（自动化测试用途）。
 
 ### 7.3 Page / View
 - `MainWindow`：系统装配与页面编排中心。

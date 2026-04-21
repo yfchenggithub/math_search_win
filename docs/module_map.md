@@ -47,7 +47,7 @@
 | `LicenseService` | `src/license/license_service.h/.cpp` | 读写 `license.dat`、解析校验、状态机、发信号 | `MainWindow`、`ActivationPage`、`SettingsPage` | `DeviceFingerprintService`、`FeatureGate` | `initialize`、`reload`、`validateLicense`、`writeLicenseFile` |
 | `ActivationCodeService` | `src/license/activation_code_service.h/.cpp` | 激活码解析、CRC/设备/过期/功能校验、生成 license 内容 | `ActivationPage` | `FeatureGate` | `parseActivationCode`、`validateActivationCode`、`buildLicenseFileContent` |
 | `FeatureGate` | `src/license/feature_gate.h/.cpp` | LicenseState -> 功能启用矩阵 | `MainWindow`、`SearchPage`、`FavoritesPage` | `LicenseState` | `setLicenseState`、`isEnabled`、`disabledReason` |
-| `DeviceFingerprintService` | `src/license/device_fingerprint_service.h/.cpp` | 生成设备指纹（机器信息 + SHA256） | `LicenseService`、`ActivationPage` | Qt 系统信息 | `deviceFingerprint`、`buildDeviceFingerprint` |
+| `DeviceFingerprintService` | `src/license/device_fingerprint_service.h/.cpp` | 生成设备指纹（机器信息 + SHA256）；支持构造注入固定指纹（测试场景） | `LicenseService`、`ActivationPage` | Qt 系统信息 | `DeviceFingerprintService(fixedFingerprint=...)`、`deviceFingerprint`、`buildDeviceFingerprint` |
 
 ### 2.4 Repository / Data 类
 
@@ -80,7 +80,7 @@
 | `LicenseService` | `src/license/license_service.h/.cpp` | license 文件读取、解析、校验与状态广播 | `MainWindow`、`ActivationPage`、`SettingsPage` | `DeviceFingerprintService`、`FeatureGate` | `initialize`、`reload`、`validateLicense` |
 | `ActivationCodeService` | `src/license/activation_code_service.h/.cpp` | 激活码解析、CRC 校验、功能集解析、生成 license 文本 | `ActivationPage` | `FeatureGate` | `parseActivationCode`、`validateActivationCode` |
 | `FeatureGate` | `src/license/feature_gate.h/.cpp` | 授权状态映射到功能开关 | `MainWindow`、`SearchPage`、`FavoritesPage` | `LicenseState` | `isEnabled`、`disabledReason` |
-| `DeviceFingerprintService` | `src/license/device_fingerprint_service.h/.cpp` | 生成设备指纹 | `LicenseService`、`ActivationPage` | `QSysInfo`、`QCryptographicHash` | `deviceFingerprint` |
+| `DeviceFingerprintService` | `src/license/device_fingerprint_service.h/.cpp` | 生成设备指纹；支持固定值注入用于自动化测试 | `LicenseService`、`ActivationPage` | `QSysInfo`、`QCryptographicHash` | `DeviceFingerprintService(fixedFingerprint=...)`、`deviceFingerprint` |
 | `LicenseState` | `src/license/license_state.h/.cpp` | 授权状态 DTO 与状态码映射 | 授权服务与 UI | Qt 元类型系统 | `licenseStatusCode`、`licenseStatusDisplayText` |
 
 ### 2.7 工具类

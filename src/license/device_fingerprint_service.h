@@ -6,6 +6,7 @@ namespace license {
 
 class DeviceFingerprintService final {
 public:
+    explicit DeviceFingerprintService(QString fixedFingerprint = QString());
     QString deviceFingerprint() const;
 
 private:
@@ -13,8 +14,8 @@ private:
     static QString formatFingerprint(const QByteArray& sha256HexUpper);
 
 private:
+    QString fixedFingerprint_;
     mutable QString cachedFingerprint_;
 };
 
 }  // namespace license
-

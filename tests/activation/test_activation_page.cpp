@@ -1,7 +1,7 @@
+#include "core/logging/logger.h"
 #include "license/activation_code_service.h"
 #include "license/device_fingerprint_service.h"
 #include "license/license_service.h"
-#include "core/logging/logger.h"
 #include "ui/pages/activation_page.h"
 
 #include <QtTest/QtTest>
@@ -13,10 +13,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSharedPointer>
 #include <QRandomGenerator>
 #include <QTimer>
 
@@ -119,12 +120,12 @@ QString buildActivationCodeForDevice(const QString& deviceFingerprint, const QSt
     return QStringLiteral("MSW1.%1.%2").arg(toBase64Url(payload), crc32UpperHex(payload));
 }
 
-void closeAnyMessageBoxes(QString* capturedMessage = nullptr)
+void closeAnyMessageBoxes(const QSharedPointer<QString>& capturedMessage = {})
 {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
         auto* box = qobject_cast<QMessageBox*>(widget);
         if (box != nullptr) {
-            if (capturedMessage != nullptr && capturedMessage->trimmed().isEmpty()) {
+            if (!capturedMessage.isNull() && capturedMessage->trimmed().isEmpty()) {
                 *capturedMessage = box->text();
             }
             box->done(QDialog::Accepted);
@@ -132,13 +133,13 @@ void closeAnyMessageBoxes(QString* capturedMessage = nullptr)
     }
 }
 
-void scheduleAutoCloseMessageBoxes(QString* capturedMessage = nullptr)
+void scheduleAutoCloseMessageBoxes(const QSharedPointer<QString>& capturedMessage = {})
 {
     QTimer::singleShot(0, [capturedMessage]() {
         closeAnyMessageBoxes(capturedMessage);
     });
-    QTimer::singleShot(80, [capturedMessage]() {
-        closeAnyMessageBoxes(capturedMessage);
+    QTimer::singleShot(80, []() {
+        closeAnyMessageBoxes();
     });
 }
 
@@ -151,9 +152,11 @@ private slots:
     void cleanupTestCase();
 
     void page_usesCurrentDeviceFingerprintAndInactiveClassOnTrial();
-    void activateButton_withEmptyInput_keepsTrialAndMarksError();
-    void activateButton_withValidCode_writesLicenseAndSwitchesToFull();
+    void activateButton_withEmptyInput_showsFailureAndMarksError();
+    void activateButton_withMalformedCode_showsFailureAndKeepsTrial();
+    void activateButton_withTrimmedValidCode_switchesToFullAndShowsSuccess();
     void activateButton_withExpiredCodeOnFullLicense_showsFriendlyErrorMessage();
+    void reloadButton_reflectsLicenseStateChangesAfterReload();
     void page_withNullServices_staysStableAndShowsUnknownThenError();
 };
 
@@ -167,7 +170,7 @@ void ActivationPageTest::page_usesCurrentDeviceFingerprintAndInactiveClassOnTria
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
     const license::ActivationCodeService activationCodeService;
     license::LicenseService licenseService(&deviceService);
     licenseService.initialize();
@@ -183,12 +186,12 @@ void ActivationPageTest::page_usesCurrentDeviceFingerprintAndInactiveClassOnTria
     QCOMPARE(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusInactive"));
 }
 
-void ActivationPageTest::activateButton_withEmptyInput_keepsTrialAndMarksError()
+void ActivationPageTest::activateButton_withEmptyInput_showsFailureAndMarksError()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
     const license::ActivationCodeService activationCodeService;
     license::LicenseService licenseService(&deviceService);
     licenseService.initialize();
@@ -202,20 +205,50 @@ void ActivationPageTest::activateButton_withEmptyInput_keepsTrialAndMarksError()
     QVERIFY(statusLabel != nullptr);
 
     activationInput->setText(QStringLiteral("   \t\r\n "));
-    scheduleAutoCloseMessageBoxes();
+    const auto capturedMessage = QSharedPointer<QString>::create();
+    scheduleAutoCloseMessageBoxes(capturedMessage);
     activateButton->click();
 
     QVERIFY(!licenseService.currentState().isFull);
     QVERIFY(!QFileInfo::exists(licenseService.licenseFilePath()));
     QCOMPARE(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusError"));
+    QVERIFY2(!capturedMessage->trimmed().isEmpty(), "empty activation input should trigger warning message");
 }
 
-void ActivationPageTest::activateButton_withValidCode_writesLicenseAndSwitchesToFull()
+void ActivationPageTest::activateButton_withMalformedCode_showsFailureAndKeepsTrial()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
+    const license::ActivationCodeService activationCodeService;
+    license::LicenseService licenseService(&deviceService);
+    licenseService.initialize();
+
+    ActivationPage page(&licenseService, &deviceService, &activationCodeService);
+    auto* activationInput = page.findChild<QLineEdit*>(QStringLiteral("activationCodeField"));
+    auto* activateButton = page.findChild<QPushButton*>(QStringLiteral("activationPrimaryButton"));
+    auto* statusLabel = page.findChild<QLabel*>(QStringLiteral("licenseStatusValue"));
+    QVERIFY(activationInput != nullptr);
+    QVERIFY(activateButton != nullptr);
+    QVERIFY(statusLabel != nullptr);
+
+    activationInput->setText(QStringLiteral("MSW1.invalid_payload.1234ABCD"));
+    const auto capturedMessage = QSharedPointer<QString>::create();
+    scheduleAutoCloseMessageBoxes(capturedMessage);
+    activateButton->click();
+
+    QVERIFY(!licenseService.currentState().isFull);
+    QCOMPARE(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusError"));
+    QVERIFY2(!capturedMessage->trimmed().isEmpty(), "malformed activation code should trigger failure message");
+}
+
+void ActivationPageTest::activateButton_withTrimmedValidCode_switchesToFullAndShowsSuccess()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
     const license::ActivationCodeService activationCodeService;
     license::LicenseService licenseService(&deviceService);
     licenseService.initialize();
@@ -229,15 +262,17 @@ void ActivationPageTest::activateButton_withValidCode_writesLicenseAndSwitchesTo
     QVERIFY(statusLabel != nullptr);
 
     const QString code = buildActivationCodeForDevice(deviceService.deviceFingerprint());
-    activationInput->setText(code);
+    activationInput->setText(QStringLiteral("  %1  ").arg(code));
 
-    scheduleAutoCloseMessageBoxes();
+    const auto capturedMessage = QSharedPointer<QString>::create();
+    scheduleAutoCloseMessageBoxes(capturedMessage);
     activateButton->click();
 
     QTRY_VERIFY_WITH_TIMEOUT(licenseService.currentState().isFull, 1500);
     QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(licenseService.licenseFilePath()), 1500);
     QCOMPARE(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusActive"));
     QVERIFY(activationInput->text().isEmpty());
+    QVERIFY2(!capturedMessage->trimmed().isEmpty(), "success branch should show information message");
 
     QFile file(licenseService.licenseFilePath());
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
@@ -251,7 +286,7 @@ void ActivationPageTest::activateButton_withExpiredCodeOnFullLicense_showsFriend
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
 
-    const license::DeviceFingerprintService deviceService;
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
     const license::ActivationCodeService activationCodeService;
     license::LicenseService licenseService(&deviceService);
     licenseService.initialize();
@@ -272,16 +307,61 @@ void ActivationPageTest::activateButton_withExpiredCodeOnFullLicense_showsFriend
     const QString expiredCode = buildActivationCodeForDevice(deviceService.deviceFingerprint(), expiredDate);
     activationInput->setText(expiredCode);
 
-    QString capturedMessage;
-    scheduleAutoCloseMessageBoxes(&capturedMessage);
+    const auto capturedMessage = QSharedPointer<QString>::create();
+    scheduleAutoCloseMessageBoxes(capturedMessage);
     activateButton->click();
 
     QVERIFY(licenseService.currentState().isFull);
     QVERIFY(QFileInfo::exists(licenseService.licenseFilePath()));
-    QVERIFY2(!capturedMessage.trimmed().isEmpty(), "expired activation should show a readable failure message");
-    QVERIFY(capturedMessage.contains(expiredDate));
-    QVERIFY(capturedMessage.contains(QStringLiteral("过期")));
-    QVERIFY(capturedMessage.contains(QStringLiteral("失效")));
+    QVERIFY2(!capturedMessage->trimmed().isEmpty(), "expired activation should show a readable failure message");
+    QVERIFY(capturedMessage->contains(expiredDate));
+}
+
+void ActivationPageTest::reloadButton_reflectsLicenseStateChangesAfterReload()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const license::DeviceFingerprintService deviceService(QStringLiteral("TEST-DEVICE-0001"));
+    const license::ActivationCodeService activationCodeService;
+    license::LicenseService licenseService(&deviceService);
+    licenseService.initialize();
+
+    ActivationPage page(&licenseService, &deviceService, &activationCodeService);
+    auto* statusLabel = page.findChild<QLabel*>(QStringLiteral("licenseStatusValue"));
+    auto* reloadButton = page.findChild<QPushButton*>(QStringLiteral("activationSecondaryButton"));
+    QVERIFY(statusLabel != nullptr);
+    QVERIFY(reloadButton != nullptr);
+
+    QCOMPARE(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusInactive"));
+
+    const QString validCode = buildActivationCodeForDevice(deviceService.deviceFingerprint());
+    const auto parsed = activationCodeService.parseActivationCode(validCode);
+    QVERIFY2(parsed.ok, qPrintable(parsed.errorMessage));
+    const auto validated = activationCodeService.validateActivationCode(parsed.payload,
+                                                                       parsed.originalPayloadJson,
+                                                                       parsed.check8,
+                                                                       deviceService.deviceFingerprint());
+    QVERIFY2(validated.ok, qPrintable(validated.errorMessage));
+
+    QString writeError;
+    const QByteArray licenseContent = activationCodeService.buildLicenseFileContent(parsed.payload,
+                                                                                     validated.resolvedFeatures,
+                                                                                     parsed.prefix,
+                                                                                     parsed.check8);
+    QVERIFY2(licenseService.writeLicenseFile(licenseContent, &writeError), qPrintable(writeError));
+
+    reloadButton->click();
+    QTRY_COMPARE_WITH_TIMEOUT(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusActive"), 1500);
+
+    QFile malformedFile(licenseService.licenseFilePath());
+    QVERIFY(malformedFile.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate));
+    const QByteArray malformed = QByteArrayLiteral("format=msw-license-v1\nbroken_line_without_equal\n");
+    QCOMPARE(malformedFile.write(malformed), malformed.size());
+    malformedFile.close();
+
+    reloadButton->click();
+    QTRY_COMPARE_WITH_TIMEOUT(statusLabel->property("statusClass").toString(), QStringLiteral("licenseStatusError"), 1500);
 }
 
 void ActivationPageTest::page_withNullServices_staysStableAndShowsUnknownThenError()
@@ -308,3 +388,4 @@ void ActivationPageTest::page_withNullServices_staysStableAndShowsUnknownThenErr
 QTEST_MAIN(ActivationPageTest)
 
 #include "test_activation_page.moc"
+

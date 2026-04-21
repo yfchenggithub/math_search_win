@@ -18,8 +18,17 @@ QString nonEmptyOrFallback(const QString& value, const QString& fallback)
 
 }  // namespace
 
+DeviceFingerprintService::DeviceFingerprintService(QString fixedFingerprint)
+    : fixedFingerprint_(fixedFingerprint.trimmed())
+{
+}
+
 QString DeviceFingerprintService::deviceFingerprint() const
 {
+    if (!fixedFingerprint_.isEmpty()) {
+        return fixedFingerprint_;
+    }
+
     if (!cachedFingerprint_.isEmpty()) {
         return cachedFingerprint_;
     }
