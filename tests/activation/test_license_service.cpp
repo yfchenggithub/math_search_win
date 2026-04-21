@@ -6,6 +6,7 @@
 
 #include <QtTest/QtTest>
 
+#include <QDate>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -76,7 +77,8 @@ bool writeUtf8File(const QString& filePath, const QByteArray& data)
 
 QByteArray buildValidLicenseContent(const QString& deviceFingerprint,
                                     const QString& serial = QStringLiteral("LIC-2026-0001"),
-                                    const QString& watermark = QStringLiteral("WM-0001"))
+                                    const QString& watermark = QStringLiteral("WM-0001"),
+                                    const QString& expireAt = QString())
 {
     license::ActivationCodePayload payload;
     payload.version = 1;
@@ -91,7 +93,7 @@ QByteArray buildValidLicenseContent(const QString& deviceFingerprint,
                             QStringLiteral("fav"),
                             QStringLiteral("af")};
     payload.issuedAt = QStringLiteral("2026-04-20");
-    payload.expireAt = QString();
+    payload.expireAt = expireAt.trimmed();
 
     const license::ActivationCodeService activationCodeService;
     return activationCodeService.buildLicenseFileContent(payload,
@@ -110,6 +112,7 @@ private slots:
 
     void initialize_withoutLicenseFile_setsTrialMissingState();
     void reload_withValidLicenseFile_switchesToValidFullState();
+    void initialize_withExpiredLicenseFile_downgradesToTrialState();
     void reload_withMalformedLicenseFile_setsParseErrorState();
     void validateLicense_withMismatchedDevice_reportsDeviceMismatch();
     void featureGate_trialDisabledReason_isReadableChinese();
@@ -160,6 +163,33 @@ void LicenseServiceTest::reload_withValidLicenseFile_switchesToValidFullState()
     QCOMPARE(state.licenseSerial, QStringLiteral("LIC-2026-0001"));
     QCOMPARE(state.watermarkId, QStringLiteral("WM-0001"));
     QCOMPARE(state.boundDeviceFingerprint, currentDevice);
+}
+
+void LicenseServiceTest::initialize_withExpiredLicenseFile_downgradesToTrialState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const license::DeviceFingerprintService deviceService;
+    const QString currentDevice = deviceService.deviceFingerprint();
+    QVERIFY(!currentDevice.trimmed().isEmpty());
+
+    const QString expiredDate = QDate::currentDate().addDays(-1).toString(QStringLiteral("yyyy-MM-dd"));
+
+    license::LicenseService licenseService(&deviceService);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(),
+                          buildValidLicenseContent(currentDevice,
+                                                   QStringLiteral("LIC-2026-0002"),
+                                                   QStringLiteral("WM-0002"),
+                                                   expiredDate)));
+
+    licenseService.initialize();
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::Invalid);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QCOMPARE(state.expireAt, expiredDate);
+    QVERIFY(state.technicalReason.contains(QStringLiteral("license expired")));
 }
 
 void LicenseServiceTest::reload_withMalformedLicenseFile_setsParseErrorState()

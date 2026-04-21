@@ -5,6 +5,7 @@
 #include "license/feature_gate.h"
 #include "shared/paths.h"
 
+#include <QDate>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -20,6 +21,39 @@ QString statusMessageForParseOrValidation(const QString& fallback, const QString
         return fallback;
     }
     return QStringLiteral("%1（%2）").arg(fallback, trimmed);
+}
+
+bool validateLicenseExpiration(const QString& expireAt, QString* errorMessage, QString* technicalReason)
+{
+    const QString text = expireAt.trimmed();
+    if (text.isEmpty()) {
+        return true;
+    }
+
+    const QDate expireDate = QDate::fromString(text, QStringLiteral("yyyy-MM-dd"));
+    if (!expireDate.isValid()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("授权到期日期格式无效（expire_at）。");
+        }
+        if (technicalReason != nullptr) {
+            *technicalReason = QStringLiteral("expire_at invalid format value=%1").arg(text);
+        }
+        return false;
+    }
+
+    const QDate today = QDate::currentDate();
+    if (today > expireDate) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("授权已过期。");
+        }
+        if (technicalReason != nullptr) {
+            *technicalReason = QStringLiteral("license expired expire_at=%1 today=%2")
+                                   .arg(text, today.toString(QStringLiteral("yyyy-MM-dd")));
+        }
+        return false;
+    }
+
+    return true;
 }
 
 }  // namespace
@@ -324,6 +358,10 @@ LicenseValidationResult LicenseService::validateLicense(const QMap<QString, QStr
         result.errorMessage = QStringLiteral("授权绑定设备与当前设备不匹配。");
         result.technicalReason =
             QStringLiteral("device mismatch current=%1 bound=%2").arg(currentDevice, device);
+        return result;
+    }
+
+    if (!validateLicenseExpiration(result.expireAt, &result.errorMessage, &result.technicalReason)) {
         return result;
     }
 

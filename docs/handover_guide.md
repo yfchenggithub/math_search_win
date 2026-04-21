@@ -1,0 +1,150 @@
+﻿# 接手指南
+
+## 1. 项目一句话说明
+
+这是一个 `C++17 + Qt 6 Widgets + QWebEngine` 的 Windows 本地离线桌面应用，当前已实现“搜索 -> 详情查看 -> 收藏/历史 -> 离线激活门控”的可运行闭环。
+
+## 2. 第一天如何快速跑起来
+
+1. 准备依赖：Qt 6.11.0（`msvc2022_64`）与 CMake 3.21+。
+2. 配置构建：
+
+```powershell
+cmake --preset msvc-debug
+```
+
+3. 编译：
+
+```powershell
+cmake --build --preset msvc-debug
+```
+
+4. 运行（仓库根目录）：
+
+```powershell
+powershell .\run-debug.ps1
+```
+
+5. 启动后先做 3 个烟测：
+- 搜索关键词，确认结果列表变化。
+- 点击结果，确认右侧详情显示（Web 或 fallback）。
+- 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
+
+## 3. 先读哪些文件最容易建立全局认识
+
+按这个顺序读最快：
+1. `src/main.cpp`
+2. `src/ui/main_window.h/.cpp`
+3. `src/ui/pages/search_page.h/.cpp`
+4. `src/domain/services/search_service.cpp`
+5. `src/domain/services/suggest_service.cpp`
+6. `src/ui/detail/detail_pane.cpp` + `resources/detail/detail.js`
+7. `src/domain/repositories/*_repository.cpp`
+8. `src/license/license_service.cpp` + `src/ui/pages/activation_page.cpp`
+
+## 4. 如何理解搜索系统
+
+- UI 入口在 `SearchPage`：
+  - 输入变化：`onQueryTextChanged()` -> `runSuggest()`
+  - 执行搜索：`onQueryReturnPressed/onSearchButtonClicked/onSuggestionClicked` -> `runSearch()`
+- 算法在 `SearchService::search()`：
+  - `termIndex + prefixIndex` 合并评分
+  - module/category/tag 过滤
+  - score 排序
+- 数据源在 `ConclusionIndexRepository`，文件是 `data/backend_search_index.json`。
+- 历史写入仅在 `button/return/suggest_click` 三类触发中执行（`HistoryRepository::addQuery`）。
+
+## 5. 如何理解详情渲染系统
+
+- 主流程：`onResultSelectionChanged()` -> `enqueueDetailRenderRequest()` -> `renderDetailForRequest()`。
+- 数据准备：
+  - `ConclusionContentRepository::getById()` 读 `data/canonical_content_v2.json`
+  - `ConclusionDetailAdapter::toViewData()`
+  - `DetailViewDataMapper::buildContentPayload()`
+- 渲染模式：
+  - Web 模式：`DetailPane` + `resources/detail/detail_template.html` + `detail.js` + `katex`
+  - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser`）
+- 并发与抖动控制：
+  - `DetailRenderCoordinator` 管 requestId/stale
+  - `detailSelectionCoalesceTimer_` 18ms 合并快速切换
+
+## 6. 如何理解本地存储系统
+
+- 底层：`LocalStorageService`（`cache` 目录、原子写盘 `QSaveFile`）。
+- 业务仓库：
+  - 收藏：`FavoritesRepository` -> `cache/favorites.json`
+  - 历史：`HistoryRepository` -> `cache/history.json`
+  - 设置：`SettingsRepository` -> `cache/settings.json`
+- 重要现状：`SettingsRepository` 已实现，但运行时页面未接线，`SettingsPage` 当前是只读状态页。
+
+## 7. 如何理解激活/授权系统
+
+- 启动校验：`LicenseService::initialize/reload` 读取 `license/license.dat`。
+- 状态传播：`licenseStateChanged` -> `MainWindow` -> `FeatureGate::setLicenseState` -> 各页面刷新。
+- 激活入口：`ActivationPage::onActivateClicked()`。
+- 激活流程：
+  - `ActivationCodeService::parseActivationCode`
+  - `validateActivationCode`
+  - `buildLicenseFileContent`
+  - `LicenseService::writeLicenseFile + reload`
+- 重要风险：签名校验/解密当前为 TODO stub（非完整安全实现）。
+
+## 8. 常见排错路径
+
+### 搜不到结果怎么办
+- 先断点 `SearchPage::runSearch`，看是否触发。
+- 检查 `indexReady_`、`FeatureGate` 是否放行搜索。
+- 检查 `ConclusionIndexRepository::loadFromFile` diagnostics。
+- 查看日志分类：`search.index`、`search.engine`。
+
+### suggest 不显示怎么办
+- 断点 `onQueryTextChanged`、`runSuggest`。
+- 检查 `suggestService_` 和 `indexReady_`。
+- 检查 `lastSuggestSignature_` 是否误判重复。
+- 查看 `SuggestionResult.items` 是否为空。
+
+### 点击结果详情不出来怎么办
+- 断点 `onResultSelectionChanged`、`flushPendingDetailRequest`、`renderDetailForRequest`。
+- 看 `contentReady_`、`contentRepository_->getById(docId)` 是否命中。
+- 看 `detailRenderCoordinator_->isRequestStale(requestId)` 是否持续淘汰请求。
+
+### KaTeX / WebEngine 渲染异常怎么办
+- 先看 `DetailHtmlRenderer::isReady/lastError`。
+- 确认 `resources/detail/*` 与 `resources/katex/*` 存在。
+- 断点 `DetailPane::onShellLoadFinished`、`dispatchNow`。
+- 看 `SearchPage::activateTextFallbackMode` 是否被触发（说明已回退文本模式）。
+
+### 收藏保存失败怎么办
+- 断点 `SearchPage::onFavoriteButtonClicked`。
+- 检查 `FavoritesRepository::load/save` 返回值。
+- 检查 `LocalStorageService::ensureCacheDirExists` 与 `writeJsonFileAtomically`。
+- 检查 `cache/favorites.json` 是否可写、是否被外部占用。
+
+### 设置不持久化怎么办
+- 这是当前实现现状：`SettingsPage` 未接线 `SettingsRepository`。
+- 如果需要“可编辑并持久化”，要新增页面交互逻辑调用 `SettingsRepository::setValue/save`。
+
+### 激活状态异常怎么办
+- 断点 `ActivationPage::onActivateClicked` 和 `LicenseService::reload`。
+- 检查 `license/license.dat` 内容格式（`format/product/edition/device/features`）。
+- 检查 `DeviceFingerprintService::deviceFingerprint()` 与 license 中 `device` 是否一致。
+- 检查过期字段 `expire_at` 是否已过期。
+
+## 9. 新人最容易误解的点
+
+- 误解 1：设置页已经是“设置中心”。
+  - 现实：当前是状态展示页，设置仓库未接线。
+- 误解 2：收藏文件一定有完整 `items` 元数据。
+  - 现实：`FavoritesRepository` 默认只写 `ids`，`FavoritesPage` 读取 `items` 只是兼容。
+- 误解 3：激活链路已经是完整安全方案。
+  - 现实：签名/解密校验是 TODO stub。
+- 误解 4：输入时会自动实时搜索。
+  - 现实：输入实时触发的是 suggest；搜索主触发仍是回车/按钮/建议点击。
+
+## 10. 建议后续整理顺序
+
+1. 先补授权安全链路（签名/解密/到期策略）。
+2. 统一收藏文件 schema（`ids` vs `items`）。
+3. 拆分 `SearchPage`（搜索编排、详情编排、状态同步分层）。
+4. 明确 `SettingsPage` 定位并接线真实持久化。
+5. 为 `DetailViewDataMapper` 和 `detail.js` 增加契约测试，降低跨语言改动风险。
