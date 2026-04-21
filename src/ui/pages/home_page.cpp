@@ -403,6 +403,7 @@ void HomePage::rebuildRecentPreview()
         return;
     }
 
+    bool hasRenderableItems = false;
     for (const domain::models::SearchHistoryItem& item : std::as_const(recentItems_)) {
         const QString query = item.query.trimmed();
         if (query.isEmpty()) {
@@ -417,9 +418,10 @@ void HomePage::rebuildRecentPreview()
         auto* previewButton = createPreviewButton(recentPreviewSection_, normalizedText(query, 40), meta);
         connect(previewButton, &QPushButton::clicked, this, [this, query]() { emit searchRequested(query); });
         recentPreviewLayout_->addWidget(previewButton);
+        hasRenderableItems = true;
     }
 
-    if (recentPreviewLayout_->isEmpty()) {
+    if (!hasRenderableItems) {
         recentPreviewLayout_->addWidget(
             createPreviewEmptyItem(recentPreviewSection_,
                                    QStringLiteral("暂无最近搜索"),
@@ -439,6 +441,7 @@ void HomePage::rebuildFavoritesPreview()
         return;
     }
 
+    bool hasRenderableItems = false;
     for (const FavoritePreviewItem& item : std::as_const(favoriteItems_)) {
         const QString conclusionId = item.conclusionId.trimmed();
         if (conclusionId.isEmpty()) {
@@ -455,9 +458,10 @@ void HomePage::rebuildFavoritesPreview()
             emit openConclusionRequested(conclusionId);
         });
         favoritesPreviewLayout_->addWidget(previewButton);
+        hasRenderableItems = true;
     }
 
-    if (favoritesPreviewLayout_->isEmpty()) {
+    if (!hasRenderableItems) {
         favoritesPreviewLayout_->addWidget(
             createPreviewEmptyItem(favoritesPreviewSection_,
                                    QStringLiteral("暂无收藏"),
