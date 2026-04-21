@@ -225,3 +225,87 @@ add_test(
         "PATH=$<TARGET_FILE_DIR:Qt6::Widgets>;$ENV{PATH}"
         $<TARGET_FILE:math_search_page_wiring_tests>
 )
+
+add_executable(math_search_main_window_round5_tests
+    ui/test_main_window_round5.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/main_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/navigation_sidebar.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/top_bar.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/bottom_status_bar.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/home_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/search_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/favorites_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/recent_searches_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/settings_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/activation_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/recent_search_item_widget.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/widgets/favorites/favorite_item_card.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/style/app_style.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_html_renderer.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_perf_aggregator.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_pane.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_coordinator.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_path_resolver.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_fallback_content_builder.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_view_data_mapper.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/render_section.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/conclusion_record.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/adapters/conclusion_card_adapter.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/adapters/conclusion_detail_adapter.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/canonical_content_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
+)
+configure_math_search_test_target(math_search_main_window_round5_tests)
+target_link_libraries(math_search_main_window_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets)
+add_test(
+    NAME main_window_round5_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::WebEngineWidgets>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_main_window_round5_tests>
+)
+
+add_executable(math_search_search_page_round5_tests
+    ui/test_search_page_round5.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/search_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/style/app_style.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_html_renderer.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_perf_aggregator.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_pane.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_coordinator.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_render_path_resolver.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_fallback_content_builder.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/detail/detail_view_data_mapper.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/render_section.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/conclusion_record.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/adapters/conclusion_card_adapter.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/adapters/conclusion_detail_adapter.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/canonical_content_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
+)
+configure_math_search_test_target(math_search_search_page_round5_tests)
+target_link_libraries(math_search_search_page_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets)
+add_test(
+    NAME search_page_round5_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::WebEngineWidgets>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_search_page_round5_tests>
+)
+
+add_executable(math_search_settings_activation_round5_tests
+    ui/test_settings_activation_round5.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/settings_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/pages/activation_page.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/style/app_style.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/render_section.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/conclusion_record.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/canonical_content_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
+)
+configure_math_search_test_target(math_search_settings_activation_round5_tests)
+target_link_libraries(math_search_settings_activation_round5_tests PRIVATE Qt6::Widgets)
+add_test(
+    NAME settings_activation_round5_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Widgets>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_settings_activation_round5_tests>
+)
