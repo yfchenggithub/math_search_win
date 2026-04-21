@@ -58,7 +58,7 @@ QString FeatureGate::disabledReason(Feature feature) const
 
     const FeatureMeta* meta = findFeatureMeta(feature);
     if (meta != nullptr) {
-        return QString::fromLatin1(meta->trialDisabledReason);
+        return QString::fromUtf8(meta->trialDisabledReason);
     }
     return QStringLiteral("该功能在当前授权下不可用。");
 }
@@ -195,4 +195,3 @@ uint qHash(const license::Feature& feature, uint seed) noexcept
 {
     return ::qHash(static_cast<int>(feature), seed);
 }
-

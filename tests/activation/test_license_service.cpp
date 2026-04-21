@@ -112,6 +112,7 @@ private slots:
     void reload_withValidLicenseFile_switchesToValidFullState();
     void reload_withMalformedLicenseFile_setsParseErrorState();
     void validateLicense_withMismatchedDevice_reportsDeviceMismatch();
+    void featureGate_trialDisabledReason_isReadableChinese();
 };
 
 void LicenseServiceTest::cleanupTestCase()
@@ -205,6 +206,15 @@ void LicenseServiceTest::validateLicense_withMismatchedDevice_reportsDeviceMisma
     QCOMPARE(validation.status, license::LicenseStatus::DeviceMismatch);
     QCOMPARE(validation.boundDeviceFingerprint, QStringLiteral("ZZZZ-YYYY-XXXX-WWWW"));
     QVERIFY(validation.technicalReason.contains(currentDevice));
+}
+
+void LicenseServiceTest::featureGate_trialDisabledReason_isReadableChinese()
+{
+    const license::FeatureGate featureGate;
+    const QString reason = featureGate.disabledReason(license::Feature::Favorites);
+
+    QCOMPARE(reason, QStringLiteral("体验版不支持收藏，正式版可收藏与管理结论。"));
+    QVERIFY(!reason.contains(QStringLiteral("Ã")));
 }
 
 QTEST_APPLESS_MAIN(LicenseServiceTest)
