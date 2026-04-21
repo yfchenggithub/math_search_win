@@ -7,6 +7,8 @@
 #include <QtTest/QtTest>
 
 #include <algorithm>
+#include <cmath>
+#include <QElapsedTimer>
 #include <QSet>
 
 namespace {
@@ -72,6 +74,7 @@ private slots:
     void behaviorRound2_moduleTagFilters_takeEffect();
     void behaviorRound2_tieScore_secondaryOrderRule();
     void behaviorRound2_trialAndFullResultCap_contracts();
+    void performanceBaseline_round2_limitQuery_logsAvgAndP95();
 
     void realIndex_smoke_ifAvailable();
 
@@ -439,6 +442,69 @@ void SearchServiceTest::behaviorRound2_trialAndFullResultCap_contracts()
                                            query,
                                            fullOptions,
                                            fullResult)));
+}
+
+void SearchServiceTest::performanceBaseline_round2_limitQuery_logsAvgAndP95()
+{
+    const QString query = QStringLiteral("limit query");
+    domain::models::SearchOptions options;
+    options.maxResults = 20;
+
+    constexpr int kWarmupRuns = 5;
+    constexpr int kMeasuredRuns = 40;
+    constexpr double kLooseP95BudgetMs = 500.0;
+
+    for (int i = 0; i < kWarmupRuns; ++i) {
+        const auto warmupResult = serviceRound2_.search(query, options);
+        QVERIFY2(warmupResult.total > 0,
+                 qPrintable(makeFailureContext(QStringLiteral("warmup baseline query should return non-empty result"),
+                                               query,
+                                               options,
+                                               warmupResult)));
+    }
+
+    QVector<double> samplesMs;
+    samplesMs.reserve(kMeasuredRuns);
+    for (int i = 0; i < kMeasuredRuns; ++i) {
+        QElapsedTimer timer;
+        timer.start();
+        const auto result = serviceRound2_.search(query, options);
+        const double elapsedMs = static_cast<double>(timer.nsecsElapsed()) / 1'000'000.0;
+        samplesMs.push_back(elapsedMs);
+
+        QVERIFY2(result.total > 0,
+                 qPrintable(makeFailureContext(QStringLiteral("baseline query should return non-empty result"),
+                                               query,
+                                               options,
+                                               result)));
+    }
+
+    QVERIFY2(!samplesMs.isEmpty(), "performance baseline samples should not be empty");
+    std::sort(samplesMs.begin(), samplesMs.end());
+
+    double sumMs = 0.0;
+    for (const double sample : samplesMs) {
+        sumMs += sample;
+    }
+    const double avgMs = sumMs / static_cast<double>(samplesMs.size());
+    const int p95Index = std::max(0, static_cast<int>(std::ceil(samplesMs.size() * 0.95)) - 1);
+    const double p95Ms = samplesMs.at(p95Index);
+    const double minMs = samplesMs.first();
+    const double maxMs = samplesMs.last();
+
+    qInfo().noquote() << QStringLiteral(
+                            "[perf][search][baseline] fixture=round2 query=\"%1\" runs=%2 avgMs=%3 p95Ms=%4 minMs=%5 maxMs=%6")
+                            .arg(query)
+                            .arg(samplesMs.size())
+                            .arg(QString::number(avgMs, 'f', 3))
+                            .arg(QString::number(p95Ms, 'f', 3))
+                            .arg(QString::number(minMs, 'f', 3))
+                            .arg(QString::number(maxMs, 'f', 3));
+
+    QVERIFY2(p95Ms < kLooseP95BudgetMs,
+             qPrintable(QStringLiteral("search perf baseline p95=%1ms exceeds loose budget %2ms")
+                            .arg(QString::number(p95Ms, 'f', 3))
+                            .arg(QString::number(kLooseP95BudgetMs, 'f', 1))));
 }
 
 void SearchServiceTest::realIndex_smoke_ifAvailable()

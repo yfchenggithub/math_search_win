@@ -146,8 +146,10 @@
 
 ## 14. 测试与文档同步回归
 
-- [ ] 受影响模块有对应测试（`tests/search` / `tests/suggest` / `tests/storage` / `tests/activation` / `tests/ui` / `tests/detail`）。
-- [ ] 至少执行了受影响测试集，且结果记录可追踪。
+- [ ] 受影响模块已映射到 `docs/test_matrix.md` 的“模块 -> CTest 目标”清单（`search/suggest/storage/activation/detail/ui`）。
+- [ ] 受影响模块在 `tests/search` / `tests/suggest` / `tests/storage` / `tests/activation` / `tests/ui` / `tests/detail` 中有对应自动化测试，且至少执行了最小必跑集合。
+- [ ] 若受影响模块暂无自动化测试：已补充人工冒烟步骤，并在 `docs/test_matrix.md` 记录风险与补测计划。
+- [ ] 测试执行结果可追踪（命令、时间、通过/失败结论）。
 - [ ] 四份架构文档是否需要同步更新已判断：
   - `docs/system_architecture.md`
   - `docs/module_map.md`
