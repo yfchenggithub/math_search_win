@@ -102,6 +102,19 @@ add_test(
         $<TARGET_FILE:math_search_suggest_tests>
 )
 
+add_executable(math_search_index_repository_tests
+    repository/test_conclusion_index_repository.cpp
+    shared/test_fixture_loader.h
+    shared/test_fixture_loader.cpp
+)
+configure_math_search_test_target(math_search_index_repository_tests)
+add_test(
+    NAME conclusion_index_repository_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_index_repository_tests>
+)
+
 add_executable(math_search_detail_perf_tests
     detail/test_detail_perf_aggregator.cpp
 )

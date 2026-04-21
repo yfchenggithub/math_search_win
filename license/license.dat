@@ -1,0 +1,15 @@
+format=msw-license-v1
+product=math_search_win
+serial=LIC-2026-0001
+watermark=WM-0001
+edition=full
+device=1155-EBFC-6EFC-8BD2
+features=basic_search_preview,full_search,full_detail,favorites,advanced_filter
+issued_at=2026-04-20
+expire_at=2028-05-25
+issuer=offline-manual
+source=activation_code
+payload_ver=1
+activation_prefix=MSW1
+activation_check=D6AC0191
+status=valid

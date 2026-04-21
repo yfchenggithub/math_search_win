@@ -32,6 +32,16 @@ QString fixtureIndexPath()
     return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index.json"));
 }
 
+QString fixtureIndexRound2Path()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_round2.json"));
+}
+
+QString malformedFixtureIndexPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_malformed.json"));
+}
+
 QString realIndexPath()
 {
     return QDir(projectSourceDir()).filePath(QStringLiteral("data/backend_search_index.json"));

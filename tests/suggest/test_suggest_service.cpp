@@ -69,21 +69,33 @@ private slots:
     void sorting_qualitySignalIsReasonable();
     void maxResults_limitsReturnedItems();
     void sameInputOrder_isStable();
+    void behaviorRound2_prefixAndTermIndex_hitContracts();
+    void behaviorRound2_dedupAndSorting_contracts();
+    void behaviorRound2_limitAndNoiseWhitespaceCase_contracts();
 
     void realIndex_smoke_ifAvailable();
 
 private:
     infrastructure::data::ConclusionIndexRepository fixtureRepository_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryRound2_;
     domain::services::SuggestService service_;
+    domain::services::SuggestService serviceRound2_;
 };
 
 void SuggestServiceTest::initTestCase()
 {
     QString errorSummary;
-    const QString fixturePath = tests::shared::fixtureIndexPath();
-    QVERIFY2(tests::shared::loadRepositoryFromFile(fixturePath, &fixtureRepository_, &errorSummary), qPrintable(errorSummary));
+    QVERIFY2(tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexPath(), &fixtureRepository_, &errorSummary),
+             qPrintable(errorSummary));
     QVERIFY2(fixtureRepository_.docCount() > 0, "fixture repository should contain docs");
     service_.setRepository(&fixtureRepository_);
+
+    errorSummary.clear();
+    QVERIFY2(
+        tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexRound2Path(), &fixtureRepositoryRound2_, &errorSummary),
+        qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryRound2_.docCount() > 0, "round2 fixture repository should contain docs");
+    serviceRound2_.setRepository(&fixtureRepositoryRound2_);
 }
 
 void SuggestServiceTest::emptyQuery_returnsEmpty_data()
@@ -363,6 +375,145 @@ void SuggestServiceTest::sameInputOrder_isStable()
                                                options,
                                                runA)));
     }
+}
+
+void SuggestServiceTest::behaviorRound2_prefixAndTermIndex_hitContracts()
+{
+    domain::models::SuggestOptions prefixOptions;
+    prefixOptions.maxResults = 10;
+
+    const auto prefixResult = serviceRound2_.suggest(QStringLiteral("pre"), prefixOptions);
+    QVERIFY2(prefixResult.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("prefix query should return suggestions"),
+                                           QStringLiteral("pre"),
+                                           prefixOptions,
+                                           prefixResult)));
+    QVERIFY2(indexOfSuggestion(prefixResult.items, QStringLiteral("pre")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("prefixIndex should contain exact 'pre' suggestion"),
+                                           QStringLiteral("pre"),
+                                           prefixOptions,
+                                           prefixResult)));
+
+    bool hasPrefixSource = false;
+    for (const auto& item : prefixResult.items) {
+        if (item.source == QStringLiteral("prefix_index")) {
+            hasPrefixSource = true;
+            break;
+        }
+    }
+    QVERIFY2(hasPrefixSource,
+             qPrintable(makeFailureContext(QStringLiteral("prefix query should include prefix_index source"),
+                                           QStringLiteral("pre"),
+                                           prefixOptions,
+                                           prefixResult)));
+
+    domain::models::SuggestOptions termOnlyOptions;
+    termOnlyOptions.enablePrefix = false;
+    termOnlyOptions.maxResults = 10;
+    const auto termOnlyResult = serviceRound2_.suggest(QStringLiteral("term supplement"), termOnlyOptions);
+    QVERIFY2(termOnlyResult.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("term-only mode should still return suggestions"),
+                                           QStringLiteral("term supplement"),
+                                           termOnlyOptions,
+                                           termOnlyResult)));
+
+    bool hasTermSource = false;
+    for (const auto& item : termOnlyResult.items) {
+        if (item.source == QStringLiteral("term_index")) {
+            hasTermSource = true;
+            break;
+        }
+    }
+    QVERIFY2(hasTermSource,
+             qPrintable(makeFailureContext(QStringLiteral("prefix disabled mode should hit term_index"),
+                                           QStringLiteral("term supplement"),
+                                           termOnlyOptions,
+                                           termOnlyResult)));
+}
+
+void SuggestServiceTest::behaviorRound2_dedupAndSorting_contracts()
+{
+    const QString dedupeQuery = QStringLiteral("dup token");
+
+    domain::models::SuggestOptions dedupOn;
+    dedupOn.enableExactDedup = true;
+    dedupOn.maxResults = 20;
+    const auto deduped = serviceRound2_.suggest(dedupeQuery, dedupOn);
+
+    domain::models::SuggestOptions dedupOff = dedupOn;
+    dedupOff.enableExactDedup = false;
+    const auto undeduped = serviceRound2_.suggest(dedupeQuery, dedupOff);
+
+    QVERIFY2(countSuggestionText(deduped.items, QStringLiteral("dup token")) == 1,
+             qPrintable(makeFailureContext(QStringLiteral("dedup enabled should keep only one 'dup token'"),
+                                           dedupeQuery,
+                                           dedupOn,
+                                           deduped)));
+    QVERIFY2(countSuggestionText(undeduped.items, QStringLiteral("dup token")) >= 2,
+             qPrintable(makeFailureContext(QStringLiteral("dedup disabled should keep duplicated source rows"),
+                                           dedupeQuery,
+                                           dedupOff,
+                                           undeduped)));
+
+    const QString rankingQuery = QStringLiteral("rankcase");
+    domain::models::SuggestOptions rankingOptions;
+    rankingOptions.maxResults = 20;
+    const auto rankingResult = serviceRound2_.suggest(rankingQuery, rankingOptions);
+    const int exactIndex = indexOfSuggestion(rankingResult.items, QStringLiteral("rankcase"));
+    const int extendedIndex = indexOfSuggestion(rankingResult.items, QStringLiteral("rankcase extended"));
+    QVERIFY2(exactIndex >= 0 && extendedIndex >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("ranking fixture should expose both rankcase variants"),
+                                           rankingQuery,
+                                           rankingOptions,
+                                           rankingResult)));
+    QVERIFY2(exactIndex < extendedIndex,
+             qPrintable(makeFailureContext(QStringLiteral("closer exact suggestion should rank above longer variant"),
+                                           rankingQuery,
+                                           rankingOptions,
+                                           rankingResult)));
+
+    for (int i = 1; i < rankingResult.items.size(); ++i) {
+        QVERIFY2(rankingResult.items.at(i - 1).score + 1e-9 >= rankingResult.items.at(i).score,
+                 qPrintable(makeFailureContext(QStringLiteral("sorted suggestions should be non-increasing by score"),
+                                               rankingQuery,
+                                               rankingOptions,
+                                               rankingResult)));
+    }
+}
+
+void SuggestServiceTest::behaviorRound2_limitAndNoiseWhitespaceCase_contracts()
+{
+    domain::models::SuggestOptions limitOptions;
+    limitOptions.maxResults = 2;
+    const auto limited = serviceRound2_.suggest(QStringLiteral("limit"), limitOptions);
+    QVERIFY2(limited.items.size() <= 2,
+             qPrintable(makeFailureContext(QStringLiteral("suggestion list should respect maxResults cap"),
+                                           QStringLiteral("limit"),
+                                           limitOptions,
+                                           limited)));
+    QVERIFY2(limited.total > limited.items.size(),
+             qPrintable(makeFailureContext(QStringLiteral("suggestion total should preserve pre-truncate count"),
+                                           QStringLiteral("limit"),
+                                           limitOptions,
+                                           limited)));
+
+    domain::models::SuggestOptions normalizeOptions;
+    normalizeOptions.maxResults = 10;
+    const QString noisyCaseQuery = QStringLiteral("  MIXED   CASE   KEY  ");
+    const auto normalizedResult = serviceRound2_.suggest(noisyCaseQuery, normalizeOptions);
+    QVERIFY2(indexOfSuggestion(normalizedResult.items, QStringLiteral("mixed case key")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("case/whitespace-variant query should hit normalized suggestion"),
+                                           noisyCaseQuery,
+                                           normalizeOptions,
+                                           normalizedResult)));
+
+    const QString noiseOnlyQuery = QStringLiteral("   ###   ");
+    const auto noiseOnlyResult = serviceRound2_.suggest(noiseOnlyQuery, normalizeOptions);
+    QVERIFY2(noiseOnlyResult.total == 0 && noiseOnlyResult.items.isEmpty(),
+             qPrintable(makeFailureContext(QStringLiteral("noise-only query should return empty suggestions safely"),
+                                           noiseOnlyQuery,
+                                           normalizeOptions,
+                                           noiseOnlyResult)));
 }
 
 void SuggestServiceTest::realIndex_smoke_ifAvailable()

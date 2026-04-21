@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-21T12:10:00+08:00",
+  "stats": {
+    "documents": 2,
+    "terms": 2,
+    "prefixes": 2,
+    "suggestions": 0,
+    "modules": 1,
+    "moduleStats": [
+      {
+        "module": "malformed",
+        "scanned": 2,
+        "built": 1,
+        "filtered": 0,
+        "skipped": 1
+      }
+    ]
+  },
+  "buildOptions": {
+    "prefixDocLimit": 16,
+    "suggestionLimit": 16,
+    "targetModules": ["malformed"],
+    "targetItems": []
+  },
+  "fieldMaskLegend": {
+    "title": 1,
+    "keyword": 4
+  },
+  "docs": {
+    "M001": {
+      "id": "",
+      "module": 123,
+      "moduleDir": "malformed/mod",
+      "title": "Malformed Doc",
+      "summary": "This record should still load.",
+      "category": "malformed",
+      "tags": ["ok", 5, true],
+      "coreFormula": "x",
+      "rank": "5",
+      "difficulty": "1.5",
+      "searchBoost": "0.2",
+      "hotScore": "1.0",
+      "examFrequency": "0.1",
+      "examScore": "0.1"
+    },
+    "BROKEN": 7
+  },
+  "termIndex": {
+    "mal_key": [
+      ["M001", 9.0, 1],
+      ["UNKNOWN", 7.0, 1],
+      ["M001", "7", 1],
+      ["M001", 6.0, -1],
+      ["M001", 6.0],
+      [123, 6.0, 1]
+    ],
+    "all_bad": [
+      ["UNKNOWN", 1.0, 1],
+      ["M001", "2", 1]
+    ]
+  },
+  "prefixIndex": {
+    "mal_pre": [
+      ["M001", 8.0, 1],
+      [123, 5.0, 1]
+    ],
+    "all_bad_pre": [
+      ["UNKNOWN", 2.0, 1]
+    ]
+  }
+}

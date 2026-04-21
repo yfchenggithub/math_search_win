@@ -40,6 +40,16 @@ bool hasTagCaseInsensitive(const QStringList& tags, const QString& expectedTag)
     return false;
 }
 
+bool hasTextCaseInsensitive(const QStringList& values, const QString& expectedText)
+{
+    for (const QString& value : values) {
+        if (value.compare(expectedText, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 class SearchServiceTest final : public QObject {
@@ -58,21 +68,34 @@ private slots:
     void exactBoost_promotesTermMatchedDocs();
     void noResultQuery_returnsEmptyAndSafe();
     void maxResults_limitsReturnedItemsButKeepsTotal();
+    void behaviorRound2_exactPrefixKeywordMultiKeyword_contracts();
+    void behaviorRound2_moduleTagFilters_takeEffect();
+    void behaviorRound2_tieScore_secondaryOrderRule();
+    void behaviorRound2_trialAndFullResultCap_contracts();
 
     void realIndex_smoke_ifAvailable();
 
 private:
     infrastructure::data::ConclusionIndexRepository fixtureRepository_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryRound2_;
     domain::services::SearchService service_;
+    domain::services::SearchService serviceRound2_;
 };
 
 void SearchServiceTest::initTestCase()
 {
     QString errorSummary;
-    const QString fixturePath = tests::shared::fixtureIndexPath();
-    QVERIFY2(tests::shared::loadRepositoryFromFile(fixturePath, &fixtureRepository_, &errorSummary), qPrintable(errorSummary));
+    QVERIFY2(tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexPath(), &fixtureRepository_, &errorSummary),
+             qPrintable(errorSummary));
     QVERIFY2(fixtureRepository_.docCount() > 0, "fixture repository should contain docs");
     service_.setRepository(&fixtureRepository_);
+
+    errorSummary.clear();
+    QVERIFY2(
+        tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexRound2Path(), &fixtureRepositoryRound2_, &errorSummary),
+        qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryRound2_.docCount() > 0, "round2 fixture repository should contain docs");
+    serviceRound2_.setRepository(&fixtureRepositoryRound2_);
 }
 
 void SearchServiceTest::emptyQuery_returnsEmpty_data()
@@ -275,6 +298,147 @@ void SearchServiceTest::maxResults_limitsReturnedItemsButKeepsTotal()
              qPrintable(makeFailureContext(QStringLiteral("total should be >= returned size"), query, options, result)));
     QVERIFY2(result.total > result.hits.size(),
              qPrintable(makeFailureContext(QStringLiteral("fixture query should be truncated by maxResults"), query, options, result)));
+}
+
+void SearchServiceTest::behaviorRound2_exactPrefixKeywordMultiKeyword_contracts()
+{
+    domain::models::SearchOptions options;
+    options.maxResults = 20;
+
+    const auto exactResult = serviceRound2_.search(QStringLiteral("exact term"), options);
+    QVERIFY2(indexOfDocId(exactResult.hits, QStringLiteral("X001")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("exact term query should hit X001"),
+                                           QStringLiteral("exact term"),
+                                           options,
+                                           exactResult)));
+
+    const auto prefixResult = serviceRound2_.search(QStringLiteral("pre"), options);
+    QVERIFY2(indexOfDocId(prefixResult.hits, QStringLiteral("X002")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("prefix query should hit X002"),
+                                           QStringLiteral("pre"),
+                                           options,
+                                           prefixResult)));
+
+    const auto keywordResult = serviceRound2_.search(QStringLiteral("keyword term"), options);
+    const int keywordHitIndex = indexOfDocId(keywordResult.hits, QStringLiteral("X003"));
+    QVERIFY2(keywordHitIndex >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("keyword query should hit X003"),
+                                           QStringLiteral("keyword term"),
+                                           options,
+                                           keywordResult)));
+    QVERIFY2(hasTextCaseInsensitive(keywordResult.hits.at(keywordHitIndex).matchedFields, QStringLiteral("keyword")),
+             qPrintable(makeFailureContext(QStringLiteral("keyword hit should report keyword matched field"),
+                                           QStringLiteral("keyword term"),
+                                           options,
+                                           keywordResult)));
+
+    const QString multiKeywordQuery = QStringLiteral("  MULTI   WORD   KEY  ");
+    const auto multiKeywordResult = serviceRound2_.search(multiKeywordQuery, options);
+    QVERIFY2(indexOfDocId(multiKeywordResult.hits, QStringLiteral("X004")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("multi-keyword query should match normalized term key"),
+                                           multiKeywordQuery,
+                                           options,
+                                           multiKeywordResult)));
+}
+
+void SearchServiceTest::behaviorRound2_moduleTagFilters_takeEffect()
+{
+    const QString query = QStringLiteral("limit query");
+    domain::models::SearchOptions baseOptions;
+    baseOptions.maxResults = 20;
+    const auto baseResult = serviceRound2_.search(query, baseOptions);
+    QVERIFY2(baseResult.total >= 7,
+             qPrintable(makeFailureContext(QStringLiteral("limit baseline should include at least seven docs"),
+                                           query,
+                                           baseOptions,
+                                           baseResult)));
+
+    domain::models::SearchOptions moduleOptions = baseOptions;
+    moduleOptions.moduleFilter = {QStringLiteral("geometry")};
+    const auto moduleResult = serviceRound2_.search(query, moduleOptions);
+    QVERIFY2(moduleResult.total > 0 && moduleResult.total < baseResult.total,
+             qPrintable(makeFailureContext(QStringLiteral("module filter should shrink limit result set"),
+                                           query,
+                                           moduleOptions,
+                                           moduleResult)));
+    for (const auto& hit : moduleResult.hits) {
+        QVERIFY2(hit.module.compare(QStringLiteral("geometry"), Qt::CaseInsensitive) == 0,
+                 qPrintable(makeFailureContext(QStringLiteral("module-filtered results must all be geometry"),
+                                               query,
+                                               moduleOptions,
+                                               moduleResult)));
+    }
+
+    domain::models::SearchOptions tagOptions = baseOptions;
+    tagOptions.tagFilter = {QStringLiteral("setf")};
+    const auto tagResult = serviceRound2_.search(query, tagOptions);
+    QVERIFY2(tagResult.total == 1,
+             qPrintable(makeFailureContext(QStringLiteral("unique tag filter should narrow to one hit"),
+                                           query,
+                                           tagOptions,
+                                           tagResult)));
+    QVERIFY2(tagResult.hits.size() == 1 && tagResult.hits.at(0).docId == QStringLiteral("L006"),
+             qPrintable(makeFailureContext(QStringLiteral("tag filter setf should resolve to L006"),
+                                           query,
+                                           tagOptions,
+                                           tagResult)));
+}
+
+void SearchServiceTest::behaviorRound2_tieScore_secondaryOrderRule()
+{
+    const QString query = QStringLiteral("tie query");
+    domain::models::SearchOptions options;
+    options.maxResults = 20;
+
+    const auto result = serviceRound2_.search(query, options);
+    const int tieA = indexOfDocId(result.hits, QStringLiteral("T001"));
+    const int tieB = indexOfDocId(result.hits, QStringLiteral("T002"));
+    const int tieC = indexOfDocId(result.hits, QStringLiteral("T003"));
+    QVERIFY2(tieA >= 0 && tieB >= 0 && tieC >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("tie query should include all tie docs"), query, options, result)));
+    QVERIFY2(tieA < tieB && tieB < tieC,
+             qPrintable(makeFailureContext(QStringLiteral("same-score ordering should follow title then docId"),
+                                           query,
+                                           options,
+                                           result)));
+}
+
+void SearchServiceTest::behaviorRound2_trialAndFullResultCap_contracts()
+{
+    const QString query = QStringLiteral("limit query");
+
+    domain::models::SearchOptions trialOptions;
+    trialOptions.maxResults = 5;
+    const auto trialResult = serviceRound2_.search(query, trialOptions);
+    QVERIFY2(trialResult.hits.size() == 5,
+             qPrintable(makeFailureContext(QStringLiteral("trial mode contract should cap results to five"),
+                                           query,
+                                           trialOptions,
+                                           trialResult)));
+    QVERIFY2(trialResult.total > trialResult.hits.size(),
+             qPrintable(makeFailureContext(QStringLiteral("trial mode should preserve total before truncation"),
+                                           query,
+                                           trialOptions,
+                                           trialResult)));
+
+    domain::models::SearchOptions fullOptions = trialOptions;
+    fullOptions.maxResults = 120;
+    const auto fullResult = serviceRound2_.search(query, fullOptions);
+    QVERIFY2(fullResult.hits.size() == fullResult.total,
+             qPrintable(makeFailureContext(QStringLiteral("full mode contract should not truncate this fixture query"),
+                                           query,
+                                           fullOptions,
+                                           fullResult)));
+    QVERIFY2(fullResult.total == trialResult.total,
+             qPrintable(makeFailureContext(QStringLiteral("trial/full should agree on untruncated total hit count"),
+                                           query,
+                                           fullOptions,
+                                           fullResult)));
+    QVERIFY2(fullResult.hits.size() > trialResult.hits.size(),
+             qPrintable(makeFailureContext(QStringLiteral("full mode should expose more hits than trial cap"),
+                                           query,
+                                           fullOptions,
+                                           fullResult)));
 }
 
 void SearchServiceTest::realIndex_smoke_ifAvailable()
