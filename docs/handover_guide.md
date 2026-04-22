@@ -180,9 +180,13 @@ powershell .\run-debug.ps1
 
 ### 11.3 Handover cautions
 
+- Packaging main entry is `release_tool.py` (commands: `deploy`, `verify`, `package`, `all`).
 - Release output now has separate folders:
   - `resources/`: Qt WebEngine runtime files (from `windeployqt`)
   - `app_resources/`: project detail/katex static assets
+- Runtime app style file in release output should be under:
+  - `app_resources/styles/app.qss`
+  - source path `src/ui/style/app.qss` is copied by `release_tool.py` as runtime asset, not as C++ source deployment
 - Do not remove `app_resources/detail` or `app_resources/katex` after running `windeployqt`.
 - License cryptographic verification is still not production-grade (TODO stubs remain).
 

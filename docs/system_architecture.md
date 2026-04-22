@@ -448,6 +448,7 @@ flowchart TD
   - `cmake --build --preset msvc-debug`
   - `powershell .\run-debug.ps1`
 - Release 同理（`run-release.ps1`）。
+- 发布打包主入口：`release_tool.py`（`deploy` / `verify` / `package` / `all`）。
 
 ### 9.2 关键依赖
 - Qt6 Widgets
@@ -552,5 +553,5 @@ flowchart TD
 ### 12.3 Skeleton / Planned
 
 - License signature verification and encrypted payload validation are still TODO stubs.
-- No installer-level automation is included in this change set (`windeployqt` is documented, not scripted in CMake).
+- CMake/CPack installer automation is still not implemented; current release packaging is handled by `release_tool.py`.
 

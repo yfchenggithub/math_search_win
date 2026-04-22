@@ -210,3 +210,14 @@
   - missing `license/` directory
   - invalid non-directory `license` path
 
+### 5.5 Release Packaging Entry
+
+- `release_tool.py` is the release packaging entry for deploy/verify/package.
+- Script responsibilities:
+  - copy release exe to `dist/<name>`
+  - call `windeployqt` for Qt runtime
+  - copy project resources (`data`, `app_resources`, `license`, optional `docs`)
+  - create `cache` directory (or copy by flag)
+  - map style runtime assets from `src/ui/style` to `app_resources/styles`
+  - validate critical runtime files before reporting success
+

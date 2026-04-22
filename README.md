@@ -153,29 +153,44 @@ Depending on Qt setup, include needed plugin folders such as:
 
 **Hard requirement: deploy `QtWebEngineProcess` and related WebEngine resources.**
 
-## 12. Recommended `windeployqt` Packaging
+## 12. Recommended Packaging Entry (`release_tool.py`)
 
 **Hard requirement: use `windeployqt` with the same Qt version used to build.**
 
-Example:
+Primary one-command release entry:
 
 ```powershell
-cmake --preset msvc-release
-cmake --build --preset msvc-release
-
-D:\Qt\6.11.0\msvc2022_64\bin\windeployqt.exe `
-  --release `
-  --compiler-runtime `
-  D:\work\math_search_win\out\build\msvc-release\Release\math_search_win.exe
+python .\release_tool.py --windeployqt D:\Qt\6.11.0\msvc2022_64\bin\windeployqt.exe deploy
 ```
 
-Then manually copy app-owned folders into release output:
+Full deploy + zip:
 
-- `app_resources/detail`
-- `app_resources/katex`
-- `data`
-- `license`
-- `cache`
+```powershell
+python .\release_tool.py --windeployqt D:\Qt\6.11.0\msvc2022_64\bin\windeployqt.exe all
+```
+
+The script performs:
+
+1. Locate release exe (default: `out/build/msvc-release/Release/math_search_win.exe`)
+2. Recreate `dist/<dist-name>/`
+3. Copy exe to dist
+4. Run `windeployqt --release --compiler-runtime`
+5. Copy project runtime resources:
+   - `data/`
+   - `app_resources/`
+   - `license/` (or create empty folder if source is missing)
+   - `docs/` (default enabled)
+   - `cache/` (default creates empty folder; use `--copy-cache-content` to copy existing cache)
+6. Map style runtime files from `src/ui/style` into `app_resources/styles` (for `AppPaths::appStylePath()`)
+7. Verify critical runtime dependencies and fail fast if missing
+
+Useful options:
+
+- `--build-dir`, `--exe-name`, `--exe-path`
+- `--dist-root`, `--dist-name`, `--zip-name`
+- `--windeployqt` or `--qt-bin-dir`
+- `--dry-run`, `--verbose`
+- `--skip-windeployqt` (troubleshooting only)
 
 ## 13. Recommended Release Folder Tree
 
@@ -204,12 +219,15 @@ MyApp/
         auto-render.min.js
       fonts/
         ...
+    styles/
+      app.qss
   data/
     backend_search_index.json
     canonical_content_v2.json
   license/
     license.dat                   # optional for trial-first release
   cache/
+  docs/                           # optional, enabled by default in release_tool.py
 ```
 
 ## 14. Manual Verification and Troubleshooting

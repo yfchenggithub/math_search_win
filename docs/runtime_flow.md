@@ -315,3 +315,20 @@ to `SearchPage::activateTextFallbackMode(...)`, which updates page status and sw
 
 into `BottomStatusBar::setDataStatusText(...)`, and marks version line as runtime abnormal when needed.
 
+### 6.5 Release Packaging Flow (`release_tool.py`)
+
+- Main release entry is `release_tool.py`.
+- Deploy flow:
+  1. resolve release exe path
+  2. recreate `dist/<dist-name>`
+  3. run `windeployqt` on copied exe
+  4. copy project resources (`data`, `app_resources`, `license`, optional `docs`)
+  5. initialize `cache/` directory
+  6. copy runtime style assets from `src/ui/style` to `app_resources/styles`
+  7. run post-deploy validation and fail on missing required files
+- Validation checks include:
+  - exe + key Qt runtime files (`platforms/qwindows.dll`, WebEngine resources)
+  - app detail/KaTeX resources
+  - app style file `app_resources/styles/app.qss`
+  - `data`, `cache`, `license` (and `docs` when enabled)
+

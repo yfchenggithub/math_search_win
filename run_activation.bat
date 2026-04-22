@@ -1,1 +1,1 @@
-python generate_activation_code.py --device 1155-EBFC-6EFC-8BD2  --serial LIC-2026-0001 --watermark WM-0001 --issued-at 2026-04-20 --expire-at 2026-04-20
+python generate_activation_code.py --device 63BF-DEF2-5417-9A56  --serial LIC-2026-0001 --watermark WM-0001 --issued-at 2026-04-20 --expire-at 2027-04-20
