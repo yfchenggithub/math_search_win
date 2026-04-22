@@ -332,8 +332,8 @@ void MainWindow::inspectRuntimeLayout()
     if (!status.dataDirExists) {
         statusTags.push_back(QStringLiteral("data 目录缺失"));
     }
-    if (!status.resourcesDirExists) {
-        statusTags.push_back(QStringLiteral("resources 目录缺失"));
+    if (!status.appResourcesDirExists) {
+        statusTags.push_back(QStringLiteral("app_resources 目录缺失"));
     }
     if (!status.cacheDirReady) {
         statusTags.push_back(QStringLiteral("cache 目录不可写"));

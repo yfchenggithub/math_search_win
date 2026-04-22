@@ -20,9 +20,19 @@ QString normalizePath(const QString& rawPath)
     return QDir::cleanPath(QDir::fromNativeSeparators(rawPath.trimmed()));
 }
 
+bool hasLegacyResourcesLayout(const QDir& dir)
+{
+    return dir.exists(QStringLiteral("resources/detail")) && dir.exists(QStringLiteral("resources/katex"));
+}
+
+bool hasAppResourcesLayout(const QDir& dir)
+{
+    return dir.exists(QStringLiteral("app_resources")) || hasLegacyResourcesLayout(dir);
+}
+
 bool hasReleaseLikeMarkers(const QDir& dir)
 {
-    if (dir.exists(QStringLiteral("resources"))) {
+    if (hasAppResourcesLayout(dir)) {
         return true;
     }
     return dir.exists(QStringLiteral("data")) || dir.exists(QStringLiteral("cache")) || dir.exists(QStringLiteral("license"));
@@ -30,7 +40,7 @@ bool hasReleaseLikeMarkers(const QDir& dir)
 
 bool hasDevLikeMarkers(const QDir& dir)
 {
-    return dir.exists(QStringLiteral("src")) && dir.exists(QStringLiteral("resources"));
+    return dir.exists(QStringLiteral("src")) && hasAppResourcesLayout(dir);
 }
 
 bool hasRootMarkers(const QDir& dir)
@@ -106,7 +116,7 @@ QString resolveAppRoot()
 
 bool RuntimeLayoutStatus::webResourcesReady() const
 {
-    return resourcesDirExists && detailDirExists && katexDirExists && detailTemplateExists;
+    return appResourcesDirExists && detailDirExists && katexDirExists && detailTemplateExists;
 }
 
 QString AppPaths::executableDir()
@@ -143,23 +153,41 @@ QString AppPaths::licenseDir()
     return path;
 }
 
-QString AppPaths::resourcesDir()
+QString AppPaths::appResourcesDir()
 {
-    const QString path = QDir(appRoot()).filePath(QStringLiteral("resources"));
-    LOG_DEBUG(LogCategory::FileIo, QStringLiteral("resourcesDir=%1").arg(path));
-    return path;
+    const QString rootPath = appRoot();
+    const QString appResourcesPath = QDir(rootPath).filePath(QStringLiteral("app_resources"));
+    const QFileInfo appResourcesInfo(appResourcesPath);
+    if (appResourcesInfo.exists() && appResourcesInfo.isDir()) {
+        LOG_DEBUG(LogCategory::FileIo, QStringLiteral("appResourcesDir=%1").arg(appResourcesPath));
+        return appResourcesPath;
+    }
+
+    const QString legacyResourcesPath = QDir(rootPath).filePath(QStringLiteral("resources"));
+    const QFileInfo legacyResourcesInfo(legacyResourcesPath);
+    const QDir legacyResourcesDir(legacyResourcesPath);
+    const bool legacyDetailReady = legacyResourcesDir.exists(QStringLiteral("detail"));
+    const bool legacyKatexReady = legacyResourcesDir.exists(QStringLiteral("katex"));
+    if (legacyResourcesInfo.exists() && legacyResourcesInfo.isDir() && legacyDetailReady && legacyKatexReady) {
+        LOG_WARN(LogCategory::Config,
+                 QStringLiteral("legacy resources dir detected; prefer app_resources path=%1").arg(legacyResourcesPath));
+        return legacyResourcesPath;
+    }
+
+    LOG_DEBUG(LogCategory::FileIo, QStringLiteral("appResourcesDir=%1").arg(appResourcesPath));
+    return appResourcesPath;
 }
 
 QString AppPaths::detailResourcesDir()
 {
-    const QString path = QDir(resourcesDir()).filePath(QStringLiteral("detail"));
+    const QString path = QDir(appResourcesDir()).filePath(QStringLiteral("detail"));
     LOG_DEBUG(LogCategory::FileIo, QStringLiteral("detailResourcesDir=%1").arg(path));
     return path;
 }
 
 QString AppPaths::katexDir()
 {
-    const QString path = QDir(resourcesDir()).filePath(QStringLiteral("katex"));
+    const QString path = QDir(appResourcesDir()).filePath(QStringLiteral("katex"));
     LOG_DEBUG(LogCategory::FileIo, QStringLiteral("katexDir=%1").arg(path));
     return path;
 }
@@ -176,6 +204,8 @@ QString AppPaths::appStylePath()
     QDir probe(appRoot());
     for (int depth = 0; depth <= 10; ++depth) {
         const QStringList candidates = {
+            probe.filePath(QStringLiteral("app_resources/styles/app.qss")),
+            probe.filePath(QStringLiteral("app_resources/style/app.qss")),
             probe.filePath(QStringLiteral("resources/styles/app.qss")),
             probe.filePath(QStringLiteral("resources/style/app.qss")),
             probe.filePath(QStringLiteral("src/ui/style/app.qss")),
@@ -238,7 +268,7 @@ RuntimeLayoutStatus AppPaths::inspectRuntimeLayout(bool ensureCacheDirIfMissing)
     status.dataDir = dataDir();
     status.cacheDir = cacheDir();
     status.licenseDir = licenseDir();
-    status.resourcesDir = resourcesDir();
+    status.appResourcesDir = appResourcesDir();
     status.detailDir = detailResourcesDir();
     status.katexDir = katexDir();
     status.detailTemplatePath = detailTemplatePath();
@@ -249,10 +279,10 @@ RuntimeLayoutStatus AppPaths::inspectRuntimeLayout(bool ensureCacheDirIfMissing)
         status.errors.push_back(QStringLiteral("data directory missing: %1").arg(status.dataDir));
     }
 
-    const QFileInfo resourcesInfo(status.resourcesDir);
-    status.resourcesDirExists = resourcesInfo.exists() && resourcesInfo.isDir();
-    if (!status.resourcesDirExists) {
-        status.errors.push_back(QStringLiteral("resources directory missing: %1").arg(status.resourcesDir));
+    const QFileInfo appResourcesInfo(status.appResourcesDir);
+    status.appResourcesDirExists = appResourcesInfo.exists() && appResourcesInfo.isDir();
+    if (!status.appResourcesDirExists) {
+        status.errors.push_back(QStringLiteral("app_resources directory missing: %1").arg(status.appResourcesDir));
     }
 
     const QFileInfo detailInfo(status.detailDir);
@@ -296,13 +326,13 @@ RuntimeLayoutStatus AppPaths::inspectRuntimeLayout(bool ensureCacheDirIfMissing)
     }
 
     LOG_INFO(LogCategory::Config,
-             QStringLiteral("runtime layout root=%1 exe_dir=%2 data=%3 cache=%4 license=%5 resources=%6 detail=%7 katex=%8 template=%9")
+             QStringLiteral("runtime layout root=%1 exe_dir=%2 data=%3 cache=%4 license=%5 app_resources=%6 detail=%7 katex=%8 template=%9")
                  .arg(status.appRoot,
                       status.executableDir,
                       status.dataDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
                       status.cacheDirReady ? QStringLiteral("ready") : QStringLiteral("missing"),
                       status.licenseDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
-                      status.resourcesDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
+                      status.appResourcesDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
                       status.detailDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
                       status.katexDirExists ? QStringLiteral("ready") : QStringLiteral("missing"),
                       status.detailTemplateExists ? QStringLiteral("ready") : QStringLiteral("missing")));

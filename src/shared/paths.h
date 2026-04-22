@@ -9,14 +9,14 @@ struct RuntimeLayoutStatus {
     QString dataDir;
     QString cacheDir;
     QString licenseDir;
-    QString resourcesDir;
+    QString appResourcesDir;
     QString detailDir;
     QString katexDir;
     QString detailTemplatePath;
     bool dataDirExists = false;
     bool cacheDirReady = false;
     bool licenseDirExists = false;
-    bool resourcesDirExists = false;
+    bool appResourcesDirExists = false;
     bool detailDirExists = false;
     bool katexDirExists = false;
     bool detailTemplateExists = false;
@@ -33,7 +33,7 @@ public:
     static QString dataDir();
     static QString cacheDir();
     static QString licenseDir();
-    static QString resourcesDir();
+    static QString appResourcesDir();
     static QString detailResourcesDir();
     static QString katexDir();
     static QString detailTemplatePath();

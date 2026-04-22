@@ -912,7 +912,7 @@ void SearchPage::resetToEmptyState()
         const QString reason = detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
                                                               : detailHtmlRenderer_->lastError().trimmed();
         updateStatusLine(QStringLiteral("详情页已切换兼容模式。"),
-                         QStringLiteral("请检查 resources/detail 与 resources/katex。"));
+                         QStringLiteral("请检查 app_resources/detail 与 app_resources/katex。"));
         updateDetailShellMeta(QStringLiteral("兼容模式：Web 资源不可用"), QStringLiteral("warning"));
         LOG_WARN(LogCategory::WebViewKatex,
                  QStringLiteral("detail empty_state fallback reason=%1")

@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "license/feature_gate.h"
 #include "license/license_service.h"
 
@@ -36,7 +36,7 @@ public:
         }
 
         QDir root(rootPath_);
-        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources"))) {
+        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("app_resources"))) {
             return;
         }
 
@@ -57,7 +57,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"));
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"));
     }
 
 private:
@@ -300,4 +300,5 @@ void LicenseServiceTest::reload_invalidThenValid_transitionsAndEmitsSignals()
 QTEST_APPLESS_MAIN(LicenseServiceTest)
 
 #include "test_license_service.moc"
+
 

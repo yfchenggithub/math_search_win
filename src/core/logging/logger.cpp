@@ -103,7 +103,10 @@ QString normalizePath(const QString& rawPath)
 
 bool hasProjectMarkers(const QDir& dir)
 {
-    return dir.exists(QStringLiteral("src")) && dir.exists(QStringLiteral("resources"));
+    const bool hasAppResources = dir.exists(QStringLiteral("app_resources"));
+    const bool hasLegacyResources =
+        dir.exists(QStringLiteral("resources/detail")) && dir.exists(QStringLiteral("resources/katex"));
+    return dir.exists(QStringLiteral("src")) && (hasAppResources || hasLegacyResources);
 }
 
 QString detectProjectRoot()
@@ -175,6 +178,7 @@ QString compactPathInternal(const QString& rawPath,
 
     static const QStringList kKeepMarkers = {
         QStringLiteral("/src/"),
+        QStringLiteral("/app_resources/"),
         QStringLiteral("/resources/"),
         QStringLiteral("/data/"),
         QStringLiteral("/cache/"),

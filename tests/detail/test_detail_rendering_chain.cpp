@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "domain/adapters/conclusion_detail_adapter.h"
 #include "ui/detail/detail_fallback_content_builder.h"
 #include "ui/detail/detail_html_renderer.h"
@@ -103,19 +103,19 @@ bool setupRendererSandbox(const QString& rootPath,
                           bool includeKatexFontProbe)
 {
     QDir root(rootPath);
-    if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources/detail"))
-        || !root.mkpath(QStringLiteral("resources/katex/contrib"))
-        || !root.mkpath(QStringLiteral("resources/katex/fonts"))) {
+    if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("app_resources/detail"))
+        || !root.mkpath(QStringLiteral("app_resources/katex/contrib"))
+        || !root.mkpath(QStringLiteral("app_resources/katex/fonts"))) {
         return false;
     }
 
-    const QString detailTemplatePath = root.filePath(QStringLiteral("resources/detail/detail_template.html"));
-    const QString detailCssPath = root.filePath(QStringLiteral("resources/detail/detail.css"));
-    const QString detailJsPath = root.filePath(QStringLiteral("resources/detail/detail.js"));
-    const QString katexCssPath = root.filePath(QStringLiteral("resources/katex/katex.min.css"));
-    const QString katexJsPath = root.filePath(QStringLiteral("resources/katex/katex.min.js"));
-    const QString katexAutoRenderPath = root.filePath(QStringLiteral("resources/katex/contrib/auto-render.min.js"));
-    const QString katexFontProbePath = root.filePath(QStringLiteral("resources/katex/fonts/KaTeX_Main-Regular.woff2"));
+    const QString detailTemplatePath = root.filePath(QStringLiteral("app_resources/detail/detail_template.html"));
+    const QString detailCssPath = root.filePath(QStringLiteral("app_resources/detail/detail.css"));
+    const QString detailJsPath = root.filePath(QStringLiteral("app_resources/detail/detail.js"));
+    const QString katexCssPath = root.filePath(QStringLiteral("app_resources/katex/katex.min.css"));
+    const QString katexJsPath = root.filePath(QStringLiteral("app_resources/katex/katex.min.js"));
+    const QString katexAutoRenderPath = root.filePath(QStringLiteral("app_resources/katex/contrib/auto-render.min.js"));
+    const QString katexFontProbePath = root.filePath(QStringLiteral("app_resources/katex/fonts/KaTeX_Main-Regular.woff2"));
 
     if (includeDetailTemplate
         && !writeUtf8File(detailTemplatePath,
@@ -454,3 +454,4 @@ void DetailRenderingChainTest::perfAggregator_keyPhasesRecorded_andLifecycleStab
 QTEST_APPLESS_MAIN(DetailRenderingChainTest)
 
 #include "test_detail_rendering_chain.moc"
+

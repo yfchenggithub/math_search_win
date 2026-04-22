@@ -1,4 +1,4 @@
-# math_search_win
+﻿# math_search_win
 
 ## 1. Project Overview
 
@@ -16,7 +16,7 @@ This repository targets MVP release hardening: runnability, packageability, and 
 ```text
 math_search_win/
   src/                            # C++ source code
-  resources/
+  app_resources/
     detail/                       # detail HTML/CSS/JS template assets
       detail_template.html
       detail.css
@@ -49,9 +49,9 @@ powershell .\run-debug.ps1
 At startup the app now performs runtime layout checks for:
 
 - `data`
-- `resources`
-- `resources/detail`
-- `resources/katex`
+- `app_resources`
+- `app_resources/detail`
+- `app_resources/katex`
 - `license`
 - `cache`
 
@@ -64,10 +64,10 @@ Runtime paths are resolved from app root (`AppPaths`) with stable folder contrac
 - `data/` for business/index/content data
 - `license/` for license file(s)
 - `cache/` for writable runtime state
-- `resources/` for read-only static assets
+- `app_resources/` for read-only app static assets
 
 If `cache/` is missing, the app tries to create it.
-If `data/` or `resources/` is missing, startup status and page-level messages show explicit errors.
+If `data/` or `app_resources/` is missing, startup status and page-level messages show explicit errors.
 
 ## 5. `data` Folder
 
@@ -93,12 +93,12 @@ If `data/` or `resources/` is missing, startup status and page-level messages sh
 - Safe to recreate.
 - Must not store read-only static assets.
 
-## 8. `resources` Folder
+## 8. `app_resources` Folder
 
 - Read-only static assets.
 - Current critical assets:
-  - `resources/detail/*`
-  - `resources/katex/*`
+  - `app_resources/detail/*`
+  - `app_resources/katex/*`
 - Runtime user data must not be written here.
 
 ## 9. WebEngine Local Resource Notes
@@ -106,7 +106,7 @@ If `data/` or `resources/` is missing, startup status and page-level messages sh
 Detail page is loaded as local file:
 
 - `QWebEngineView::load(QUrl::fromLocalFile(...))`
-- template: `resources/detail/detail_template.html`
+- template: `app_resources/detail/detail_template.html`
 - relative subresources:
   - `./detail.css`
   - `./detail.js`
@@ -114,7 +114,7 @@ Detail page is loaded as local file:
 
 Hardening behavior:
 
-- missing template/resources are detected at renderer init
+- missing template/app_resources are detected at renderer init
 - load/render failure triggers fallback mode
 - fallback status is visible in page UI, not only in logs
 
@@ -122,10 +122,10 @@ Hardening behavior:
 
 Detail math rendering depends on local KaTeX:
 
-- `resources/katex/katex.min.css`
-- `resources/katex/katex.min.js`
-- `resources/katex/contrib/auto-render.min.js`
-- `resources/katex/fonts/...`
+- `app_resources/katex/katex.min.css`
+- `app_resources/katex/katex.min.js`
+- `app_resources/katex/contrib/auto-render.min.js`
+- `app_resources/katex/fonts/...`
 
 **Hard requirement: KaTeX is local-only; do not use CDN.**
 
@@ -138,8 +138,8 @@ Release delivery must include:
 - `platforms/qwindows.dll`
 - `QtWebEngineProcess.exe`
 - Qt WebEngine resource files
-- app `resources/detail/...`
-- app `resources/katex/...`
+- app `app_resources/detail/...`
+- app `app_resources/katex/...`
 - `data/`
 - `license/`
 - `cache/`
@@ -171,8 +171,8 @@ D:\Qt\6.11.0\msvc2022_64\bin\windeployqt.exe `
 
 Then manually copy app-owned folders into release output:
 
-- `resources/detail`
-- `resources/katex`
+- `app_resources/detail`
+- `app_resources/katex`
 - `data`
 - `license`
 - `cache`
@@ -189,9 +189,10 @@ MyApp/
   QtWebEngineProcess.exe
   platforms/
     qwindows.dll
-  resources/                      # both Qt WebEngine files + app static assets
+  resources/                      # Qt WebEngine runtime files from windeployqt
     icudtl.dat
     qtwebengine_*.pak
+  app_resources/                  # app-owned detail/katex static assets
     detail/
       detail_template.html
       detail.css
@@ -218,8 +219,8 @@ Minimum manual checks before shipment:
 1. First launch succeeds.
 2. Missing `data/` shows clear startup/page errors.
 3. Missing `license/` or `license.dat` shows clear trial status.
-4. Missing `resources/detail/` shows clear detail fallback message.
-5. Missing `resources/katex/` shows clear formula/fallback message.
+4. Missing `app_resources/detail/` shows clear detail fallback message.
+5. Missing `app_resources/katex/` shows clear formula/fallback message.
 6. Search empty-input state is correct.
 7. Search no-result state is correct.
 8. Detail unselected state is correct.
@@ -230,7 +231,8 @@ Minimum manual checks before shipment:
 
 Common checks:
 
-- detail white screen: verify `resources/detail` and `resources/katex`
+- detail white screen: verify `app_resources/detail` and `app_resources/katex`
 - formula not rendering: verify KaTeX css/js/contrib/fonts are all present
 - license issues: verify `license/license.dat`, binding, and expiry fields
 - favorites/history not saving: verify `cache/` exists and is writable
+

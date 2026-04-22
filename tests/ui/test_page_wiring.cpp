@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "domain/repositories/favorites_repository.h"
 #include "domain/repositories/history_repository.h"
 #include "ui/pages/favorites_page.h"
@@ -38,7 +38,7 @@ public:
         }
 
         QDir root(rootPath_);
-        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources"))) {
+        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("app_resources"))) {
             rootPath_.clear();
             return;
         }
@@ -60,7 +60,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"));
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"));
     }
 
 private:
@@ -228,3 +228,4 @@ void PageWiringTest::favoritesPage_openAndUnfavorite_emitSignalsAndRefresh()
 QTEST_MAIN(PageWiringTest)
 
 #include "test_page_wiring.moc"
+

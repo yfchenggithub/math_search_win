@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "license/activation_code_service.h"
 #include "license/device_fingerprint_service.h"
 #include "license/license_service.h"
@@ -46,7 +46,7 @@ public:
         QDir root(rootPath_);
         const QStringList requiredDirs = {
             QStringLiteral("src"),
-            QStringLiteral("resources"),
+            QStringLiteral("app_resources"),
             QStringLiteral("data"),
             QStringLiteral("cache"),
             QStringLiteral("license"),
@@ -75,7 +75,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"))
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"))
             && QDir(rootPath_).exists(QStringLiteral("cache"))
             && QDir(rootPath_).exists(QStringLiteral("license"));
     }
@@ -189,3 +189,4 @@ void SettingsActivationRound5UiTest::activationPage_keyButtonsKeepStableAndStatu
 QTEST_MAIN(SettingsActivationRound5UiTest)
 
 #include "test_settings_activation_round5.moc"
+

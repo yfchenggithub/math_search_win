@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "license/activation_code_service.h"
 #include "license/feature_gate.h"
 #include "license/license_service.h"
@@ -41,7 +41,7 @@ public:
         }
 
         QDir root(rootPath_);
-        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources"))) {
+        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("app_resources"))) {
             return;
         }
 
@@ -62,7 +62,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"));
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"));
     }
 
 private:
@@ -331,4 +331,5 @@ void ActivationCodeServiceTest::buildLicenseFileContent_outputsExpectedKeyValueR
 QTEST_APPLESS_MAIN(ActivationCodeServiceTest)
 
 #include "test_activation_code_service.moc"
+
 

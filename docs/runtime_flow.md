@@ -120,7 +120,7 @@ sequenceDiagram
   participant DRP as DetailRenderPathResolver
   participant DP as DetailPane
   participant FB as DetailFallbackContentBuilder
-  participant JS as resources/detail/detail.js
+  participant JS as app_resources/detail/detail.js
 
   U->>SP: 选中结果项
   SP->>SP: onResultSelectionChanged()
@@ -282,8 +282,8 @@ New startup behavior:
 - `main.cpp` calls `AppPaths::inspectRuntimeLayout(true)`
 - logs explicit errors/warnings for:
   - missing `data`
-  - missing `resources`
-  - missing `resources/detail` or `resources/katex`
+  - missing `app_resources`
+  - missing `app_resources/detail` or `app_resources/katex`
   - missing `license`
   - cache directory readiness
 
@@ -314,3 +314,4 @@ to `SearchPage::activateTextFallbackMode(...)`, which updates page status and sw
 - runtime directory check summary
 
 into `BottomStatusBar::setDataStatusText(...)`, and marks version line as runtime abnormal when needed.
+

@@ -26,7 +26,7 @@
 - 收藏页筛选按钮（文案“筛选（即将支持）”）当前无实际逻辑。
 - 激活页“查看升级方案”仅弹窗提示“暂未接入在线升级流程”。
 - 设置页“扩展预留”区块是说明性预留。
-- `src/app`、`resources/web` 目录当前为空占位。
+- `src/app` 目录当前为空占位。
 
 #### 规划中（代码中有明确文案或 TODO）
 - License/Activation 真实签名体系接入（`Ed25519/ECDSA`）与 payload 加密协议。
@@ -41,7 +41,7 @@
 ### 2.1 根目录关键目录
 - `src/`：主代码。
 - `data/`：运行时搜索索引与内容数据。
-- `resources/`：详情模板、KaTeX 资源、静态资源。
+- `app_resources/`：详情模板、KaTeX 资源、静态资源。
 - `cache/`：收藏/历史/设置本地持久化。
 - `license/`：`license.dat` 文件目录。
 - `tests/`：单元测试与页面 wiring 测试。
@@ -104,10 +104,10 @@ flowchart LR
     DFB[DetailFallbackContentBuilder]
     DHR[DetailHtmlRenderer]
     DP[DetailPane]
-    HTML[resources/detail/detail_template.html]
-    JS[resources/detail/detail.js]
-    CSS[resources/detail/detail.css]
-    KATEX[resources/katex/*]
+    HTML[app_resources/detail/detail_template.html]
+    JS[app_resources/detail/detail.js]
+    CSS[app_resources/detail/detail.css]
+    KATEX[app_resources/katex/*]
   end
 
   subgraph Data[本地资源/持久化]
@@ -306,10 +306,10 @@ flowchart TD
   - `DetailFallbackContentBuilder::buildFallbackHtml/buildTrialPreviewHtml()`（文本回退和 trial 预览分支）
   - `DetailHtmlRenderer::buildRenderScript()` -> `window.DetailRuntime.renderDetail(...)`
 - Web 资源装配：
-  - `resources/detail/detail_template.html`
-  - `resources/detail/detail.js`
-  - `resources/detail/detail.css`
-  - `resources/katex/*`
+  - `app_resources/detail/detail_template.html`
+  - `app_resources/detail/detail.js`
+  - `app_resources/detail/detail.css`
+  - `app_resources/katex/*`
 - 回退机制：
   - Web 模式不可用或失败 -> `activateTextFallbackMode()` + `renderDetailInFallbackBrowser()`。
 - 性能链路：
@@ -423,10 +423,10 @@ flowchart TD
 - 授权：`license/license.dat`。
 
 ### 8.2 详情渲染资源
-- HTML：`resources/detail/detail_template.html`
-- JS：`resources/detail/detail.js`
-- CSS：`resources/detail/detail.css`
-- KaTeX：`resources/katex/*`
+- HTML：`app_resources/detail/detail_template.html`
+- JS：`app_resources/detail/detail.js`
+- CSS：`app_resources/detail/detail.css`
+- KaTeX：`app_resources/katex/*`
 
 ### 8.3 内容与索引边界
 - 索引仓库负责“可检索字段与倒排命中”。
@@ -434,8 +434,8 @@ flowchart TD
 - 搜索结果列表主要来自索引；详情正文来自内容。
 
 ### 8.4 运行时资源查找
-- 通过 `AppPaths::appRoot()/dataDir()/cacheDir()/licenseDir()` 解析。
-- `DetailHtmlRenderer` 在 `resources/detail` 与 `resources/katex` 做存在性校验。
+- 通过 `AppPaths::appRoot()/dataDir()/cacheDir()/licenseDir()/appResourcesDir()` 解析。
+- `DetailHtmlRenderer` 在 `app_resources/detail` 与 `app_resources/katex` 做存在性校验。
 
 ---
 
@@ -452,11 +452,11 @@ flowchart TD
 ### 9.2 关键依赖
 - Qt6 Widgets
 - Qt6 WebEngineWidgets
-- 本地 `resources/` 与 `data/` 目录
+- 本地 `app_resources/` 与 `data/` 目录
 
 ### 9.3 常见失败原因
 - `data/*.json` 缺失或格式异常。
-- `resources/detail` 或 `resources/katex` 缺失导致 Web 详情退化。
+- `app_resources/detail` 或 `app_resources/katex` 缺失导致 Web 详情退化。
 - WebEngine 环境问题导致详情回退文本模式。
 - `license/license.dat` 非法导致降级 trial。
 
@@ -516,7 +516,7 @@ flowchart TD
 
 ### 按改动目标快速定位
 - 改搜索逻辑：`SearchPage::runSearch` + `SearchService::search` + `ConclusionIndexRepository`。
-- 改详情渲染：`SearchPage::renderDetailForRequest` + `ui/detail/*` + `resources/detail/*`。
+- 改详情渲染：`SearchPage::renderDetailForRequest` + `ui/detail/*` + `app_resources/detail/*`。
 - 改本地存储：`LocalStorageService` + `FavoritesRepository/HistoryRepository/SettingsRepository`。
 - 改授权：`ActivationPage` + `ActivationCodeService` + `LicenseService` + `FeatureGate`。
 
@@ -530,7 +530,7 @@ flowchart TD
 - `AppPaths` now resolves:
   - executable dir
   - app root
-  - `data`, `license`, `cache`, `resources`
+  - `data`, `license`, `cache`, `app_resources`
   - detail template and KaTeX folders
 - Startup runtime checks were added in:
   - `src/main.cpp`
@@ -553,3 +553,4 @@ flowchart TD
 
 - License signature verification and encrypted payload validation are still TODO stubs.
 - No installer-level automation is included in this change set (`windeployqt` is documented, not scripted in CMake).
+

@@ -38,7 +38,7 @@ powershell .\run-debug.ps1
 3. `src/ui/pages/search_page.h/.cpp`
 4. `src/domain/services/search_service.cpp`
 5. `src/domain/services/suggest_service.cpp`
-6. `src/ui/detail/detail_pane.cpp` + `resources/detail/detail.js`
+6. `src/ui/detail/detail_pane.cpp` + `app_resources/detail/detail.js`
 7. `src/domain/repositories/*_repository.cpp`
 8. `src/license/license_service.cpp` + `src/ui/pages/activation_page.cpp`
 
@@ -64,7 +64,7 @@ powershell .\run-debug.ps1
 - 分支决策：
   - `DetailRenderPathResolver::resolve()` 决定 `TrialPreview / Web / FallbackText`
 - 渲染模式：
-  - Web 模式：`DetailPane` + `resources/detail/detail_template.html` + `detail.js` + `katex`
+  - Web 模式：`DetailPane` + `app_resources/detail/detail_template.html` + `detail.js` + `katex`
   - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser` + `DetailFallbackContentBuilder::buildFallbackHtml`）
   - Trial 预览：`showTrialDetailPreview` + `DetailFallbackContentBuilder::buildTrialPreviewHtml`
 - 并发与抖动控制：
@@ -113,7 +113,7 @@ powershell .\run-debug.ps1
 
 ### KaTeX / WebEngine 渲染异常怎么办
 - 先看 `DetailHtmlRenderer::isReady/lastError`。
-- 确认 `resources/detail/*` 与 `resources/katex/*` 存在。
+- 确认 `app_resources/detail/*` 与 `app_resources/katex/*` 存在。
 - 断点 `DetailPane::onShellLoadFinished`、`dispatchNow`。
 - 看 `SearchPage::activateTextFallbackMode` 是否被触发（说明已回退文本模式）。
 
@@ -162,7 +162,7 @@ powershell .\run-debug.ps1
 - Startup now runs explicit runtime layout checks and shows status in UI.
 - WebEngine runtime cache/storage moved under `cache/webengine`.
 - Detail rendering fallback messages are now user-visible for:
-  - missing template/resources
+  - missing template/app_resources
   - shell load failure
   - JS runtime failure
 - License reload now explicitly handles missing/invalid `license` directory path.
@@ -180,8 +180,9 @@ powershell .\run-debug.ps1
 
 ### 11.3 Handover cautions
 
-- `resources/` now serves two roles in release output:
-  - Qt WebEngine runtime files (from `windeployqt`)
-  - project detail/katex static assets
-- Do not remove `resources/detail` or `resources/katex` after running `windeployqt`.
+- Release output now has separate folders:
+  - `resources/`: Qt WebEngine runtime files (from `windeployqt`)
+  - `app_resources/`: project detail/katex static assets
+- Do not remove `app_resources/detail` or `app_resources/katex` after running `windeployqt`.
 - License cryptographic verification is still not production-grade (TODO stubs remain).
+

@@ -14,7 +14,7 @@ namespace ui::detail {
 
 DetailHtmlRenderer::DetailHtmlRenderer()
 {
-    const QString resourcesRoot = AppPaths::resourcesDir();
+    const QString resourcesRoot = AppPaths::appResourcesDir();
     detailDirectory_ = AppPaths::detailResourcesDir();
     detailTemplatePath_ = AppPaths::detailTemplatePath();
 
@@ -26,7 +26,7 @@ DetailHtmlRenderer::DetailHtmlRenderer()
     const QString detailJsPath = QDir(detailDirectory_).filePath(QStringLiteral("detail.js"));
 
     LOG_DEBUG(LogCategory::WebViewKatex,
-              QStringLiteral("renderer init app_root=%1 resources=%2 detail_dir=%3")
+              QStringLiteral("renderer init app_root=%1 app_resources=%2 detail_dir=%3")
                   .arg(AppPaths::appRoot(), resourcesRoot, detailDirectory_));
 
     const QStringList requiredFiles = {

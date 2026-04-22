@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "license/activation_code_service.h"
 #include "license/device_fingerprint_service.h"
 #include "license/license_service.h"
@@ -45,7 +45,7 @@ public:
         }
 
         QDir root(rootPath_);
-        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources"))) {
+        if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("app_resources"))) {
             return;
         }
 
@@ -66,7 +66,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"));
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"));
     }
 
 private:
@@ -388,4 +388,5 @@ void ActivationPageTest::page_withNullServices_staysStableAndShowsUnknownThenErr
 QTEST_MAIN(ActivationPageTest)
 
 #include "test_activation_page.moc"
+
 

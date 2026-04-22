@@ -1,4 +1,4 @@
-#include "core/logging/logger.h"
+﻿#include "core/logging/logger.h"
 #include "domain/adapters/conclusion_detail_adapter.h"
 #include "domain/repositories/favorites_repository.h"
 #include "domain/repositories/history_repository.h"
@@ -131,7 +131,7 @@ public:
         QDir root(rootPath_);
         const QStringList requiredDirs = {
             QStringLiteral("src"),
-            QStringLiteral("resources"),
+            QStringLiteral("app_resources"),
             QStringLiteral("data"),
             QStringLiteral("cache"),
             QStringLiteral("license"),
@@ -160,7 +160,7 @@ public:
     {
         return !rootPath_.isEmpty()
             && QDir(rootPath_).exists(QStringLiteral("src"))
-            && QDir(rootPath_).exists(QStringLiteral("resources"))
+            && QDir(rootPath_).exists(QStringLiteral("app_resources"))
             && QDir(rootPath_).exists(QStringLiteral("data"))
             && QDir(rootPath_).exists(QStringLiteral("cache"))
             && QDir(rootPath_).exists(QStringLiteral("license"));
@@ -495,3 +495,4 @@ void MainWindowRound5Test::crossPage_favoritesOpenEntry_navigatesToSearchDetail(
 QTEST_MAIN(MainWindowRound5Test)
 
 #include "test_main_window_round5.moc"
+

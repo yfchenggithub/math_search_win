@@ -11,8 +11,8 @@
 | `src/infrastructure/storage` | 本地 JSON 读写与原子写盘。 |
 | `src/license` | 激活、license 校验、功能门控。 |
 | `src/ui/detail` | 详情渲染协同（请求管理、分支决策、payload 映射、fallback HTML 组装、shell 分发、性能聚合）。 |
-| `resources/detail` | 详情模板、样式、JS 运行时。 |
-| `resources/katex` | 数学公式渲染依赖。 |
+| `app_resources/detail` | 详情模板、样式、JS 运行时。 |
+| `app_resources/katex` | 数学公式渲染依赖。 |
 | `data` | 运行时业务数据（内容 + 索引）。 |
 | `cache` | 运行时持久化数据（收藏/历史/设置）。 |
 | `tests` | 搜索、建议、存储、授权、页面 wiring、详情性能与详情链路行为测试。 |
@@ -96,7 +96,7 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `DetailHtmlRenderer` | `src/ui/detail/detail_html_renderer.h/.cpp` | 校验资源完整性，生成 JS init/render 脚本 | `SearchPage`、`DetailPane` | `resources/detail`、`resources/katex` | `isReady`、`buildInitScript`、`buildRenderScript` |
+| `DetailHtmlRenderer` | `src/ui/detail/detail_html_renderer.h/.cpp` | 校验资源完整性，生成 JS init/render 脚本 | `SearchPage`、`DetailPane` | `app_resources/detail`、`app_resources/katex` | `isReady`、`buildInitScript`、`buildRenderScript` |
 | `DetailRenderCoordinator` | `src/ui/detail/detail_render_coordinator.h/.cpp` | 请求 ID、stale 判断、已渲染去重 | `SearchPage` | 时间戳 | `createRequest`、`isRequestStale`、`markRendered` |
 | `DetailRenderPathResolver` | `src/ui/detail/detail_render_path_resolver.h/.cpp` | 详情分支决策（Trial / Web / Fallback） | `SearchPage` | 功能门控状态 + Web 可用性 | `resolve` |
 | `DetailViewDataMapper` | `src/ui/detail/detail_view_data_mapper.h/.cpp` | 详情 ViewData -> Web payload | `SearchPage` | `ConclusionDetailViewData` | `buildContentPayload`、`buildEmptyPayload`、`buildErrorPayload` |
@@ -116,7 +116,7 @@
 | `src/domain/services/search_service.cpp` | 搜索算法核心 | 影响命中质量和排序结果 |
 | `src/domain/services/suggest_service.cpp` | 建议算法核心 | 影响输入联想与点击转化 |
 | `src/ui/detail/detail_pane.cpp` | Web 渲染分发桥 | 影响详情是否展示、是否回退 |
-| `resources/detail/detail.js` | 详情前端运行时 | 影响渲染性能与公式显示 |
+| `app_resources/detail/detail.js` | 详情前端运行时 | 影响渲染性能与公式显示 |
 | `src/infrastructure/storage/local_storage_service.cpp` | 统一落盘入口 | 影响收藏/历史/设置持久化稳定性 |
 | `src/license/license_service.cpp` | 授权状态机 | 影响 trial/full 判定和功能开放 |
 | `src/license/activation_code_service.cpp` | 激活码校验核心 | 影响激活成功率和安全性 |
@@ -139,7 +139,7 @@
 ### 改详情模板与渲染
 - C++ 调度：`SearchPage::renderDetailForRequest`、`DetailPane`
 - payload 映射：`DetailViewDataMapper`
-- 前端模板：`resources/detail/detail_template.html` / `detail.js` / `detail.css`
+- 前端模板：`app_resources/detail/detail_template.html` / `detail.js` / `detail.css`
 
 ### 改收藏持久化
 - 业务仓库：`FavoritesRepository`
@@ -171,7 +171,7 @@
 ### 查日志和性能问题
 - `core/logging/logger.h/.cpp`
 - `LogCategory` 分类：`search.engine`、`detail.render`、`perf.*`、`file.io`
-- 详情性能：`DetailPerfAggregator` + `resources/detail/detail.js` perf 事件
+- 详情性能：`DetailPerfAggregator` + `app_resources/detail/detail.js` perf 事件
 
 ---
 
@@ -209,3 +209,4 @@
 - `src/license/license_service.cpp` now explicitly handles:
   - missing `license/` directory
   - invalid non-directory `license` path
+
