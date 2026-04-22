@@ -269,6 +269,7 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
     const QSet<QString> tagFilter = toLowerSet(options.tagFilter);
     const FieldMaskLegend& legend = repository_->fieldMaskLegend();
     const QString scoringQuery = result.normalizedQuery.isEmpty() ? compactRawQuery : result.normalizedQuery;
+    const QString requiredPrefix = result.normalizedQuery;
 
     QHash<QString, ScoredSuggestion> dedupedByNormalizedText;
     QVector<ScoredSuggestion> undeduped;
@@ -276,6 +277,9 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
 
     const auto acceptSuggestion = [&](ScoredSuggestion candidate) {
         if (candidate.item.normalizedText.isEmpty()) {
+            return;
+        }
+        if (!candidate.item.normalizedText.startsWith(requiredPrefix, Qt::CaseInsensitive)) {
             return;
         }
 

@@ -62,6 +62,9 @@ private slots:
     void emptyQuery_returnsEmpty_data();
     void emptyQuery_returnsEmpty();
 
+    void prefixHardFilter_onlyStartsWith_data();
+    void prefixHardFilter_onlyStartsWith();
+
     void prefixSuggestions_basicBehavior();
     void termSupplement_worksWhenPrefixDisabled();
     void dedupStrategy_removesDuplicateTextWhenEnabled();
@@ -116,7 +119,43 @@ void SuggestServiceTest::emptyQuery_returnsEmpty()
              qPrintable(makeFailureContext(QStringLiteral("empty/blank query should return empty suggestions"),
                                            query,
                                            options,
-                                           result)));
+                                            result)));
+}
+
+void SuggestServiceTest::prefixHardFilter_onlyStartsWith_data()
+{
+    QTest::addColumn<QString>("query");
+
+    QTest::newRow("prefix-bu-char") << QStringLiteral("\u4e0d");
+    QTest::newRow("prefix-mean-inequality") << QStringLiteral("\u5747\u503c");
+    QTest::newRow("prefix-function") << QStringLiteral("\u51fd\u6570");
+    QTest::newRow("prefix-derivative") << QStringLiteral("\u5bfc\u6570");
+    QTest::newRow("prefix-circle") << QStringLiteral("\u5706");
+}
+
+void SuggestServiceTest::prefixHardFilter_onlyStartsWith()
+{
+    QFETCH(QString, query);
+
+    domain::models::SuggestOptions options;
+    options.maxResults = 20;
+    const auto result = service_.suggest(query, options);
+    QVERIFY2(result.total > 0 && !result.items.isEmpty(),
+             qPrintable(makeFailureContext(QStringLiteral("fixture prefix query should produce suggestions"), query, options, result)));
+
+    const QString normalizedQuery = domain::models::normalizeQueryText(query);
+    for (const auto& item : result.items) {
+        const bool startsWithPrefix = item.normalizedText.startsWith(normalizedQuery, Qt::CaseInsensitive);
+        QVERIFY2(startsWithPrefix,
+                 qPrintable(QStringLiteral("%1; offending_suggestion=%2; normalized=%3; normalized_query=%4")
+                                .arg(makeFailureContext(QStringLiteral("every suggestion must start with query prefix"),
+                                                        query,
+                                                        options,
+                                                        result),
+                                     item.text,
+                                     item.normalizedText,
+                                     normalizedQuery)));
+    }
 }
 
 void SuggestServiceTest::prefixSuggestions_basicBehavior()
