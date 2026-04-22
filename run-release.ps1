@@ -6,9 +6,16 @@ chcp 65001 | Out-Null
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$exePath = Join-Path $repoRoot "out\build\msvc-release\Release\math_search_win.exe"
+
+if (-not (Test-Path -LiteralPath $exePath)) {
+    throw "Release executable not found: $exePath"
+}
+
 $env:PATH = "D:\Qt\6.11.0\msvc2022_64\bin;$env:PATH"
 # $env:QT_DEBUG_PLUGINS = "1"
 # Optional: enable content-side probe logs on startup.
 # $env:MATH_SEARCH_CONTENT_PROBE = "1"
 
-& "D:\work\math_search_win\out\build\msvc-release\Release\math_search_win.exe"
+& $exePath

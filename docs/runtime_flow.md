@@ -270,3 +270,47 @@ sequenceDiagram
   LS-->>AP: licenseStateChanged
   LS-->>FG: (via MainWindow) setLicenseState
 ```
+
+---
+
+## 6. Release Hardening Runtime Additions (2026-04-21)
+
+### 6.1 Startup Runtime Layout Check
+
+New startup behavior:
+
+- `main.cpp` calls `AppPaths::inspectRuntimeLayout(true)`
+- logs explicit errors/warnings for:
+  - missing `data`
+  - missing `resources`
+  - missing `resources/detail` or `resources/katex`
+  - missing `license`
+  - cache directory readiness
+
+### 6.2 WebEngine Storage Routing
+
+`main.cpp` configures:
+
+- `QWebEngineProfile::defaultProfile()->setCachePath(cache/webengine)`
+- `QWebEngineProfile::defaultProfile()->setPersistentStoragePath(cache/webengine)`
+
+This keeps runtime write data under the `cache` contract.
+
+### 6.3 Detail Failure Visibility
+
+`DetailPane` now escalates:
+
+- shell load failure
+- JS runtime init failure
+- JS render callback failure
+
+to `SearchPage::activateTextFallbackMode(...)`, which updates page status and switches to text fallback mode with user-visible error text.
+
+### 6.4 MainWindow Bottom Status Composition
+
+`MainWindow` now merges:
+
+- data/index load status
+- runtime directory check summary
+
+into `BottomStatusBar::setDataStatusText(...)`, and marks version line as runtime abnormal when needed.

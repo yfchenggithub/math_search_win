@@ -99,11 +99,13 @@ bool setupRendererSandbox(const QString& rootPath,
                           bool includeDetailJs,
                           bool includeKatexCss,
                           bool includeKatexJs,
-                          bool includeKatexAutoRenderJs)
+                          bool includeKatexAutoRenderJs,
+                          bool includeKatexFontProbe)
 {
     QDir root(rootPath);
     if (!root.mkpath(QStringLiteral("src")) || !root.mkpath(QStringLiteral("resources/detail"))
-        || !root.mkpath(QStringLiteral("resources/katex/contrib"))) {
+        || !root.mkpath(QStringLiteral("resources/katex/contrib"))
+        || !root.mkpath(QStringLiteral("resources/katex/fonts"))) {
         return false;
     }
 
@@ -113,6 +115,7 @@ bool setupRendererSandbox(const QString& rootPath,
     const QString katexCssPath = root.filePath(QStringLiteral("resources/katex/katex.min.css"));
     const QString katexJsPath = root.filePath(QStringLiteral("resources/katex/katex.min.js"));
     const QString katexAutoRenderPath = root.filePath(QStringLiteral("resources/katex/contrib/auto-render.min.js"));
+    const QString katexFontProbePath = root.filePath(QStringLiteral("resources/katex/fonts/KaTeX_Main-Regular.woff2"));
 
     if (includeDetailTemplate
         && !writeUtf8File(detailTemplatePath,
@@ -132,6 +135,9 @@ bool setupRendererSandbox(const QString& rootPath,
         return false;
     }
     if (includeKatexAutoRenderJs && !writeUtf8File(katexAutoRenderPath, QStringLiteral("window.renderMathInElement=function(){};"))) {
+        return false;
+    }
+    if (includeKatexFontProbe && !writeUtf8File(katexFontProbePath, QStringLiteral("fake-font"))) {
         return false;
     }
 
@@ -320,7 +326,7 @@ void DetailRenderingChainTest::resources_missingDetailFiles_routesToFallback()
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
     QVERIFY(setupRendererSandbox(
-        sandbox.path(), true, true, false, true, true, true));
+        sandbox.path(), true, true, false, true, true, true, true));
 
     ScopedCurrentDir cwdGuard(sandbox.path());
     ui::detail::DetailHtmlRenderer renderer;
@@ -338,7 +344,7 @@ void DetailRenderingChainTest::resources_missingKatexFiles_routesToFallback()
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
     QVERIFY(setupRendererSandbox(
-        sandbox.path(), true, true, true, false, true, true));
+        sandbox.path(), true, true, true, false, true, true, true));
 
     ScopedCurrentDir cwdGuard(sandbox.path());
     ui::detail::DetailHtmlRenderer renderer;
@@ -356,7 +362,7 @@ void DetailRenderingChainTest::resources_complete_routesToWeb()
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
     QVERIFY(setupRendererSandbox(
-        sandbox.path(), true, true, true, true, true, true));
+        sandbox.path(), true, true, true, true, true, true, true));
 
     ScopedCurrentDir cwdGuard(sandbox.path());
     ui::detail::DetailHtmlRenderer renderer;

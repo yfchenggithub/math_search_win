@@ -172,3 +172,40 @@
 - `core/logging/logger.h/.cpp`
 - `LogCategory` 分类：`search.engine`、`detail.render`、`perf.*`、`file.io`
 - 详情性能：`DetailPerfAggregator` + `resources/detail/detail.js` perf 事件
+
+---
+
+## 5. Release Hardening Delta (2026-04-21)
+
+### 5.1 Path and Runtime Layout
+
+- `AppPaths` (`src/shared/paths.*`) is now the single entry for runtime folder resolution and checks.
+- New `RuntimeLayoutStatus` reports:
+  - path resolution
+  - directory readiness
+  - startup warnings/errors
+
+### 5.2 Startup and Runtime Checks
+
+- `src/main.cpp`:
+  - performs runtime layout checks
+  - configures WebEngine storage/cache under `cache/webengine`
+- `src/ui/main_window.cpp`:
+  - collects startup runtime status
+  - merges runtime issues into bottom status line
+
+### 5.3 Detail Rendering Stability
+
+- `src/ui/detail/detail_html_renderer.cpp`:
+  - validates detail template + KaTeX key assets + font probe file
+- `src/ui/detail/detail_pane.cpp`:
+  - detects shell init failures and JS render failures, emits fallback signal
+- `src/ui/pages/search_page.cpp`:
+  - surfaces fallback mode in user-visible status text
+  - differentiates empty state vs error/fallback state in detail panel
+
+### 5.4 License Path State
+
+- `src/license/license_service.cpp` now explicitly handles:
+  - missing `license/` directory
+  - invalid non-directory `license` path

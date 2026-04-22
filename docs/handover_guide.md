@@ -151,3 +151,37 @@ powershell .\run-debug.ps1
 3. 拆分 `SearchPage`（搜索编排、详情编排、状态同步分层）。
 4. 明确 `SettingsPage` 定位并接线真实持久化。
 5. 为 `DetailViewDataMapper` 和 `detail.js` 增加契约测试，降低跨语言改动风险。
+
+---
+
+## 11. 2026-04-21 Release Closure Notes
+
+### 11.1 What changed
+
+- Runtime path resolution and folder checks were centralized in `AppPaths`.
+- Startup now runs explicit runtime layout checks and shows status in UI.
+- WebEngine runtime cache/storage moved under `cache/webengine`.
+- Detail rendering fallback messages are now user-visible for:
+  - missing template/resources
+  - shell load failure
+  - JS runtime failure
+- License reload now explicitly handles missing/invalid `license` directory path.
+
+### 11.2 New primary file references
+
+- `src/shared/paths.h`
+- `src/shared/paths.cpp`
+- `src/main.cpp`
+- `src/ui/main_window.cpp`
+- `src/ui/pages/search_page.cpp`
+- `src/ui/detail/detail_html_renderer.cpp`
+- `src/ui/detail/detail_pane.cpp`
+- `src/license/license_service.cpp`
+
+### 11.3 Handover cautions
+
+- `resources/` now serves two roles in release output:
+  - Qt WebEngine runtime files (from `windeployqt`)
+  - project detail/katex static assets
+- Do not remove `resources/detail` or `resources/katex` after running `windeployqt`.
+- License cryptographic verification is still not production-grade (TODO stubs remain).

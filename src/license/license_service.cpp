@@ -79,6 +79,25 @@ void LicenseService::initialize()
 
 void LicenseService::reload()
 {
+    const QString licenseDirectory = AppPaths::licenseDir();
+    const QFileInfo licenseDirInfo(licenseDirectory);
+    if (!licenseDirInfo.exists()) {
+        setState(buildTrialFallbackState(LicenseStatus::Missing,
+                                         QStringLiteral("未检测到授权目录，当前为体验版。"),
+                                         QStringLiteral("license directory missing path=%1").arg(licenseDirectory),
+                                         false),
+                 true);
+        return;
+    }
+    if (!licenseDirInfo.isDir()) {
+        setState(buildTrialFallbackState(LicenseStatus::ReadError,
+                                         QStringLiteral("授权目录路径异常，当前为体验版。"),
+                                         QStringLiteral("license path is not a directory path=%1").arg(licenseDirectory),
+                                         false),
+                 true);
+        return;
+    }
+
     const LicenseReadResult readResult = readLicenseFile();
     if (!readResult.exists) {
         setState(buildTrialFallbackState(LicenseStatus::Missing,

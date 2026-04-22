@@ -94,6 +94,21 @@ bool shouldRecordSearchHistory(const QString& triggerSource)
         || normalizedTrigger == QStringLiteral("suggest_click");
 }
 
+QString webFallbackUserMessage(const QString& reason)
+{
+    const QString normalized = reason.trimmed().toLower();
+    if (normalized.contains(QStringLiteral("katex"))) {
+        return QStringLiteral("KaTeX 本地资源缺失，已切换到兼容详情模式。");
+    }
+    if (normalized.contains(QStringLiteral("template"))) {
+        return QStringLiteral("详情模板加载失败，已切换到兼容详情模式。");
+    }
+    if (normalized.contains(QStringLiteral("runtime"))) {
+        return QStringLiteral("详情脚本渲染失败，已切换到兼容详情模式。");
+    }
+    return QStringLiteral("详情 Web 渲染不可用，已切换到兼容详情模式。");
+}
+
 }  // namespace
 
 SearchPage::SearchPage(domain::services::SearchService* searchService,
@@ -891,8 +906,20 @@ void SearchPage::resetToEmptyState()
                      QStringLiteral("支持实时建议、模块/分类/标签筛选、结果详情联动。"));
     updateResultEmptyState(QStringLiteral("开始搜索"), QStringLiteral("输入关键词后在这里查看匹配结果。"));
     resetDetailTimingSessions(true);
-    updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
     showDetailPlaceholder(QStringLiteral("左侧输入关键词后可查看搜索结果和详情。"));
+
+    if (!webDetailEnabled_) {
+        const QString reason = detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
+                                                              : detailHtmlRenderer_->lastError().trimmed();
+        updateStatusLine(QStringLiteral("详情页已切换兼容模式。"),
+                         QStringLiteral("请检查 resources/detail 与 resources/katex。"));
+        updateDetailShellMeta(QStringLiteral("兼容模式：Web 资源不可用"), QStringLiteral("warning"));
+        LOG_WARN(LogCategory::WebViewKatex,
+                 QStringLiteral("detail empty_state fallback reason=%1")
+                     .arg(reason.isEmpty() ? QStringLiteral("unknown") : reason));
+    } else {
+        updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
+    }
 }
 
 void SearchPage::updateStatusLine(const QString& status, const QString& summary)
@@ -2041,7 +2068,10 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setVisible(true);
     }
-    updateDetailShellMeta(QStringLiteral("已切换到兼容详情模式"), QStringLiteral("warning"));
+
+    const QString userMessage = webFallbackUserMessage(reason);
+    updateStatusLine(QStringLiteral("详情 Web 渲染异常，已自动切换兼容模式。"), userMessage);
+    showDetailError(userMessage);
 }
 
 bool SearchPage::isFeatureEnabled(license::Feature feature) const

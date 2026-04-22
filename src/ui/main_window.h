@@ -41,6 +41,7 @@ private:
     void setupUi();
     void setupPages();
     void loadSearchData();
+    void inspectRuntimeLayout();
     void updateBottomStatusBar() const;
     QString titleForPage(int pageIndex) const;
     QString subtitleForPage(int pageIndex) const;
@@ -57,8 +58,10 @@ private:
     bool indexLoaded_ = false;
     bool contentLoaded_ = false;
     bool webReady_ = false;
+    bool runtimeLayoutHealthy_ = true;
     int currentPageIndex_ = -1;
     QString startupStatusLine_;
+    QString runtimeStatusLine_;
 
     NavigationSidebar* navigationSidebar_ = nullptr;
     TopBar* topBar_ = nullptr;

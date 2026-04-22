@@ -519,3 +519,37 @@ flowchart TD
 - 改详情渲染：`SearchPage::renderDetailForRequest` + `ui/detail/*` + `resources/detail/*`。
 - 改本地存储：`LocalStorageService` + `FavoritesRepository/HistoryRepository/SettingsRepository`。
 - 改授权：`ActivationPage` + `ActivationCodeService` + `LicenseService` + `FeatureGate`。
+
+---
+
+## 12. MVP Release Hardening Update (2026-04-21)
+
+### 12.1 Implemented
+
+- Runtime path management was centralized in `src/shared/paths.h` and `src/shared/paths.cpp`.
+- `AppPaths` now resolves:
+  - executable dir
+  - app root
+  - `data`, `license`, `cache`, `resources`
+  - detail template and KaTeX folders
+- Startup runtime checks were added in:
+  - `src/main.cpp`
+  - `src/ui/main_window.cpp`
+- Detail WebEngine hardening was extended in:
+  - `src/ui/detail/detail_html_renderer.cpp`
+  - `src/ui/detail/detail_pane.cpp`
+  - `src/ui/pages/search_page.cpp`
+- WebEngine cache/persistent storage path now points to:
+  - `cache/webengine/` (configured in `main.cpp`).
+- `CanonicalContentLoader::defaultCanonicalContentPath()` now uses centralized `AppPaths` data path.
+- `LicenseService::reload()` now explicitly handles missing/invalid `license` directory state.
+
+### 12.2 Partially Implemented
+
+- UI messaging is unified for search/detail/startup and runtime fallback mode.
+- Settings page remains status-oriented and does not yet expose full editable settings workflow.
+
+### 12.3 Skeleton / Planned
+
+- License signature verification and encrypted payload validation are still TODO stubs.
+- No installer-level automation is included in this change set (`windeployqt` is documented, not scripted in CMake).

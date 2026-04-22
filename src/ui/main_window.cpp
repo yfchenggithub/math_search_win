@@ -14,7 +14,6 @@
 #include "ui/widgets/navigation_sidebar.h"
 #include "ui/widgets/top_bar.h"
 
-#include <QDir>
 #include <QHBoxLayout>
 #include <QStackedWidget>
 #include <QStringList>
@@ -31,6 +30,8 @@ MainWindow::MainWindow(QWidget* parent)
 
     resize(UiConstants::kDefaultWindowWidth, UiConstants::kDefaultWindowHeight);
     setWindowTitle(UiConstants::kAppTitle);
+
+    inspectRuntimeLayout();
 
     licenseService_.initialize();
     featureGate_.setLicenseState(licenseService_.currentState());
@@ -60,27 +61,6 @@ MainWindow::MainWindow(QWidget* parent)
         switchPageWithTrigger(pageIndex, QStringLiteral("navigation"));
     });
     switchPageWithTrigger(UiConstants::kPageHome, QStringLiteral("startup_default"));
-
-    const QString dataPath = AppPaths::dataDir();
-    if (QDir(dataPath).exists()) {
-        LOG_DEBUG(LogCategory::DataLoader, QStringLiteral("directory ready name=data path=%1").arg(dataPath));
-    } else {
-        LOG_WARN(LogCategory::DataLoader, QStringLiteral("data directory missing path=%1").arg(dataPath));
-    }
-
-    const QString cachePath = AppPaths::cacheDir();
-    if (QDir(cachePath).exists()) {
-        LOG_DEBUG(LogCategory::FileIo, QStringLiteral("directory ready name=cache path=%1").arg(cachePath));
-    } else {
-        LOG_WARN(LogCategory::FileIo, QStringLiteral("cache directory missing path=%1").arg(cachePath));
-    }
-
-    const QString licensePath = AppPaths::licenseDir();
-    if (QDir(licensePath).exists()) {
-        LOG_DEBUG(LogCategory::Config, QStringLiteral("directory ready name=license path=%1").arg(licensePath));
-    } else {
-        LOG_WARN(LogCategory::Config, QStringLiteral("license directory missing path=%1").arg(licensePath));
-    }
 
     LOG_INFO(LogCategory::UiMainWindow,
              QStringLiteral("ui ready page_count=%1 web_ready=%2")
@@ -307,21 +287,72 @@ void MainWindow::loadSearchData()
                 .arg(contentRepository_.size())
                 .arg(indexRepository_.docCount())
                 .arg(indexRepository_.modules().size());
-        return;
+    } else {
+        QStringList errorParts;
+        if (!indexLoaded_) {
+            const QString indexReason = indexRepository_.diagnostics().fatalError.trimmed();
+            errorParts.push_back(indexReason.isEmpty() ? QStringLiteral("索引加载失败")
+                                                       : QStringLiteral("索引失败: %1").arg(indexReason));
+        }
+        if (!contentLoaded_) {
+            const QString contentReason = contentRepository_.diagnostics().fatalError.trimmed();
+            errorParts.push_back(contentReason.isEmpty() ? QStringLiteral("内容加载失败")
+                                                         : QStringLiteral("内容失败: %1").arg(contentReason));
+        }
+        startupStatusLine_ = errorParts.join(QStringLiteral(" | "));
     }
 
-    QStringList errorParts;
-    if (!indexLoaded_) {
-        const QString indexReason = indexRepository_.diagnostics().fatalError.trimmed();
-        errorParts.push_back(indexReason.isEmpty() ? QStringLiteral("索引加载失败")
-                                                   : QStringLiteral("索引失败: %1").arg(indexReason));
+    if (!runtimeStatusLine_.trimmed().isEmpty()) {
+        if (!startupStatusLine_.trimmed().isEmpty()) {
+            startupStatusLine_ = QStringLiteral("%1 | %2").arg(startupStatusLine_, runtimeStatusLine_);
+        } else {
+            startupStatusLine_ = runtimeStatusLine_;
+        }
     }
-    if (!contentLoaded_) {
-        const QString contentReason = contentRepository_.diagnostics().fatalError.trimmed();
-        errorParts.push_back(contentReason.isEmpty() ? QStringLiteral("内容加载失败")
-                                                     : QStringLiteral("内容失败: %1").arg(contentReason));
+}
+
+void MainWindow::inspectRuntimeLayout()
+{
+    const RuntimeLayoutStatus status = AppPaths::inspectRuntimeLayout(true);
+    QStringList statusTags;
+
+    if (!status.errors.isEmpty()) {
+        runtimeLayoutHealthy_ = false;
+        for (const QString& message : status.errors) {
+            LOG_ERROR(LogCategory::Config, QStringLiteral("runtime check failed %1").arg(message));
+        }
     }
-    startupStatusLine_ = errorParts.join(QStringLiteral(" | "));
+
+    if (!status.warnings.isEmpty()) {
+        for (const QString& message : status.warnings) {
+            LOG_WARN(LogCategory::Config, QStringLiteral("runtime check warning %1").arg(message));
+        }
+    }
+
+    if (!status.dataDirExists) {
+        statusTags.push_back(QStringLiteral("data 目录缺失"));
+    }
+    if (!status.resourcesDirExists) {
+        statusTags.push_back(QStringLiteral("resources 目录缺失"));
+    }
+    if (!status.cacheDirReady) {
+        statusTags.push_back(QStringLiteral("cache 目录不可写"));
+    }
+    if (!status.licenseDirExists) {
+        statusTags.push_back(QStringLiteral("license 目录缺失"));
+    }
+    if (!status.detailTemplateExists) {
+        statusTags.push_back(QStringLiteral("详情模板缺失"));
+    }
+    if (!status.katexDirExists) {
+        statusTags.push_back(QStringLiteral("katex 资源缺失"));
+    }
+
+    if (statusTags.isEmpty()) {
+        runtimeStatusLine_ = QStringLiteral("运行目录检查通过");
+    } else {
+        runtimeStatusLine_ = QStringLiteral("运行目录检查：%1").arg(statusTags.join(QStringLiteral("，")));
+    }
 }
 
 void MainWindow::updateBottomStatusBar() const
@@ -331,8 +362,10 @@ void MainWindow::updateBottomStatusBar() const
     }
 
     bottomStatusBar_->setDataStatusText(startupStatusLine_);
-    if (indexLoaded_ && contentLoaded_) {
+    if (indexLoaded_ && contentLoaded_ && runtimeLayoutHealthy_) {
         bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据就绪"));
+    } else if (!runtimeLayoutHealthy_) {
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 运行目录异常"));
     } else {
         bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据异常"));
     }

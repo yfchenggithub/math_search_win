@@ -1,8 +1,8 @@
 #include "infrastructure/data/canonical_content_loader.h"
 
 #include "domain/models/render_section.h"
+#include "shared/paths.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -37,7 +37,7 @@ using domain::models::ShareInfo;
 using domain::models::TheoremGroupItem;
 using domain::models::VariableDef;
 
-constexpr auto kDefaultRelativePath = "data/canonical_content_v2.json";
+constexpr auto kDefaultFileName = "canonical_content_v2.json";
 
 QString buildScopeKey(const QString& recordId, const QString& scope)
 {
@@ -848,27 +848,7 @@ bool parseRecord(const QString& rawTopLevelKey,
 
 QString resolveDefaultCanonicalPath()
 {
-    QStringList roots;
-    roots << QDir::currentPath();
-    if (QCoreApplication::instance() != nullptr) {
-        roots << QCoreApplication::applicationDirPath();
-    }
-
-    for (const QString& root : std::as_const(roots)) {
-        QDir probe(root);
-        for (int depth = 0; depth <= 8; ++depth) {
-            const QString candidate = probe.filePath(QString::fromUtf8(kDefaultRelativePath));
-            if (QFileInfo::exists(candidate)) {
-                return QFileInfo(candidate).absoluteFilePath();
-            }
-            if (!probe.cdUp()) {
-                break;
-            }
-        }
-    }
-
-    // Development convention fallback: project_root/data/canonical_content_v2.json relative to current working dir.
-    return QDir(QDir::currentPath()).filePath(QString::fromUtf8(kDefaultRelativePath));
+    return QDir(AppPaths::dataDir()).filePath(QString::fromUtf8(kDefaultFileName));
 }
 
 }  // namespace
@@ -955,4 +935,3 @@ CanonicalContentLoadResult CanonicalContentLoader::loadFromFile(const QString& f
 }
 
 }  // namespace infrastructure::data
-

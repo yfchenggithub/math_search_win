@@ -14,19 +14,20 @@ namespace ui::detail {
 
 DetailHtmlRenderer::DetailHtmlRenderer()
 {
-    const QString appRoot = AppPaths::appRoot();
-    const QString resourcesRoot = QDir(appRoot).filePath(QStringLiteral("resources"));
-    detailDirectory_ = QDir(resourcesRoot).filePath(QStringLiteral("detail"));
-    detailTemplatePath_ = QDir(detailDirectory_).filePath(QStringLiteral("detail_template.html"));
+    const QString resourcesRoot = AppPaths::resourcesDir();
+    detailDirectory_ = AppPaths::detailResourcesDir();
+    detailTemplatePath_ = AppPaths::detailTemplatePath();
 
-    const QString katexCssPath = QDir(resourcesRoot).filePath(QStringLiteral("katex/katex.min.css"));
-    const QString katexJsPath = QDir(resourcesRoot).filePath(QStringLiteral("katex/katex.min.js"));
-    const QString katexAutoRenderPath = QDir(resourcesRoot).filePath(QStringLiteral("katex/contrib/auto-render.min.js"));
+    const QString katexCssPath = QDir(AppPaths::katexDir()).filePath(QStringLiteral("katex.min.css"));
+    const QString katexJsPath = QDir(AppPaths::katexDir()).filePath(QStringLiteral("katex.min.js"));
+    const QString katexAutoRenderPath = QDir(AppPaths::katexDir()).filePath(QStringLiteral("contrib/auto-render.min.js"));
+    const QString katexFontProbePath = QDir(AppPaths::katexDir()).filePath(QStringLiteral("fonts/KaTeX_Main-Regular.woff2"));
     const QString detailCssPath = QDir(detailDirectory_).filePath(QStringLiteral("detail.css"));
     const QString detailJsPath = QDir(detailDirectory_).filePath(QStringLiteral("detail.js"));
 
     LOG_DEBUG(LogCategory::WebViewKatex,
-              QStringLiteral("renderer init app_root=%1 detail_dir=%2").arg(appRoot, detailDirectory_));
+              QStringLiteral("renderer init app_root=%1 resources=%2 detail_dir=%3")
+                  .arg(AppPaths::appRoot(), resourcesRoot, detailDirectory_));
 
     const QStringList requiredFiles = {
         detailTemplatePath_,
@@ -35,6 +36,7 @@ DetailHtmlRenderer::DetailHtmlRenderer()
         katexCssPath,
         katexJsPath,
         katexAutoRenderPath,
+        katexFontProbePath,
     };
 
     QStringList missingFiles;
@@ -75,6 +77,21 @@ DetailHtmlRenderer::DetailHtmlRenderer()
             QStringLiteral("detail template missing initial bootstrap marker path=%1").arg(detailTemplatePath_);
         LOG_ERROR(LogCategory::WebViewKatex, lastError_);
         return;
+    }
+
+    const QStringList expectedLocalRefs = {
+        QStringLiteral("../katex/katex.min.css"),
+        QStringLiteral("../katex/katex.min.js"),
+        QStringLiteral("../katex/contrib/auto-render.min.js"),
+        QStringLiteral("./detail.css"),
+        QStringLiteral("./detail.js"),
+    };
+    for (const QString& expectedRef : expectedLocalRefs) {
+        if (!templateHtml.contains(expectedRef)) {
+            LOG_WARN(LogCategory::WebViewKatex,
+                     QStringLiteral("detail template may miss local dependency ref=%1 path=%2")
+                         .arg(expectedRef, detailTemplatePath_));
+        }
     }
 
     detailTemplateUrl_ = QUrl::fromLocalFile(detailTemplatePath_);

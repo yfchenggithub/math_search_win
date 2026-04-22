@@ -2,11 +2,10 @@
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
+#include "shared/paths.h"
 
 #include <QApplication>
-#include <QCoreApplication>
 #include <QDate>
-#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 
@@ -17,32 +16,7 @@ namespace {
 
 QString locateAppStylePath()
 {
-    auto tryFindInTree = [](const QString& startPath) -> QString {
-        QDir dir(startPath);
-        for (int depth = 0; depth < 10; ++depth) {
-            const QString rootStyle = dir.filePath(QStringLiteral("app.qss"));
-            if (QFileInfo::exists(rootStyle)) {
-                return QDir::cleanPath(rootStyle);
-            }
-
-            const QString sourceStyle = dir.filePath(QStringLiteral("src/ui/style/app.qss"));
-            if (QFileInfo::exists(sourceStyle)) {
-                return QDir::cleanPath(sourceStyle);
-            }
-
-            if (!dir.cdUp()) {
-                break;
-            }
-        }
-        return {};
-    };
-
-    const QString fromAppDir = tryFindInTree(QCoreApplication::applicationDirPath());
-    if (!fromAppDir.isEmpty()) {
-        return fromAppDir;
-    }
-
-    return tryFindInTree(QDir::currentPath());
+    return AppPaths::appStylePath();
 }
 
 bool loadTextFile(const QString& path, QString* outText)

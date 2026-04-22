@@ -206,12 +206,24 @@ void DetailPane::onShellLoadFinished(bool ok)
     emit shellReadyChanged(ok);
 
     if (!ok) {
-        emit webModeFailed(QStringLiteral("QWebEngineView failed to load detail html"));
+        const QString failedUrl =
+            (webView_ == nullptr || webView_->url().isEmpty()) ? QStringLiteral("<empty>") : webView_->url().toString();
+        emit webModeFailed(QStringLiteral("QWebEngineView failed to load detail html url=%1").arg(failedUrl));
         return;
     }
 
     if (webView_ != nullptr && webView_->page() != nullptr && htmlRenderer_ != nullptr) {
-        webView_->page()->runJavaScript(htmlRenderer_->buildInitScript(), [](const QVariant&) {});
+        webView_->page()->runJavaScript(htmlRenderer_->buildInitScript(), [this](const QVariant& rawResult) {
+            const QVariantMap result = rawResult.toMap();
+            const bool ok = result.value(QStringLiteral("ok"), false).toBool();
+            if (ok) {
+                return;
+            }
+
+            const QString error = result.value(QStringLiteral("error")).toString().trimmed();
+            emit webModeFailed(QStringLiteral("detail runtime init failed: %1")
+                                   .arg(error.isEmpty() ? QStringLiteral("unknown") : error));
+        });
     }
 
     if (hasPendingRequest_) {
@@ -274,6 +286,8 @@ void DetailPane::dispatchNow(const RequestContext& request)
                            .arg(request.detailId)
                            .arg(request.requestId)
                            .arg(error.isEmpty() ? QStringLiteral("unknown") : error));
+            emit webModeFailed(QStringLiteral("detail runtime render failed: %1")
+                                   .arg(error.isEmpty() ? QStringLiteral("runtime_unknown") : error));
         }
     });
 

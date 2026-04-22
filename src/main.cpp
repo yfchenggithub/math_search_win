@@ -1,6 +1,8 @@
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QWebEngineProfile>
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
@@ -10,6 +12,7 @@
 #include "domain/services/suggest_service.h"
 #include "infrastructure/data/conclusion_index_repository.h"
 #include "infrastructure/data/conclusion_content_repository.h"
+#include "shared/paths.h"
 #include "ui/main_window.h"
 
 namespace {
@@ -154,6 +157,32 @@ int main(int argc, char *argv[])
     LOG_INFO(LogCategory::AppStartup,
              QStringLiteral("startup begin app=%1 log_dir=%2")
                  .arg(QCoreApplication::applicationName(), logging::Logger::instance().logDirectory()));
+
+    const RuntimeLayoutStatus runtimeStatus = AppPaths::inspectRuntimeLayout(true);
+    if (!runtimeStatus.errors.isEmpty()) {
+        for (const QString& issue : runtimeStatus.errors) {
+            LOG_ERROR(LogCategory::AppStartup, QStringLiteral("startup runtime check failed %1").arg(issue));
+        }
+    }
+    if (!runtimeStatus.warnings.isEmpty()) {
+        for (const QString& issue : runtimeStatus.warnings) {
+            LOG_WARN(LogCategory::AppStartup, QStringLiteral("startup runtime check warning %1").arg(issue));
+        }
+    }
+
+    const QString webEngineCachePath = QDir(AppPaths::cacheDir()).filePath(QStringLiteral("webengine"));
+    if (!QDir().mkpath(webEngineCachePath)) {
+        LOG_WARN(LogCategory::PerfWebView,
+                 QStringLiteral("failed to create webengine cache directory path=%1").arg(webEngineCachePath));
+    } else {
+        QWebEngineProfile* profile = QWebEngineProfile::defaultProfile();
+        profile->setCachePath(webEngineCachePath);
+        profile->setPersistentStoragePath(webEngineCachePath);
+        LOG_INFO(LogCategory::PerfWebView,
+                 QStringLiteral("webengine profile configured cache_path=%1 storage_path=%2")
+                     .arg(profile->cachePath(), profile->persistentStoragePath()));
+    }
+
     runContentProbeIfEnabled();
     runIndexProbeIfEnabled();
     if (probeOnlyEnabled()) {
