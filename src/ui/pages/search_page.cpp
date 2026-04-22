@@ -1142,6 +1142,13 @@ void SearchPage::runSuggest(const QString& query)
     }
 
     suggestionList_->setVisible(suggestionList_->count() > 0);
+    if (QScrollBar* scrollBar = suggestionList_->verticalScrollBar(); scrollBar != nullptr) {
+        scrollBar->setValue(scrollBar->minimum());
+    }
+    if (suggestionList_->count() > 0) {
+        suggestionList_->scrollToItem(suggestionList_->item(0), QAbstractItemView::PositionAtTop);
+    }
+
     updateStatusLine(QStringLiteral("建议已更新。"),
                      QStringLiteral("query=%1 | suggest=%2 | elapsed=%3ms")
                          .arg(normalizedQuery)

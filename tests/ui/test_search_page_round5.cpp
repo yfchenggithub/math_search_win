@@ -27,6 +27,7 @@
 #include <QPushButton>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QSignalSpy>
 
 #include <algorithm>
@@ -251,6 +252,7 @@ private slots:
 
     void searchInput_clickSearch_triggersRunSearchAndSelectsFirstResult();
     void suggestionClick_usesSuggestClickSourceAndRunsSearch();
+    void suggestRefresh_resetsSuggestionListScrollToTop();
     void favoriteToggle_emitsFavoritesChangedSignalAndPersists();
     void webDetailDispatch_viewportResetLoggedBeforeEveryDispatch();
 };
@@ -334,6 +336,45 @@ void SearchPageRound5UiTest::suggestionClick_usesSuggestClickSourceAndRunsSearch
     const QList<domain::models::SearchHistoryItem> latest = historyRepository.recentItems(1);
     QVERIFY(!latest.isEmpty());
     QCOMPARE(latest.first().source, QStringLiteral("suggest_click"));
+}
+
+void SearchPageRound5UiTest::suggestRefresh_resetsSuggestionListScrollToTop()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    auto* queryInput = page.findChild<QLineEdit*>(QStringLiteral("searchInput"));
+    auto* suggestionList = page.findChild<QListWidget*>(QStringLiteral("searchSuggestionList"));
+    QVERIFY(queryInput != nullptr);
+    QVERIFY(suggestionList != nullptr);
+
+    suggestionList->setFixedHeight(28);
+
+    queryInput->setText(QStringLiteral("limit"));
+    QTRY_VERIFY(suggestionList->count() > 0);
+
+    QScrollBar* scrollBar = suggestionList->verticalScrollBar();
+    QVERIFY(scrollBar != nullptr);
+    QTRY_VERIFY(scrollBar->maximum() > 0);
+
+    scrollBar->setValue(scrollBar->maximum());
+    QTRY_COMPARE(scrollBar->value(), scrollBar->maximum());
+
+    queryInput->clear();
+    QTRY_VERIFY(!suggestionList->isVisible());
+
+    queryInput->setText(QStringLiteral("lim"));
+    QTRY_VERIFY(suggestionList->count() > 0);
+    QTRY_VERIFY(scrollBar->maximum() > 0);
+    QTRY_COMPARE(scrollBar->value(), scrollBar->minimum());
 }
 
 void SearchPageRound5UiTest::favoriteToggle_emitsFavoritesChangedSignalAndPersists()
