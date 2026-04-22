@@ -8,6 +8,7 @@
 - 可选执行 `runContentProbeIfEnabled()`、`runIndexProbeIfEnabled()`。
 - 若带 `--probe-only` 参数，探测后直接退出，不进入 UI。
 - 创建 `MainWindow`：在构造函数内先做授权状态初始化，再加载数据，再装配页面。
+- `main()` 调用 `window.showMaximized()`，应用启动默认最大化（非独占全屏）。
 - `MainWindow::switchPageWithTrigger(kPageHome, "startup_default")` 设置首页。
 
 ```mermaid
@@ -33,6 +34,7 @@ sequenceDiagram
     MW->>FG: setLicenseState(currentState)
     MW->>Data: loadSearchData()
     MW->>UI: setupUi() + setupPages()
+    Main->>MW: showMaximized()
     MW->>MW: switchPageWithTrigger(home)
     Main->>Main: app.exec()
   end
@@ -43,6 +45,7 @@ sequenceDiagram
 ### 2.1 输入联想（Suggest）
 
 - 输入框 `QLineEdit::textChanged` 绑定到 `SearchPage::onQueryTextChanged()`。
+- 搜索输入框启用 `QLineEdit::setClearButtonEnabled(true)`，右侧可一键清空当前关键词。
 - 非空输入触发 `SearchPage::runSuggest()`。
 - `runSuggest()` 组装 `SuggestOptions`（含 module/category/tag 过滤），调用 `SuggestService::suggest()`。
 - Suggest 数据来自 `ConclusionIndexRepository` 的 `prefixIndex` + `termIndex`。
@@ -202,24 +205,38 @@ sequenceDiagram
 ### 4.3 设置链路（当前状态）
 
 - `SettingsRepository` 和 `AppSettings` 已实现读写默认值、落盘 `cache/settings.json`。
-- 但运行时页面 `SettingsPage` 未调用 `SettingsRepository::load/setValue/save`。
+- `SearchPage` 已接入 `SettingsRepository`：`loadDetailFontScaleSetting()` 读取 `detail_font_scale_level`，点击 `Aa` 按钮后 `persistDetailFontScaleSetting()` 写回。
+- `SettingsPage` 仍未接入通用设置编辑流程。
 - 当前 `SettingsPage::reloadData()` 展示应用、授权、数据目录、日志目录与帮助信息。
 - 已实现 `openLogDirButton_`：通过 `logging::Logger::instance().logDirectory()` 获取目录后调用 `QDesktopServices::openUrl(...)` 打开日志目录；失败时弹窗并写 `config/file.io` 日志。
+- `openReadmeButton_` 调用链：先用 `cmd /c start <绝对路径>` 打开 README；失败后回退 `notepad.exe <绝对路径>`；仍失败再尝试打开 `docs/` 并提示错误。
 
 ```mermaid
 flowchart TD
-  A[SettingsPage::reloadData] --> B[读取 LicenseService / Repository 状态]
-  B --> C[更新 UI 标签 含 dataDir/logDir]
-  C --> D[不写 settings.json]
+  UIA[SettingsPage::reloadData] --> UIB[读取 LicenseService / Repository 状态]
+  UIB --> UIC[更新 UI 标签 含 dataDir/logDir]
+  UIC --> UID[SettingsPage 不写 settings.json]
 
-  I[openLogDirButton clicked] --> J[Logger::logDirectory]
-  J --> K{目录可用?}
-  K -- 否 --> L[弹窗提示 + 记录 WARN/ERROR]
-  K -- 是 --> M[QDesktopServices::openUrl 打开日志目录]
+  S1[SearchPage::loadDetailFontScaleSetting] --> S2[SettingsRepository::value detail_font_scale_level]
+  S2 --> S3[SearchPage::applyDetailFontScale]
+  S3 --> S4[QWebEngineView::setZoomFactor + QTextBrowser 字号样式]
+  S5[detailFontButton 点击] --> S6[persistDetailFontScaleSetting]
+  S6 --> S7[SettingsRepository::setValue]
 
-  E[SettingsRepository] --> F[load/setValue/save]
-  F --> G[cache/settings.json]
-  G --> H[当前主要由测试覆盖]
+  LOG1[openLogDirButton clicked] --> LOG2[Logger::logDirectory]
+  LOG2 --> LOG3{目录可用?}
+  LOG3 -- 否 --> LOG4[弹窗提示 + 记录 WARN/ERROR]
+  LOG3 -- 是 --> LOG5[QDesktopServices::openUrl 打开日志目录]
+
+  RE1[openReadmeButton clicked] --> RE2[cmd start 绝对路径]
+  RE2 --> RE3{默认程序打开成功?}
+  RE3 -- 否 --> RE4[notepad.exe 打开 README]
+  RE4 --> RE5{记事本打开成功?}
+  RE5 -- 否 --> RE6[尝试打开 docs 目录并提示错误]
+
+  REP1[SettingsRepository] --> REP2[load/setValue/save]
+  REP2 --> REP3[cache/settings.json]
+  REP3 --> REP4[当前主要由测试覆盖 + SearchPage 字体档位读写]
 ```
 
 ## 5. 激活 / 授权检查流程

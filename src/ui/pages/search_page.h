@@ -3,6 +3,7 @@
 #include "domain/models/search_result_models.h"
 #include "domain/repositories/favorites_repository.h"
 #include "domain/repositories/history_repository.h"
+#include "domain/repositories/settings_repository.h"
 #include "ui/detail/detail_perf_aggregator.h"
 
 #include <QElapsedTimer>
@@ -83,6 +84,7 @@ private slots:
     void onSortChanged();
     void onClearFiltersClicked();
     void onFavoriteButtonClicked();
+    void onDetailFontButtonClicked();
     void flushPendingDetailRequest();
 
 private:
@@ -131,12 +133,15 @@ private:
     void renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView);
     void showDetailPlaceholder(const QString& message);
     void showDetailError(const QString& message);
+    void resetWebDetailViewportToTop();
+    void resetFallbackDetailViewportToTop();
+    void resetDetailViewportToTop();
     void activateTextFallbackMode(const QString& reason);
     void ensureDetailShellLoaded();
-    void dispatchPayloadToWeb(const QJsonObject& payload,
-                              const QString& docId = QString(),
-                              quint64 requestId = 0,
-                              qint64 selectionTimestampMs = 0);
+    Q_INVOKABLE void dispatchPayloadToWeb(const QJsonObject& payload,
+                                          const QString& docId = QString(),
+                                          quint64 requestId = 0,
+                                          qint64 selectionTimestampMs = 0);
     void startDetailTimingSession(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
     void markDetailTimingFailed(const QString& docId,
                                 quint64 requestId,
@@ -190,6 +195,9 @@ private:
     void applyFeatureGate();
     void refreshFavoriteButtonState(const QString& docId = QString());
     void showTrialDetailPreview(const domain::adapters::ConclusionDetailViewData& detailView, const QString& docId);
+    void loadDetailFontScaleSetting();
+    void applyDetailFontScale();
+    void persistDetailFontScaleSetting();
 
 private:
     domain::services::SearchService* searchService_ = nullptr;
@@ -200,6 +208,7 @@ private:
     const license::LicenseService* licenseService_ = nullptr;
     domain::repositories::FavoritesRepository favoritesRepository_;
     domain::repositories::HistoryRepository historyRepository_;
+    domain::repositories::SettingsRepository settingsRepository_;
 
     bool indexReady_ = false;
     bool contentReady_ = false;
@@ -225,6 +234,7 @@ private:
 
     QLineEdit* queryInput_ = nullptr;
     QPushButton* searchButton_ = nullptr;
+    QPushButton* detailFontButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
     QLabel* detailMetaLabel_ = nullptr;
@@ -251,4 +261,5 @@ private:
     QHash<quint64, DetailTimingSession> detailTimingSessions_;
     ui::detail::DetailPerfAggregator detailPerfAggregator_;
     quint64 activeDetailTimingRequestId_ = 0;
+    int detailFontScaleLevel_ = 1;
 };

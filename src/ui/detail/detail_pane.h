@@ -37,6 +37,7 @@ public:
     void ensureShellLoaded();
     void setPendingRequest(const RequestContext& request);
     void renderDetail(const RequestContext& request);
+    void resetViewportToTop();
     void renderStatePayload(const QJsonObject& payload);
     void consumePendingRequestIfReady();
     void disableWebMode();

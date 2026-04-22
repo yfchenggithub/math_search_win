@@ -656,6 +656,13 @@ QLineEdit#searchInput {
     font-size: 14px;
 }
 
+QLineEdit#searchInput::clear-button {
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    width: 14px;
+    height: 14px;
+}
+
 QLineEdit#searchInput:hover {
     border-color: #cad5e0;
     background-color: #ffffff;
@@ -902,6 +909,42 @@ QLabel#detailPerfLabel[timingState="failed"] {
     color: #b06f5a;
 }
 
+QPushButton#detailFontSizeButton {
+    min-height: 30px;
+    min-width: 52px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid #d9e0e8;
+    background-color: #f7f9fc;
+    color: #748090;
+    font-size: 12px;
+    font-weight: 520;
+}
+
+QPushButton#detailFontSizeButton:hover {
+    border-color: #cdd7e3;
+    background-color: #f2f6fb;
+    color: #637082;
+}
+
+QPushButton#detailFontSizeButton:pressed {
+    border-color: #c1cddd;
+    background-color: #ebf1f8;
+    color: #566274;
+}
+
+QPushButton#detailFontSizeButton[fontScale="small"] {
+    color: #808a97;
+}
+
+QPushButton#detailFontSizeButton[fontScale="medium"] {
+    color: #6f7b8c;
+}
+
+QPushButton#detailFontSizeButton[fontScale="large"] {
+    color: #5d6a7b;
+}
+
 QWidget#detailShellBody {
     border: 1px solid #e8edf3;
     border-radius: 12px;
@@ -917,6 +960,18 @@ QTextBrowser#detailFallbackView {
 QTextBrowser#detailFallbackView {
     color: #2a3139;
     font-size: 13px;
+}
+
+QTextBrowser#detailFallbackView[fontScale="small"] {
+    font-size: 12px;
+}
+
+QTextBrowser#detailFallbackView[fontScale="medium"] {
+    font-size: 13px;
+}
+
+QTextBrowser#detailFallbackView[fontScale="large"] {
+    font-size: 15px;
 }
 
 QListWidget#searchSuggestionList QScrollBar:vertical,

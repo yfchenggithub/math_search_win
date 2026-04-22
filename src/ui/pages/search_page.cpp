@@ -32,6 +32,7 @@
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QScrollBar>
 #include <QStyle>
 #include <QTextBrowser>
 #include <QTimer>
@@ -52,6 +53,67 @@ const QString kDetailTimingColorLoading = QStringLiteral("#8e959f");
 const QString kDetailTimingColorSuccess = QStringLiteral("#5f666f");
 const QString kDetailTimingColorFailed = QStringLiteral("#b06f5a");
 constexpr int kTrialPreviewLimit = 5;
+constexpr int kDetailFontScaleMinLevel = 0;
+constexpr int kDetailFontScaleDefaultLevel = 1;
+constexpr int kDetailFontScaleMaxLevel = 3;
+
+int clampDetailFontScaleLevel(int level)
+{
+    return std::clamp(level, kDetailFontScaleMinLevel, kDetailFontScaleMaxLevel);
+}
+
+QString detailFontScaleKey()
+{
+    return QString::fromLatin1(domain::models::AppSettingKeys::DetailFontScaleLevel);
+}
+
+qreal detailZoomFactorForLevel(int level)
+{
+    switch (clampDetailFontScaleLevel(level)) {
+    case 0:
+        return 0.92;
+    case 2:
+        return 1.14;
+    default:
+        return 1.0;
+    }
+}
+
+QString detailFontScaleTokenForLevel(int level)
+{
+    switch (clampDetailFontScaleLevel(level)) {
+    case 0:
+        return QStringLiteral("small");
+    case 2:
+        return QStringLiteral("large");
+    default:
+        return QStringLiteral("medium");
+    }
+}
+
+QString detailFontButtonTextForLevel(int level)
+{
+    switch (clampDetailFontScaleLevel(level)) {
+    case 0:
+        return QStringLiteral("Aa-");
+    case 2:
+        return QStringLiteral("Aa+");
+    default:
+        return QStringLiteral("Aa");
+    }
+}
+
+QString detailFontButtonTipForLevel(int level)
+{
+    switch (clampDetailFontScaleLevel(level)) {
+    case 0:
+        return QStringLiteral("详情字体：小（点击切换）");
+    case 2:
+        return QStringLiteral("详情字体：大（点击切换）");
+    default:
+        return QStringLiteral("详情字体：中（点击切换）");
+    }
+}
 
 int findComboDataIndex(const QComboBox* combo, const QString& value)
 {
@@ -129,6 +191,7 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     ui::style::ensureAppStyleSheetLoaded();
     setObjectName(QStringLiteral("searchPage"));
     setProperty("pageRole", QStringLiteral("search"));
+    loadDetailFontScaleSetting();
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
     detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();
@@ -146,6 +209,7 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
 
     buildUi();
     connectSignals();
+    applyDetailFontScale();
     ensureDetailShellLoaded();
     rebuildFilterOptions();
     applyFeatureGate();
@@ -534,6 +598,55 @@ void SearchPage::onFavoriteButtonClicked()
     emit favoritesChanged();
 }
 
+void SearchPage::onDetailFontButtonClicked()
+{
+    detailFontScaleLevel_ = detailFontScaleLevel_ >= kDetailFontScaleMaxLevel ? kDetailFontScaleMinLevel
+                                                                               : (detailFontScaleLevel_ + 1);
+    applyDetailFontScale();
+    persistDetailFontScaleSetting();
+}
+
+void SearchPage::loadDetailFontScaleSetting()
+{
+    detailFontScaleLevel_ = kDetailFontScaleDefaultLevel;
+
+    const bool loaded = settingsRepository_.load();
+    if (!loaded) {
+        LOG_WARN(LogCategory::Config,
+                 QStringLiteral("detail font scale setting fallback to default reason=settings_load_failed"));
+    }
+
+    const QVariant savedValue = settingsRepository_.value(detailFontScaleKey(), kDetailFontScaleDefaultLevel);
+    detailFontScaleLevel_ = clampDetailFontScaleLevel(savedValue.toInt());
+}
+
+void SearchPage::applyDetailFontScale()
+{
+    detailFontScaleLevel_ = clampDetailFontScaleLevel(detailFontScaleLevel_);
+    const QString fontScaleToken = detailFontScaleTokenForLevel(detailFontScaleLevel_);
+
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setZoomFactor(detailZoomFactorForLevel(detailFontScaleLevel_));
+    }
+
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setProperty("fontScale", fontScaleToken);
+        repolishWidget(detailBrowser_);
+    }
+
+    if (detailFontButton_ != nullptr) {
+        detailFontButton_->setProperty("fontScale", fontScaleToken);
+        detailFontButton_->setText(detailFontButtonTextForLevel(detailFontScaleLevel_));
+        detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
+        repolishWidget(detailFontButton_);
+    }
+}
+
+void SearchPage::persistDetailFontScaleSetting()
+{
+    settingsRepository_.setValue(detailFontScaleKey(), clampDetailFontScaleLevel(detailFontScaleLevel_));
+}
+
 void SearchPage::buildUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
@@ -573,6 +686,7 @@ void SearchPage::buildUi()
     queryInput_ = new QLineEdit(topBar);
     queryInput_->setObjectName(QStringLiteral("searchInput"));
     queryInput_->setPlaceholderText(QStringLiteral("输入结论关键词，例如：不等式、对数、导数"));
+    queryInput_->setClearButtonEnabled(true);
     searchButton_ = new QPushButton(QStringLiteral("搜索"), topBar);
     searchButton_->setObjectName(QStringLiteral("searchButton"));
     searchButton_->setCursor(Qt::PointingHandCursor);
@@ -728,6 +842,12 @@ void SearchPage::buildUi()
     detailTimingLabel_->setObjectName(QStringLiteral("detailPerfLabel"));
     detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     detailTimingLabel_->setProperty("timingState", QStringLiteral("idle"));
+    detailFontButton_ = new QPushButton(detailHeader);
+    detailFontButton_->setObjectName(QStringLiteral("detailFontSizeButton"));
+    detailFontButton_->setCursor(Qt::PointingHandCursor);
+    detailFontButton_->setText(detailFontButtonTextForLevel(detailFontScaleLevel_));
+    detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
+    detailFontButton_->setProperty("fontScale", detailFontScaleTokenForLevel(detailFontScaleLevel_));
 
     favoriteButton_ = new QPushButton(QStringLiteral("收藏当前结论"), detailHeader);
     favoriteButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
@@ -738,7 +858,13 @@ void SearchPage::buildUi()
     auto* detailHeaderRightLayout = new QVBoxLayout(detailHeaderRight);
     detailHeaderRightLayout->setContentsMargins(0, 0, 0, 0);
     detailHeaderRightLayout->setSpacing(4);
-    detailHeaderRightLayout->addWidget(favoriteButton_, 0, Qt::AlignRight);
+
+    auto* detailActionRow = new QHBoxLayout();
+    detailActionRow->setContentsMargins(0, 0, 0, 0);
+    detailActionRow->setSpacing(6);
+    detailActionRow->addWidget(detailFontButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(favoriteButton_, 0, Qt::AlignVCenter);
+    detailHeaderRightLayout->addLayout(detailActionRow);
     detailHeaderRightLayout->addWidget(detailTimingLabel_, 0, Qt::AlignRight);
 
     detailHeaderLayout->addWidget(detailHeaderLeft, 1);
@@ -789,9 +915,9 @@ void SearchPage::buildUi()
 
     splitter->addWidget(leftPanel);
     splitter->addWidget(detailShell);
-    splitter->setStretchFactor(0, 10);
-    splitter->setStretchFactor(1, 12);
-    splitter->setSizes({600, 760});
+    splitter->setStretchFactor(0, 7);
+    splitter->setStretchFactor(1, 19);
+    splitter->setSizes({460, 1180});
 
     workbenchLayout->addWidget(splitter, 1);
     mainLayout->addWidget(workbench, 1);
@@ -821,6 +947,7 @@ void SearchPage::connectSignals()
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
     connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
+    connect(detailFontButton_, &QPushButton::clicked, this, &SearchPage::onDetailFontButtonClicked);
 
     if (detailPane_ != nullptr) {
         connect(detailPane_.get(), &ui::detail::DetailPane::shellReadyChanged, this, [this](bool ready) {
@@ -1234,6 +1361,7 @@ void SearchPage::enqueueDetailRenderRequest(const QString& docId)
 
     if (detailRenderCoordinator_ != nullptr && detailRenderCoordinator_->isSameAsRendered(normalizedDocId)
         && !hasPendingDetailRequest_ && (detailPane_ == nullptr || !detailPane_->hasPendingRequest())) {
+        resetDetailViewportToTop();
         LOG_DEBUG(LogCategory::PerfDetail,
                   QStringLiteral("event=detail_select_skipped reason=already_rendered doc_id=%1").arg(normalizedDocId));
         return;
@@ -1499,6 +1627,7 @@ void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::Conclusio
     }
 
     detailBrowser_->setHtml(ui::detail::DetailFallbackContentBuilder::buildFallbackHtml(detailView));
+    resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
@@ -1529,6 +1658,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     }
 
     detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#666;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
@@ -1558,10 +1688,47 @@ void SearchPage::showDetailError(const QString& message)
     }
 
     detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#9a3412;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+}
+
+void SearchPage::resetWebDetailViewportToTop()
+{
+    if (!webDetailEnabled_ || detailPane_ == nullptr) {
+        return;
+    }
+    detailPane_->resetViewportToTop();
+}
+
+void SearchPage::resetFallbackDetailViewportToTop()
+{
+    if (detailBrowser_ == nullptr) {
+        return;
+    }
+
+    QScrollBar* scrollBar = detailBrowser_->verticalScrollBar();
+    if (scrollBar != nullptr) {
+        scrollBar->setValue(scrollBar->minimum());
+    }
+
+    QTimer::singleShot(0, detailBrowser_, [browser = detailBrowser_]() {
+        if (browser == nullptr) {
+            return;
+        }
+        QScrollBar* delayedScrollBar = browser->verticalScrollBar();
+        if (delayedScrollBar != nullptr) {
+            delayedScrollBar->setValue(delayedScrollBar->minimum());
+        }
+    });
+}
+
+void SearchPage::resetDetailViewportToTop()
+{
+    resetWebDetailViewportToTop();
+    resetFallbackDetailViewportToTop();
 }
 
 void SearchPage::ensureDetailShellLoaded()
@@ -1592,6 +1759,18 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
                                                         : docId.trimmed();
     requestContext.requestId = requestId;
     requestContext.selectionTimestampMs = selectionTimestampMs;
+
+    const QString normalizedDetailId =
+        requestContext.detailId.trimmed().isEmpty() ? QStringLiteral("-") : requestContext.detailId.trimmed();
+    LOG_DEBUG(LogCategory::PerfDetail,
+              QStringLiteral("event=detail_viewport_reset request_id=%1 detail_id=%2 stage=before_dispatch")
+                  .arg(requestContext.requestId)
+                  .arg(normalizedDetailId));
+    resetWebDetailViewportToTop();
+    LOG_DEBUG(LogCategory::PerfDetail,
+              QStringLiteral("event=detail_dispatch request_id=%1 detail_id=%2 stage=start")
+                  .arg(requestContext.requestId)
+                  .arg(normalizedDetailId));
     detailPane_->renderDetail(requestContext);
 }
 
@@ -2159,6 +2338,7 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setHtml(
             ui::detail::DetailFallbackContentBuilder::buildTrialPreviewHtml(detailView, docId, reason, 220));
+        resetFallbackDetailViewportToTop();
         detailBrowser_->setVisible(true);
     }
     if (detailWebView_ != nullptr) {

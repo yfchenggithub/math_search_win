@@ -167,6 +167,24 @@ void DetailPane::renderDetail(const RequestContext& request)
     dispatchNow(request);
 }
 
+void DetailPane::resetViewportToTop()
+{
+    if (webView_ == nullptr || webView_->page() == nullptr) {
+        return;
+    }
+
+    webView_->page()->runJavaScript(QStringLiteral(
+        "(function(){"
+        "const root=document.scrollingElement||document.documentElement||document.body;"
+        "if(root&&typeof root.scrollTo==='function'){root.scrollTo(0,0);} "
+        "if(root){root.scrollTop=0;}"
+        "if(document.documentElement){document.documentElement.scrollTop=0;}"
+        "if(document.body){document.body.scrollTop=0;}"
+        "if(typeof window.scrollTo==='function'){window.scrollTo(0,0);}"
+        "return true;"
+        "})();"));
+}
+
 void DetailPane::renderStatePayload(const QJsonObject& payload)
 {
     RequestContext request;
@@ -239,6 +257,12 @@ void DetailPane::dispatchNow(const RequestContext& request)
         return;
     }
 
+    const QString normalizedDetailId = request.detailId.trimmed().isEmpty() ? QStringLiteral("-") : request.detailId.trimmed();
+    resetViewportToTop();
+    LOG_DEBUG(LogCategory::PerfDetail,
+              QStringLiteral("event=detail_viewport_reset request_id=%1 detail_id=%2 stage=before_dispatch")
+                  .arg(request.requestId)
+                  .arg(normalizedDetailId));
     rememberRequestContext(request);
     const QString script = htmlRenderer_->buildRenderScript(request.payload);
     const qint64 dispatchStartMs = QDateTime::currentMSecsSinceEpoch();
@@ -247,6 +271,10 @@ void DetailPane::dispatchNow(const RequestContext& request)
         latestDispatchedRequestId_ = request.requestId;
         emitPerf(request, QStringLiteral("dispatch_to_web_start"));
     }
+    LOG_DEBUG(LogCategory::PerfDetail,
+              QStringLiteral("event=detail_dispatch request_id=%1 detail_id=%2 stage=start")
+                  .arg(request.requestId)
+                  .arg(normalizedDetailId));
 
     webView_->page()->runJavaScript(script, [this, request, dispatchStartMs](const QVariant& rawResult) {
         if (request.requestId > 0 && request.requestId != latestDispatchedRequestId_) {
@@ -275,6 +303,8 @@ void DetailPane::dispatchNow(const RequestContext& request)
             emitPerf(request, QStringLiteral("request_stale_ignored"), QStringLiteral("reason=runtime_not_accepted"));
             return;
         }
+
+        resetViewportToTop();
 
         if (!ok) {
             emitPerf(request,

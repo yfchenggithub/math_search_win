@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
     });
 
     MainWindow window;
-    window.show();
+    window.showMaximized();
     LOG_INFO(LogCategory::AppStartup, QStringLiteral("main window shown"));
 
     const qint64 startupElapsedMs = startupTimer.elapsed();

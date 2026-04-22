@@ -26,7 +26,11 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QSignalSpy>
+
+#include <algorithm>
+#include <utility>
 
 #ifndef MATH_SEARCH_TESTS_SOURCE_DIR
 #error "MATH_SEARCH_TESTS_SOURCE_DIR is not defined for tests"
@@ -55,6 +59,56 @@ bool copyFileStrict(const QString& sourcePath, const QString& targetPath)
         return false;
     }
     return QFile::copy(sourcePath, targetPath);
+}
+
+QString readUtf8File(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+    const QByteArray bytes = file.readAll();
+    file.close();
+    return QString::fromUtf8(bytes);
+}
+
+struct DetailDispatchLogEvent {
+    enum class Type {
+        ResetBeforeDispatch,
+        DispatchStart,
+    };
+
+    Type type = Type::ResetBeforeDispatch;
+    quint64 requestId = 0;
+};
+
+QVector<DetailDispatchLogEvent> parseDetailDispatchLogEvents(const QString& logText)
+{
+    QVector<DetailDispatchLogEvent> events;
+    static const QRegularExpression resetPattern(
+        QStringLiteral("event=detail_viewport_reset\\s+request_id=(\\d+)\\s+detail_id=([^\\s]+)\\s+stage=before_dispatch"));
+    static const QRegularExpression dispatchPattern(
+        QStringLiteral("event=detail_dispatch\\s+request_id=(\\d+)\\s+detail_id=([^\\s]+)\\s+stage=start"));
+
+    const QStringList lines = logText.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    events.reserve(lines.size());
+    for (const QString& line : lines) {
+        const QString trimmedLine = line.trimmed();
+        const QRegularExpressionMatch resetMatch = resetPattern.match(trimmedLine);
+        if (resetMatch.hasMatch()) {
+            events.push_back({DetailDispatchLogEvent::Type::ResetBeforeDispatch,
+                              resetMatch.captured(1).toULongLong()});
+            continue;
+        }
+
+        const QRegularExpressionMatch dispatchMatch = dispatchPattern.match(trimmedLine);
+        if (dispatchMatch.hasMatch()) {
+            events.push_back({DetailDispatchLogEvent::Type::DispatchStart,
+                              dispatchMatch.captured(1).toULongLong()});
+        }
+    }
+
+    return events;
 }
 
 QJsonObject makeCanonicalRecord(const QString& id, const QString& module, const QString& title)
@@ -198,6 +252,7 @@ private slots:
     void searchInput_clickSearch_triggersRunSearchAndSelectsFirstResult();
     void suggestionClick_usesSuggestClickSourceAndRunsSearch();
     void favoriteToggle_emitsFavoritesChangedSignalAndPersists();
+    void webDetailDispatch_viewportResetLoggedBeforeEveryDispatch();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -315,6 +370,91 @@ void SearchPageRound5UiTest::favoriteToggle_emitsFavoritesChangedSignalAndPersis
 
     QVERIFY(favoritesRepository.load());
     QVERIFY(!favoritesRepository.contains(QStringLiteral("X001")));
+}
+
+void SearchPageRound5UiTest::webDetailDispatch_viewportResetLoggedBeforeEveryDispatch()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    const QString logDir = sandbox.path(QStringLiteral("logs"));
+    qputenv("MATH_SEARCH_LOG_DIR", QDir::toNativeSeparators(logDir).toUtf8());
+    qputenv("MATH_SEARCH_LOG_TO_FILE", QByteArrayLiteral("1"));
+    qputenv("MATH_SEARCH_LOG_TO_CONSOLE", QByteArrayLiteral("0"));
+    qputenv("MATH_SEARCH_LOG_LEVEL", QByteArrayLiteral("debug"));
+    logging::Logger::instance().shutdown();
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    page.webDetailEnabled_ = true;
+    page.detailPane_ = std::make_unique<ui::detail::DetailPane>(nullptr, nullptr, nullptr);
+    QVERIFY(page.detailPane_ != nullptr);
+
+    QString logFilePath;
+    for (int i = 0; i < 150; ++i) {
+        logFilePath = logging::Logger::instance().activeLogFilePath().trimmed();
+        if (!logFilePath.isEmpty()) {
+            break;
+        }
+        QTest::qWait(20);
+    }
+    QVERIFY2(!logFilePath.isEmpty(), "logger should expose an active log file path");
+
+    const qint64 selectionTs = QDateTime::currentMSecsSinceEpoch();
+    QJsonObject payload;
+    payload.insert(QStringLiteral("state"), QStringLiteral("content"));
+    payload.insert(QStringLiteral("detailId"), QStringLiteral("X001"));
+    payload.insert(QStringLiteral("requestId"), 9527);
+    QVERIFY(QMetaObject::invokeMethod(&page,
+                                      "dispatchPayloadToWeb",
+                                      Qt::DirectConnection,
+                                      Q_ARG(QJsonObject, payload),
+                                      Q_ARG(QString, QStringLiteral("X001")),
+                                      Q_ARG(quint64, static_cast<quint64>(9527)),
+                                      Q_ARG(qint64, selectionTs)));
+
+    QString logText;
+    QVector<DetailDispatchLogEvent> events;
+    bool hasDispatchEvent = false;
+    for (int i = 0; i < 300; ++i) {
+        logText = readUtf8File(logFilePath);
+        events = parseDetailDispatchLogEvents(logText);
+        hasDispatchEvent = std::any_of(events.cbegin(), events.cend(), [](const DetailDispatchLogEvent& event) {
+            return event.type == DetailDispatchLogEvent::Type::DispatchStart && event.requestId > 0;
+        });
+        if (hasDispatchEvent) {
+            break;
+        }
+        QTest::qWait(20);
+    }
+    QVERIFY2(hasDispatchEvent, "detail dispatch start log should be recorded");
+
+    QHash<quint64, int> resetSeenByRequestId;
+    int positiveDispatchCount = 0;
+    for (const DetailDispatchLogEvent& event : std::as_const(events)) {
+        if (event.requestId == 0) {
+            continue;
+        }
+
+        if (event.type == DetailDispatchLogEvent::Type::ResetBeforeDispatch) {
+            resetSeenByRequestId[event.requestId] = resetSeenByRequestId.value(event.requestId, 0) + 1;
+            continue;
+        }
+
+        positiveDispatchCount += 1;
+        const int resetCount = resetSeenByRequestId.value(event.requestId, 0);
+        QVERIFY2(resetCount > 0,
+                 qPrintable(QStringLiteral("dispatch request_id=%1 should have reset-before-dispatch log").arg(event.requestId)));
+    }
+
+    QVERIFY2(positiveDispatchCount > 0, "at least one positive request_id dispatch should be asserted");
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

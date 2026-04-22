@@ -15,6 +15,7 @@ inline constexpr const char* LastSortMode = "last_sort_mode";
 inline constexpr const char* LastSelectedTags = "last_selected_tags";
 inline constexpr const char* EditionHint = "edition_hint";
 inline constexpr const char* Theme = "theme";
+inline constexpr const char* DetailFontScaleLevel = "detail_font_scale_level";
 }  // namespace AppSettingKeys
 
 struct AppSettings final {
@@ -23,4 +24,3 @@ struct AppSettings final {
 };
 
 }  // namespace domain::models
-

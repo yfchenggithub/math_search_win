@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -31,6 +32,33 @@ namespace {
 
 constexpr int kInfoLabelMinWidth = 132;
 const QString kFeedbackEmail = QStringLiteral("support@example.com");
+
+QString normalizedNativePath(const QString& path)
+{
+    return QDir::toNativeSeparators(QDir::cleanPath(path));
+}
+
+bool openWithSystemDefaultApp(const QString& absolutePath)
+{
+#if defined(Q_OS_WIN)
+    return QProcess::startDetached(QStringLiteral("cmd.exe"),
+                                   QStringList{QStringLiteral("/c"),
+                                               QStringLiteral("start"),
+                                               QStringLiteral(""),
+                                               normalizedNativePath(absolutePath)});
+#else
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(absolutePath));
+#endif
+}
+
+bool openPathInExplorer(const QString& absolutePath)
+{
+#if defined(Q_OS_WIN)
+    return QProcess::startDetached(QStringLiteral("explorer.exe"), QStringList{normalizedNativePath(absolutePath)});
+#else
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(absolutePath));
+#endif
+}
 
 QString buildTypeText()
 {
@@ -401,14 +429,51 @@ QWidget* SettingsPage::buildHelpSection()
     actionLayout->addStretch(1);
     sectionLayout->addWidget(actionRow);
 
-    connect(openReadmeButton_, &QPushButton::clicked, this, []() {
+    connect(openReadmeButton_, &QPushButton::clicked, this, [this]() {
         const QString appRoot = AppPaths::appRoot();
         const QString readmePath = QDir(appRoot).filePath(QStringLiteral("README.md"));
+        const QString docsPath = QDir(appRoot).filePath(QStringLiteral("docs"));
+
         if (QFileInfo::exists(readmePath)) {
-            QDesktopServices::openUrl(QUrl::fromLocalFile(readmePath));
+            const QString nativeReadmePath = normalizedNativePath(readmePath);
+            if (openWithSystemDefaultApp(readmePath)) {
+                LOG_INFO(LogCategory::Config, QStringLiteral("open_readme success method=system_default path=%1").arg(nativeReadmePath));
+                return;
+            }
+
+            LOG_WARN(LogCategory::FileIo,
+                     QStringLiteral("open_readme default_open_failed path=%1").arg(nativeReadmePath));
+
+            if (QProcess::startDetached(QStringLiteral("notepad.exe"), QStringList{nativeReadmePath})) {
+                LOG_INFO(LogCategory::Config, QStringLiteral("open_readme fallback_notepad path=%1").arg(nativeReadmePath));
+                return;
+            }
+
+            const bool openedDocs = QFileInfo::exists(docsPath) && openPathInExplorer(docsPath);
+            if (openedDocs) {
+                LOG_WARN(LogCategory::Config,
+                         QStringLiteral("open_readme fallback_docs_opened reason=notepad_failed docs=%1")
+                             .arg(normalizedNativePath(docsPath)));
+                return;
+            }
+
+            QMessageBox::warning(this,
+                                 QStringLiteral("打开 README"),
+                                 QStringLiteral("无法打开 README。\n路径：%1\n已尝试：系统默认程序、记事本。")
+                                     .arg(nativeReadmePath));
             return;
         }
-        QDesktopServices::openUrl(QUrl::fromLocalFile(QDir(appRoot).filePath(QStringLiteral("docs"))));
+
+        if (QFileInfo::exists(docsPath) && openPathInExplorer(docsPath)) {
+            LOG_WARN(LogCategory::Config,
+                     QStringLiteral("open_readme missing_readme fallback_docs_opened docs=%1").arg(normalizedNativePath(docsPath)));
+            return;
+        }
+
+        QMessageBox::warning(this,
+                             QStringLiteral("打开 README"),
+                             QStringLiteral("README 不存在，且无法打开 docs 目录。\n预期 README 路径：%1")
+                                 .arg(normalizedNativePath(readmePath)));
     });
 
     return section;

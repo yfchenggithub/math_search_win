@@ -17,6 +17,7 @@ QVariantMap AppSettings::defaultValues()
         {key(AppSettingKeys::LastSelectedTags), QVariantList()},
         {key(AppSettingKeys::EditionHint), QStringLiteral("trial")},
         {key(AppSettingKeys::Theme), QStringLiteral("system")},
+        {key(AppSettingKeys::DetailFontScaleLevel), 1},
     };
 }
 

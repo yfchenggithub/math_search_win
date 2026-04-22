@@ -31,11 +31,11 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情、收藏、历史写入、功能门控 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`onFavoriteButtonClicked` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情、收藏、历史写入、功能门控、详情字体档位持久化 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`onFavoriteButtonClicked`、`applyDetailFontScale` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页导航与最近/收藏预览 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |
-| `SettingsPage` | `src/ui/pages/settings_page.h/.cpp` | 软件/授权/数据状态展示与帮助入口（含日志目录入口） | `MainWindow` | `LicenseService`、`Conclusion*Repository`、`AppPaths`、`logging::Logger` | `reloadData`、`buildDataInfoSection`、`buildDataStatusText` |
+| `SettingsPage` | `src/ui/pages/settings_page.h/.cpp` | 软件/授权/数据状态展示与帮助入口（含日志目录、README 打开入口） | `MainWindow` | `LicenseService`、`Conclusion*Repository`、`AppPaths`、`logging::Logger` | `reloadData`、`buildDataInfoSection`、`buildHelpSection`、`buildDataStatusText` |
 | `ActivationPage` | `src/ui/pages/activation_page.h/.cpp` | 激活码输入、校验、写 license、刷新状态 | `MainWindow` | `ActivationCodeService`、`LicenseService`、`DeviceFingerprintService` | `onActivateClicked`、`reloadData`、`updateLicenseStateUi` |
 
 ### 2.3 Service 类
@@ -110,7 +110,7 @@
 
 | 文件 | 为什么重要 | 修改影响 |
 |---|---|---|
-| `src/main.cpp` | 进程入口与 probe 开关 | 影响启动行为和全局初始化 |
+| `src/main.cpp` | 进程入口与 probe 开关、窗口初始显示状态 | 影响启动行为和全局初始化 |
 | `src/ui/main_window.cpp` | 系统装配中心 | 影响页面编排、跨页联动、加载顺序 |
 | `src/ui/pages/search_page.cpp` | 最大业务聚合点 | 影响搜索/Suggest/详情/收藏/历史/门控 |
 | `src/domain/services/search_service.cpp` | 搜索算法核心 | 影响命中质量和排序结果 |
@@ -154,7 +154,7 @@
 ### 改设置项
 - 模型与默认值：`AppSettings`
 - 仓库：`SettingsRepository`
-- 页面现状：`SettingsPage` 当前主要只读展示（注意未接线）；已实现“日志目录展示 + 打开日志目录”入口
+- 页面现状：`SearchPage` 已接线 `detail_font_scale_level`（详情字体档位持久化）；`SettingsPage` 仍主要只读展示，已实现“日志目录展示 + 打开日志目录 + README 打开入口与兜底”
 
 ### 改授权/激活
 - 页面：`ActivationPage`

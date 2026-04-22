@@ -17,6 +17,9 @@
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
 - 设置页日志入口：已支持展示日志目录并在“日志操作”中打开日志目录。
+- 搜索页阅读体验增强：详情区支持三档字体（`Aa-/Aa/Aa+`）并持久化到 `cache/settings.json`。
+- 搜索输入框已启用右侧清空按钮（`QLineEdit::setClearButtonEnabled(true)`）。
+- 应用启动后主窗口默认最大化显示（`showMaximized()`）。
 - 本地持久化底座：`cache/favorites.json`、`cache/history.json`、`cache/settings.json` 原子写盘。
 
 #### 部分实现
@@ -184,7 +187,7 @@ flowchart LR
   3. `logging::Logger::instance().initialize()`。
   4. 可选 probe：`runContentProbeIfEnabled()`、`runIndexProbeIfEnabled()`。
   5. 如果 `--probe-only`，直接退出，不进入 UI。
-  6. 创建并显示 `MainWindow`。
+  6. 创建 `MainWindow` 并以最大化方式显示（`showMaximized()`，非独占全屏）。
 
 ### 4.2 `MainWindow` 构造期装配
 - `MainWindow` 成员先构造：
@@ -213,13 +216,14 @@ flowchart TD
   E --> F{--probe-only?}
   F -- yes --> G[exit 0]
   F -- no --> H[MainWindow ctor]
-  H --> I[LicenseService.initialize]
-  I --> J[FeatureGate.setLicenseState]
-  J --> K[loadSearchData]
-  K --> L[setupUi + setupPages]
-  L --> M[SearchPage.setBackendStatus]
-  M --> N[switch to Home]
-  N --> O[app.exec]
+  H --> I[window.showMaximized]
+  I --> J[LicenseService.initialize]
+  J --> K[FeatureGate.setLicenseState]
+  K --> L[loadSearchData]
+  L --> M[setupUi + setupPages]
+  M --> N[SearchPage.setBackendStatus]
+  N --> O[switch to Home]
+  O --> P[app.exec]
 ```
 
 ---
@@ -248,9 +252,10 @@ flowchart TD
 
 ### 5.4 页面实现状态
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
+- `SearchPage`：详情头部新增字体档位按钮，切换后会实时影响 Web 详情缩放与 fallback 文本字号。
 - `FavoritesPage`：已接线到真实收藏数据；筛选按钮未实现。
 - `RecentSearchesPage`：已接线到真实历史数据。
-- `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”；已实现数据目录/日志目录的打开入口。
+- `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”；已实现数据目录/日志目录打开，README 打开链路增加失败兜底（记事本/打开 docs）。
 - `ActivationPage`：激活码离线流程已通；在线升级入口未接入。
 - `HomePage`：入口与预览已接线，但定位偏导航聚合而非业务处理。
 
@@ -348,9 +353,10 @@ flowchart TD
 
 - 现状：
   - `SettingsRepository` + `AppSettings` 有完整读写与默认值体系。
-  - 但 `SettingsPage` 主要是状态展示（license/data/log/help/feedback），未见对 `SettingsRepository` 的运行时调用。
+  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（详情字体档位）。
+  - `SettingsPage` 仍主要是状态展示（license/data/log/help/feedback），未提供通用设置编辑流程。
   - `SettingsPage::buildDataInfoSection()` 已接入 `openLogDirButton_`，路径来自 `logging::Logger::instance().logDirectory()`。
-- 当前状态：部分实现。
+- 当前状态：部分实现（已有单项设置接线，未形成完整设置中心）。
 - 风险：
   - 维护者容易误以为“设置页已可持久化编辑”，实际未接线。
 

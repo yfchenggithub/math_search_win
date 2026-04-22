@@ -25,11 +25,14 @@ cmake --build --preset msvc-debug
 powershell .\run-debug.ps1
 ```
 
-5. 启动后先做 4 个烟测：
+5. 启动后先做 6 个烟测：
+- 确认主窗口启动即最大化（非独占全屏，标题栏仍可见）。
 - 搜索关键词，确认结果列表变化。
+- 搜索框右侧清空按钮可用（非空时显示，点击后清空）。
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
+- 点击详情区 `Aa` 按钮，确认小/中/大三档字体循环并即时生效。
 - 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
-- 进入“设置/关于”，点击“打开日志目录”，确认可打开日志目录。
+- 进入“设置/关于”，点击“打开 README”，确认至少可通过默认程序或记事本打开。
 
 ## 3. 先读哪些文件最容易建立全局认识
 
@@ -79,7 +82,7 @@ powershell .\run-debug.ps1
   - 收藏：`FavoritesRepository` -> `cache/favorites.json`
   - 历史：`HistoryRepository` -> `cache/history.json`
   - 设置：`SettingsRepository` -> `cache/settings.json`
-- 重要现状：`SettingsRepository` 已实现，但运行时页面未接线，`SettingsPage` 当前是只读状态页（已实现日志目录展示与打开入口）。
+- 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情字体档位持久化（`detail_font_scale_level`）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
 
 ## 7. 如何理解激活/授权系统
 
@@ -125,14 +128,21 @@ powershell .\run-debug.ps1
 - 检查 `cache/favorites.json` 是否可写、是否被外部占用。
 
 ### 设置不持久化怎么办
-- 这是当前实现现状：`SettingsPage` 未接线 `SettingsRepository`。
-- 如果需要“可编辑并持久化”，要新增页面交互逻辑调用 `SettingsRepository::setValue/save`。
+- 当前并非“完全不持久化”：`SearchPage` 的详情字体档位已写入 `SettingsRepository`。
+- 若要把“设置/关于”扩展成完整可编辑设置页，仍需在 `SettingsPage` 增加交互并调用 `SettingsRepository::setValue/save`。
 
 ### 设置页日志目录打不开怎么办
 - 断点 `SettingsPage::buildDataInfoSection` 中 `openLogDirButton_` 的 clicked lambda。
 - 检查 `logging::Logger::instance().logDirectory()` 是否为空。
 - 检查 `QDesktopServices::openUrl(QUrl::fromLocalFile(...))` 返回值。
 - 查看 `config` / `file.io` 分类日志中 `open_log_dir` 相关记录。
+
+### 设置页 README 打不开怎么办
+- 断点 `SettingsPage::buildHelpSection` 中 `openReadmeButton_` 的 clicked lambda。
+- 先确认 `README.md` 绝对路径是否存在（`QDir(AppPaths::appRoot()).filePath("README.md")`）。
+- 检查 `cmd /c start "" <README绝对路径>` 是否成功。
+- 若默认程序失败，检查 `notepad.exe <README绝对路径>` 是否可拉起。
+- 查看 `config` / `file.io` 日志中的 `open_readme` 记录。
 
 ### 激活状态异常怎么办
 - 断点 `ActivationPage::onActivateClicked` 和 `LicenseService::reload`。
@@ -143,7 +153,7 @@ powershell .\run-debug.ps1
 ## 9. 新人最容易误解的点
 
 - 误解 1：设置页已经是“设置中心”。
-  - 现实：当前是状态展示页，设置仓库未接线。
+  - 现实：当前仍以状态展示为主；仅 `SearchPage` 的详情字体档位接线到了 `SettingsRepository`。
 - 误解 2：收藏文件一定有完整 `items` 元数据。
   - 现实：`FavoritesRepository` 默认只写 `ids`，`FavoritesPage` 读取 `items` 只是兼容。
 - 误解 3：激活链路已经是完整安全方案。
