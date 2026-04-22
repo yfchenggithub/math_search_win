@@ -105,9 +105,11 @@ add_executable(math_search_win
 )
 
 target_include_directories(math_search_win PRIVATE src)
+set_target_properties(math_search_win PROPERTIES WIN32_EXECUTABLE TRUE)
 
 if(MSVC)
     target_compile_options(math_search_win PRIVATE /utf-8)
+    target_link_options(math_search_win PRIVATE $<$<CONFIG:Debug>:/SUBSYSTEM:CONSOLE>)
 endif()
 
 target_link_libraries(math_search_win PRIVATE

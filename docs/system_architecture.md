@@ -16,6 +16,7 @@
 - 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页回跳搜索页打开详情。
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
+- 设置页日志入口：已支持展示日志目录并在“日志操作”中打开日志目录。
 - 本地持久化底座：`cache/favorites.json`、`cache/history.json`、`cache/settings.json` 原子写盘。
 
 #### 部分实现
@@ -230,7 +231,7 @@ flowchart TD
 - `SearchPage`（核心搜索 + 详情）
 - `FavoritesPage`（收藏管理）
 - `RecentSearchesPage`（历史管理）
-- `SettingsPage`（状态展示与帮助）
+- `SettingsPage`（状态展示、帮助与日志入口）
 - `ActivationPage`（激活与升级入口）
 
 ### 5.2 页面切换与刷新策略
@@ -249,7 +250,7 @@ flowchart TD
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
 - `FavoritesPage`：已接线到真实收藏数据；筛选按钮未实现。
 - `RecentSearchesPage`：已接线到真实历史数据。
-- `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”。
+- `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”；已实现数据目录/日志目录的打开入口。
 - `ActivationPage`：激活码离线流程已通；在线升级入口未接入。
 - `HomePage`：入口与预览已接线，但定位偏导航聚合而非业务处理。
 
@@ -347,7 +348,8 @@ flowchart TD
 
 - 现状：
   - `SettingsRepository` + `AppSettings` 有完整读写与默认值体系。
-  - 但 `SettingsPage` 主要是状态展示（license/data/help/feedback），未见对 `SettingsRepository` 的运行时调用。
+  - 但 `SettingsPage` 主要是状态展示（license/data/log/help/feedback），未见对 `SettingsRepository` 的运行时调用。
+  - `SettingsPage::buildDataInfoSection()` 已接入 `openLogDirButton_`，路径来自 `logging::Logger::instance().logDirectory()`。
 - 当前状态：部分实现。
 - 风险：
   - 维护者容易误以为“设置页已可持久化编辑”，实际未接线。
@@ -449,6 +451,7 @@ flowchart TD
   - `powershell .\run-debug.ps1`
 - Release 同理（`run-release.ps1`）。
 - 发布打包主入口：`release_tool.py`（`deploy` / `verify` / `package` / `all`）。
+- `CMakeLists.txt` 对 `math_search_win` 启用 `WIN32_EXECUTABLE`，并仅在 `Debug` 配置追加 `/SUBSYSTEM:CONSOLE`；打包后双击 `Release` 不再出现控制台窗口。
 
 ### 9.2 关键依赖
 - Qt6 Widgets
@@ -463,6 +466,7 @@ flowchart TD
 
 ### 9.4 日志入口
 - `src/core/logging/logger.h/.cpp`
+- `src/ui/pages/settings_page.cpp`：`reloadData()` 展示日志目录；`openLogDirButton_` 打开日志目录并处理失败提示。
 - 环境变量：`MATH_SEARCH_LOG_LEVEL`、`MATH_SEARCH_LOG_DIR`、`MATH_SEARCH_LOG_TO_FILE` 等。
 - 重点分类：`search.engine`、`detail.render`、`webview.katex`、`file.io`、`config`。
 

@@ -133,6 +133,7 @@ void SettingsActivationRound5UiTest::settingsPage_buttonsAndDataStatusToggle_sta
     QVERIFY(unavailablePage.dataStatusValueLabel_ != nullptr);
     QVERIFY(readyPage.dataStatusValueLabel_ != nullptr);
     QVERIFY(unavailablePage.openDataDirButton_ != nullptr);
+    QVERIFY(unavailablePage.openLogDirButton_ != nullptr);
     QVERIFY(unavailablePage.openReadmeButton_ != nullptr);
     QVERIFY(unavailablePage.copyFeedbackEmailButton_ != nullptr);
 
@@ -140,6 +141,8 @@ void SettingsActivationRound5UiTest::settingsPage_buttonsAndDataStatusToggle_sta
 
     const QString originalCopyText = unavailablePage.copyFeedbackEmailButton_->text();
     QTest::mouseClick(unavailablePage.openDataDirButton_, Qt::LeftButton);
+    scheduleAutoCloseMessageBoxes();
+    QTest::mouseClick(unavailablePage.openLogDirButton_, Qt::LeftButton);
     QTest::mouseClick(unavailablePage.openReadmeButton_, Qt::LeftButton);
     QTest::mouseClick(unavailablePage.copyFeedbackEmailButton_, Qt::LeftButton);
     QVERIFY(unavailablePage.copyFeedbackEmailButton_->text() != originalCopyText);

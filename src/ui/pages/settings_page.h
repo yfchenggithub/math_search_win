@@ -85,6 +85,7 @@ private:
 
     QLabel* dataStatusValueLabel_ = nullptr;
     QLabel* dataDirValueLabel_ = nullptr;
+    QLabel* logDirValueLabel_ = nullptr;
     QLabel* contentStatsValueLabel_ = nullptr;
     QLabel* indexStatsValueLabel_ = nullptr;
     QLabel* moduleStatsValueLabel_ = nullptr;
@@ -102,6 +103,7 @@ private:
     QLabel* expansionHintLabel_ = nullptr;
 
     QPushButton* openDataDirButton_ = nullptr;
+    QPushButton* openLogDirButton_ = nullptr;
     QPushButton* openReadmeButton_ = nullptr;
     QPushButton* copyFeedbackEmailButton_ = nullptr;
 };

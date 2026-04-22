@@ -25,10 +25,11 @@ cmake --build --preset msvc-debug
 powershell .\run-debug.ps1
 ```
 
-5. 启动后先做 3 个烟测：
+5. 启动后先做 4 个烟测：
 - 搜索关键词，确认结果列表变化。
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
 - 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
+- 进入“设置/关于”，点击“打开日志目录”，确认可打开日志目录。
 
 ## 3. 先读哪些文件最容易建立全局认识
 
@@ -78,7 +79,7 @@ powershell .\run-debug.ps1
   - 收藏：`FavoritesRepository` -> `cache/favorites.json`
   - 历史：`HistoryRepository` -> `cache/history.json`
   - 设置：`SettingsRepository` -> `cache/settings.json`
-- 重要现状：`SettingsRepository` 已实现，但运行时页面未接线，`SettingsPage` 当前是只读状态页。
+- 重要现状：`SettingsRepository` 已实现，但运行时页面未接线，`SettingsPage` 当前是只读状态页（已实现日志目录展示与打开入口）。
 
 ## 7. 如何理解激活/授权系统
 
@@ -126,6 +127,12 @@ powershell .\run-debug.ps1
 ### 设置不持久化怎么办
 - 这是当前实现现状：`SettingsPage` 未接线 `SettingsRepository`。
 - 如果需要“可编辑并持久化”，要新增页面交互逻辑调用 `SettingsRepository::setValue/save`。
+
+### 设置页日志目录打不开怎么办
+- 断点 `SettingsPage::buildDataInfoSection` 中 `openLogDirButton_` 的 clicked lambda。
+- 检查 `logging::Logger::instance().logDirectory()` 是否为空。
+- 检查 `QDesktopServices::openUrl(QUrl::fromLocalFile(...))` 返回值。
+- 查看 `config` / `file.io` 分类日志中 `open_log_dir` 相关记录。
 
 ### 激活状态异常怎么办
 - 断点 `ActivationPage::onActivateClicked` 和 `LicenseService::reload`。
@@ -187,6 +194,7 @@ powershell .\run-debug.ps1
 - Runtime app style file in release output should be under:
   - `app_resources/styles/app.qss`
   - source path `src/ui/style/app.qss` is copied by `release_tool.py` as runtime asset, not as C++ source deployment
+- `CMakeLists.txt` sets `WIN32_EXECUTABLE` and keeps `Debug` with `/SUBSYSTEM:CONSOLE`; packaged `Release` exe double-click startup is GUI mode (no cmd console window).
 - Do not remove `app_resources/detail` or `app_resources/katex` after running `windeployqt`.
 - License cryptographic verification is still not production-grade (TODO stubs remain).
 

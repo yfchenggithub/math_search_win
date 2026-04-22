@@ -16,6 +16,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -284,6 +285,8 @@ QWidget* SettingsPage::buildDataInfoSection()
     sectionLayout->addWidget(createInfoRow(QStringLiteral("模块数量"), &moduleStatsValueLabel_));
     sectionLayout->addWidget(createInfoRow(QStringLiteral("数据源文件"), &dataSourceValueLabel_, true));
 
+    sectionLayout->addWidget(createInfoRow(QStringLiteral("日志目录"), &logDirValueLabel_, true));
+
     dataHintLabel_ = new QLabel(section);
     dataHintLabel_->setObjectName(QStringLiteral("settingsHintText"));
     dataHintLabel_->setWordWrap(true);
@@ -311,6 +314,59 @@ QWidget* SettingsPage::buildDataInfoSection()
 
     connect(openDataDirButton_, &QPushButton::clicked, this, []() {
         QDesktopServices::openUrl(QUrl::fromLocalFile(AppPaths::dataDir()));
+    });
+
+    auto* logActionRow = new QWidget(section);
+    logActionRow->setObjectName(QStringLiteral("settingsInfoRow"));
+
+    auto* logActionLayout = new QHBoxLayout(logActionRow);
+    logActionLayout->setContentsMargins(12, 9, 12, 9);
+    logActionLayout->setSpacing(14);
+
+    auto* logActionLabel = new QLabel(QStringLiteral("日志操作"), logActionRow);
+    logActionLabel->setObjectName(QStringLiteral("settingsInfoLabel"));
+    logActionLabel->setMinimumWidth(kInfoLabelMinWidth);
+
+    openLogDirButton_ = new QPushButton(QStringLiteral("打开日志目录"), logActionRow);
+    openLogDirButton_->setObjectName(QStringLiteral("settingsSecondaryButton"));
+    openLogDirButton_->setCursor(Qt::PointingHandCursor);
+
+    logActionLayout->addWidget(logActionLabel);
+    logActionLayout->addWidget(openLogDirButton_, 0, Qt::AlignLeft);
+    logActionLayout->addStretch(1);
+    sectionLayout->addWidget(logActionRow);
+
+    connect(openLogDirButton_, &QPushButton::clicked, this, [this]() {
+        const QString rawLogDir = logging::Logger::instance().logDirectory().trimmed();
+        if (rawLogDir.isEmpty()) {
+            LOG_WARN(LogCategory::Config, QStringLiteral("open_log_dir aborted reason=empty_log_directory"));
+            QMessageBox::warning(
+                this, QStringLiteral("打开日志目录"), QStringLiteral("当前日志目录为空，请先启动应用后重试。"));
+            return;
+        }
+
+        QDir logDir(rawLogDir);
+        if (!logDir.exists() && !logDir.mkpath(QStringLiteral("."))) {
+            const QString normalized = QDir::toNativeSeparators(QDir::cleanPath(rawLogDir));
+            LOG_ERROR(LogCategory::FileIo,
+                      QStringLiteral("open_log_dir failed reason=mkdir_failed path=%1").arg(normalized));
+            QMessageBox::warning(this,
+                                 QStringLiteral("打开日志目录"),
+                                 QStringLiteral("日志目录不存在且创建失败：%1").arg(normalized));
+            return;
+        }
+
+        const QString resolvedDir = QDir::toNativeSeparators(logDir.absolutePath());
+        const bool opened = QDesktopServices::openUrl(QUrl::fromLocalFile(logDir.absolutePath()));
+        if (!opened) {
+            LOG_ERROR(LogCategory::FileIo,
+                      QStringLiteral("open_log_dir failed reason=open_url_failed path=%1").arg(resolvedDir));
+            QMessageBox::warning(
+                this, QStringLiteral("打开日志目录"), QStringLiteral("无法打开日志目录：%1").arg(resolvedDir));
+            return;
+        }
+
+        LOG_INFO(LogCategory::Config, QStringLiteral("open_log_dir success path=%1").arg(resolvedDir));
     });
 
     return section;
@@ -470,6 +526,10 @@ void SettingsPage::reloadData()
     dataStatusValueLabel_->setText(buildDataStatusText());
     dataDirValueLabel_->setText(dataDir);
     dataDirValueLabel_->setToolTip(dataDir);
+    const QString logDir = QDir::toNativeSeparators(logging::Logger::instance().logDirectory().trimmed());
+    const QString displayLogDir = logDir.trimmed().isEmpty() ? QStringLiteral("当前未配置") : logDir;
+    logDirValueLabel_->setText(displayLogDir);
+    logDirValueLabel_->setToolTip(displayLogDir);
 
     if (contentLoaded_ && contentRepository_ != nullptr) {
         contentStatsValueLabel_->setText(QStringLiteral("%1 条").arg(static_cast<qlonglong>(contentRepository_->size())));
@@ -567,4 +627,3 @@ QString SettingsPage::resolvedPath(const QString& candidate, const QString& fall
     }
     return QDir::toNativeSeparators(QDir::cleanPath(path));
 }
-

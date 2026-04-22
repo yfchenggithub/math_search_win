@@ -35,7 +35,7 @@
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页导航与最近/收藏预览 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |
-| `SettingsPage` | `src/ui/pages/settings_page.h/.cpp` | 软件/授权/数据状态展示与帮助入口 | `MainWindow` | `LicenseService`、`Conclusion*Repository`、`AppPaths` | `reloadData`、`buildDataStatusText` |
+| `SettingsPage` | `src/ui/pages/settings_page.h/.cpp` | 软件/授权/数据状态展示与帮助入口（含日志目录入口） | `MainWindow` | `LicenseService`、`Conclusion*Repository`、`AppPaths`、`logging::Logger` | `reloadData`、`buildDataInfoSection`、`buildDataStatusText` |
 | `ActivationPage` | `src/ui/pages/activation_page.h/.cpp` | 激活码输入、校验、写 license、刷新状态 | `MainWindow` | `ActivationCodeService`、`LicenseService`、`DeviceFingerprintService` | `onActivateClicked`、`reloadData`、`updateLicenseStateUi` |
 
 ### 2.3 Service 类
@@ -154,7 +154,7 @@
 ### 改设置项
 - 模型与默认值：`AppSettings`
 - 仓库：`SettingsRepository`
-- 页面现状：`SettingsPage` 当前主要只读展示（注意未接线）
+- 页面现状：`SettingsPage` 当前主要只读展示（注意未接线）；已实现“日志目录展示 + 打开日志目录”入口
 
 ### 改授权/激活
 - 页面：`ActivationPage`
@@ -170,6 +170,7 @@
 
 ### 查日志和性能问题
 - `core/logging/logger.h/.cpp`
+- `ui/pages/settings_page.cpp`（`openLogDirButton_` 使用 `logging::Logger::logDirectory()` 打开日志目录）
 - `LogCategory` 分类：`search.engine`、`detail.render`、`perf.*`、`file.io`
 - 详情性能：`DetailPerfAggregator` + `app_resources/detail/detail.js` perf 事件
 
@@ -213,6 +214,7 @@
 ### 5.5 Release Packaging Entry
 
 - `release_tool.py` is the release packaging entry for deploy/verify/package.
+- `CMakeLists.txt` sets `math_search_win` as `WIN32_EXECUTABLE`, and adds `/SUBSYSTEM:CONSOLE` only for `Debug`; therefore packaged `Release` double-click startup does not show a console window.
 - Script responsibilities:
   - copy release exe to `dist/<name>`
   - call `windeployqt` for Qt runtime

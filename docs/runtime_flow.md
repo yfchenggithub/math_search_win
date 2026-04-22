@@ -203,13 +203,19 @@ sequenceDiagram
 
 - `SettingsRepository` 和 `AppSettings` 已实现读写默认值、落盘 `cache/settings.json`。
 - 但运行时页面 `SettingsPage` 未调用 `SettingsRepository::load/setValue/save`。
-- 当前 `SettingsPage::reloadData()` 只展示应用、授权、数据目录与帮助信息。
+- 当前 `SettingsPage::reloadData()` 展示应用、授权、数据目录、日志目录与帮助信息。
+- 已实现 `openLogDirButton_`：通过 `logging::Logger::instance().logDirectory()` 获取目录后调用 `QDesktopServices::openUrl(...)` 打开日志目录；失败时弹窗并写 `config/file.io` 日志。
 
 ```mermaid
 flowchart TD
   A[SettingsPage::reloadData] --> B[读取 LicenseService / Repository 状态]
-  B --> C[更新 UI 标签]
+  B --> C[更新 UI 标签 含 dataDir/logDir]
   C --> D[不写 settings.json]
+
+  I[openLogDirButton clicked] --> J[Logger::logDirectory]
+  J --> K{目录可用?}
+  K -- 否 --> L[弹窗提示 + 记录 WARN/ERROR]
+  K -- 是 --> M[QDesktopServices::openUrl 打开日志目录]
 
   E[SettingsRepository] --> F[load/setValue/save]
   F --> G[cache/settings.json]
@@ -326,6 +332,8 @@ into `BottomStatusBar::setDataStatusText(...)`, and marks version line as runtim
   5. initialize `cache/` directory
   6. copy runtime style assets from `src/ui/style` to `app_resources/styles`
   7. run post-deploy validation and fail on missing required files
+- Build subsystem note:
+  - `CMakeLists.txt` sets `WIN32_EXECUTABLE` and keeps `Debug` on `/SUBSYSTEM:CONSOLE`; packaged `Release` `math_search_win.exe` runs as GUI app without a console window.
 - Validation checks include:
   - exe + key Qt runtime files (`platforms/qwindows.dll`, WebEngine resources)
   - app detail/KaTeX resources
