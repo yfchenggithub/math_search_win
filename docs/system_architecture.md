@@ -290,12 +290,13 @@ flowchart TD
 - 关键调用：
   - `SearchPage::runSuggest()`
   - `SuggestService::suggest(query, SuggestOptions)`
-  - `ConclusionIndexRepository::forEachPrefixEntry/forEachTermEntry`
-- 数据来源：index 中 `prefixIndex/termIndex`。
+  - `ConclusionIndexRepository::optionalSuggestions()`
+  - `ConclusionIndexRepository::forEachPrefixEntry/forEachTermEntry`（seed 不足时）
+- 数据来源：index 顶层 `suggestions` + `prefixIndex/termIndex`。
 - 输出：建议列表；点击项 `onSuggestionClicked()` 后 `runSearch(..., "suggest_click")`。
 - 当前状态：已实现。
 - 风险/待确认：
-  - `ConclusionIndexRepository::optionalSuggestions()` 当前未接入 SuggestService 主流程。
+  - `optionalSuggestions()` 里的 `docId` 允许为空，当前实现会在有 module/category/tag 过滤时跳过此类 seed（见 `collectSuggestionSeedSignal`）。
 
 ### 6.3 详情渲染链路
 

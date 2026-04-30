@@ -55,6 +55,9 @@ powershell .\run-debug.ps1
   - `termIndex + prefixIndex` 合并评分
   - module/category/tag 过滤
   - score 排序
+- Suggest 在 `SuggestService::suggest()`：
+  - 优先使用索引顶层 `suggestions` seed（`optionalSuggestions()`）
+  - 候选不足时回退 `prefixIndex + termIndex`
 - 数据源在 `ConclusionIndexRepository`，文件是 `data/backend_search_index.json`。
 - 历史写入仅在 `button/return/suggest_click` 三类触发中执行（`HistoryRepository::addQuery`）。
 

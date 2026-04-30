@@ -12,6 +12,7 @@ QString projectSourceDir();
 QString testsSourceDir();
 QString fixtureIndexPath();
 QString fixtureIndexRound2Path();
+QString fixtureIndexWithSuggestionsPath();
 QString malformedFixtureIndexPath();
 QString realIndexPath();
 QString summarizeDiagnostics(const infrastructure::data::ConclusionIndexRepository& repository);

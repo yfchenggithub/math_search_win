@@ -145,6 +145,46 @@ PostingSignal collectPostingSignal(const QVector<domain::models::PostingEntry>& 
     return signal;
 }
 
+struct SuggestionSeedSignal {
+    bool accepted = false;
+    double avgDocBoost = 0.0;
+    quint32 mergedFieldMask = 0;
+    QStringList targetDocIds;
+};
+
+SuggestionSeedSignal collectSuggestionSeedSignal(const domain::models::IndexedSuggestionSeed& seed,
+                                                 const infrastructure::data::ConclusionIndexRepository& repository,
+                                                 const QSet<QString>& moduleFilter,
+                                                 const QSet<QString>& categoryFilter,
+                                                 const QSet<QString>& tagFilter)
+{
+    SuggestionSeedSignal signal;
+    const QString seedDocId = seed.docId.trimmed();
+    if (seedDocId.isEmpty()) {
+        // Suggestions without docId cannot be checked against module/category/tag filters.
+        if (!moduleFilter.isEmpty() || !categoryFilter.isEmpty() || !tagFilter.isEmpty()) {
+            return signal;
+        }
+        signal.accepted = true;
+        return signal;
+    }
+
+    const domain::models::IndexDocRecord* doc = repository.getDocById(seedDocId);
+    if (doc == nullptr) {
+        return signal;
+    }
+    if (!matchesOptionalFilter(doc->module, moduleFilter)
+        || !matchesOptionalFilter(doc->category, categoryFilter)
+        || !matchesOptionalTagFilter(doc->tags, tagFilter)) {
+        return signal;
+    }
+
+    signal.accepted = true;
+    signal.avgDocBoost = doc->searchBoost;
+    signal.targetDocIds.push_back(doc->id);
+    return signal;
+}
+
 double fieldQualityScore(quint32 fieldMask, const FieldMaskLegend& legend)
 {
     const auto bit = [&legend](const QString& name) { return legend.value(name, 0U); };
@@ -270,6 +310,7 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
     const FieldMaskLegend& legend = repository_->fieldMaskLegend();
     const QString scoringQuery = result.normalizedQuery.isEmpty() ? compactRawQuery : result.normalizedQuery;
     const QString requiredPrefix = result.normalizedQuery;
+    const QVector<domain::models::IndexedSuggestionSeed>& indexedSuggestions = repository_->optionalSuggestions();
 
     QHash<QString, ScoredSuggestion> dedupedByNormalizedText;
     QVector<ScoredSuggestion> undeduped;
@@ -305,7 +346,53 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
         }
     };
 
-    if (options.enablePrefix) {
+    const auto candidateCount = [&]() {
+        return options.enableExactDedup ? dedupedByNormalizedText.size() : undeduped.size();
+    };
+
+    for (const domain::models::IndexedSuggestionSeed& seed : indexedSuggestions) {
+        const QString seedText = collapseWhitespace(seed.text);
+        if (seedText.isEmpty()) {
+            continue;
+        }
+        if (!matchesAnyPrefix(seedText, queryKeys)) {
+            continue;
+        }
+
+        const SuggestionSeedSignal seedSignal =
+            collectSuggestionSeedSignal(seed, *repository_, moduleFilter, categoryFilter, tagFilter);
+        if (!seedSignal.accepted) {
+            continue;
+        }
+
+        ScoredSuggestion candidate;
+        candidate.item.text = seedText;
+        candidate.item.normalizedText = domain::models::normalizeQueryText(seedText);
+        candidate.item.source = QStringLiteral("indexed_suggestion");
+        candidate.item.matchedFields = domain::models::decodeFieldMask(seedSignal.mergedFieldMask, legend);
+        candidate.item.targetDocIds = seedSignal.targetDocIds;
+        candidate.qualityTier = fieldQualityTier(seedSignal.mergedFieldMask, legend);
+
+        double score = 0.0;
+        score += prefixClosenessScore(candidate.item.normalizedText, scoringQuery);
+        score += lengthReasonablenessScore(candidate.item.normalizedText, scoringQuery);
+        score += seed.score * 0.08;
+        score += seedSignal.avgDocBoost * 4.5;
+        score += 8.0;  // indexed suggestion source bonus
+        candidate.item.score = score;
+
+        if (options.enableDebug) {
+            candidate.item.debugInfo.insert(QStringLiteral("source"), candidate.item.source);
+            candidate.item.debugInfo.insert(QStringLiteral("seed_score"), seed.score);
+            candidate.item.debugInfo.insert(QStringLiteral("avg_doc_boost"), seedSignal.avgDocBoost);
+        }
+
+        acceptSuggestion(std::move(candidate));
+    }
+
+    const bool skipExpensiveIndexScan = options.enablePrefix && !indexedSuggestions.isEmpty() && candidateCount() >= maxResults;
+
+    if (options.enablePrefix && !skipExpensiveIndexScan) {
         repository_->forEachPrefixEntry([&](const QString& key, const QVector<domain::models::PostingEntry>& postings) {
             if (!matchesAnyPrefix(key, queryKeys)) {
                 return;
@@ -345,47 +432,50 @@ SuggestionResult SuggestService::suggest(const QString& query, const SuggestOpti
         });
     }
 
-    int termSupplementCount = 0;
-    repository_->forEachTermEntry([&](const QString& key, const QVector<domain::models::PostingEntry>& postings) {
-        if (termSupplementCount >= maxResults * 8) {
-            return;
-        }
-        if (!matchesAnyRelatedTerm(key, queryKeys)) {
-            return;
-        }
+    const bool shouldRunTermSupplement = !skipExpensiveIndexScan || !options.enablePrefix;
+    if (shouldRunTermSupplement) {
+        int termSupplementCount = 0;
+        repository_->forEachTermEntry([&](const QString& key, const QVector<domain::models::PostingEntry>& postings) {
+            if (termSupplementCount >= maxResults * 8) {
+                return;
+            }
+            if (!matchesAnyRelatedTerm(key, queryKeys)) {
+                return;
+            }
 
-        const PostingSignal signal = collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter, tagFilter);
-        if (!signal.hasAnyDoc) {
-            return;
-        }
+            const PostingSignal signal = collectPostingSignal(postings, *repository_, moduleFilter, categoryFilter, tagFilter);
+            if (!signal.hasAnyDoc) {
+                return;
+            }
 
-        ScoredSuggestion candidate;
-        candidate.item.text = key;
-        candidate.item.normalizedText = domain::models::normalizeQueryText(key);
-        candidate.item.source = QStringLiteral("term_index");
-        candidate.item.matchedFields = domain::models::decodeFieldMask(signal.mergedFieldMask, legend);
-        candidate.item.targetDocIds = signal.targetDocIds;
-        candidate.qualityTier = fieldQualityTier(signal.mergedFieldMask, legend);
+            ScoredSuggestion candidate;
+            candidate.item.text = key;
+            candidate.item.normalizedText = domain::models::normalizeQueryText(key);
+            candidate.item.source = QStringLiteral("term_index");
+            candidate.item.matchedFields = domain::models::decodeFieldMask(signal.mergedFieldMask, legend);
+            candidate.item.targetDocIds = signal.targetDocIds;
+            candidate.qualityTier = fieldQualityTier(signal.mergedFieldMask, legend);
 
-        double score = 0.0;
-        score += prefixClosenessScore(candidate.item.normalizedText, scoringQuery);
-        score += lengthReasonablenessScore(candidate.item.normalizedText, scoringQuery);
-        score += fieldQualityScore(signal.mergedFieldMask, legend) * 0.85;
-        score += signal.scoreSignal * 0.45;
-        score += signal.avgDocBoost * 3.0;
-        score += 3.0;  // term supplement bonus
-        candidate.item.score = score;
+            double score = 0.0;
+            score += prefixClosenessScore(candidate.item.normalizedText, scoringQuery);
+            score += lengthReasonablenessScore(candidate.item.normalizedText, scoringQuery);
+            score += fieldQualityScore(signal.mergedFieldMask, legend) * 0.85;
+            score += signal.scoreSignal * 0.45;
+            score += signal.avgDocBoost * 3.0;
+            score += 3.0;  // term supplement bonus
+            candidate.item.score = score;
 
-        if (options.enableDebug) {
-            candidate.item.debugInfo.insert(QStringLiteral("source"), candidate.item.source);
-            candidate.item.debugInfo.insert(QStringLiteral("score_signal"), signal.scoreSignal);
-            candidate.item.debugInfo.insert(QStringLiteral("avg_doc_boost"), signal.avgDocBoost);
-            candidate.item.debugInfo.insert(QStringLiteral("merged_field_mask"), static_cast<qint64>(signal.mergedFieldMask));
-        }
+            if (options.enableDebug) {
+                candidate.item.debugInfo.insert(QStringLiteral("source"), candidate.item.source);
+                candidate.item.debugInfo.insert(QStringLiteral("score_signal"), signal.scoreSignal);
+                candidate.item.debugInfo.insert(QStringLiteral("avg_doc_boost"), signal.avgDocBoost);
+                candidate.item.debugInfo.insert(QStringLiteral("merged_field_mask"), static_cast<qint64>(signal.mergedFieldMask));
+            }
 
-        acceptSuggestion(std::move(candidate));
-        ++termSupplementCount;
-    });
+            acceptSuggestion(std::move(candidate));
+            ++termSupplementCount;
+        });
+    }
 
     QVector<SuggestionItem> items;
     if (options.enableExactDedup) {

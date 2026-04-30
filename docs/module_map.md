@@ -43,7 +43,7 @@
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
 | `SearchService` | `src/domain/services/search_service.h/.cpp` | term/prefix 命中、过滤、打分、排序 | `SearchPage` | `ConclusionIndexRepository` | `search` |
-| `SuggestService` | `src/domain/services/suggest_service.h/.cpp` | prefix/term 候选收集、评分、去重 | `SearchPage` | `ConclusionIndexRepository` | `suggest` |
+| `SuggestService` | `src/domain/services/suggest_service.h/.cpp` | 先消费顶层 `suggestions` seed，再回退 prefix/term 候选收集、评分、去重 | `SearchPage` | `ConclusionIndexRepository` | `suggest` |
 | `LicenseService` | `src/license/license_service.h/.cpp` | 读写 `license.dat`、解析校验、状态机、发信号 | `MainWindow`、`ActivationPage`、`SettingsPage` | `DeviceFingerprintService`、`FeatureGate` | `initialize`、`reload`、`validateLicense`、`writeLicenseFile` |
 | `ActivationCodeService` | `src/license/activation_code_service.h/.cpp` | 激活码解析、CRC/设备/过期/功能校验、生成 license 内容 | `ActivationPage` | `FeatureGate` | `parseActivationCode`、`validateActivationCode`、`buildLicenseFileContent` |
 | `FeatureGate` | `src/license/feature_gate.h/.cpp` | LicenseState -> 功能启用矩阵 | `MainWindow`、`SearchPage`、`FavoritesPage` | `LicenseState` | `setLicenseState`、`isEnabled`、`disabledReason` |

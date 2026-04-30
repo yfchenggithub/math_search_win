@@ -48,7 +48,7 @@ sequenceDiagram
 - 搜索输入框启用 `QLineEdit::setClearButtonEnabled(true)`，右侧可一键清空当前关键词。
 - 非空输入触发 `SearchPage::runSuggest()`。
 - `runSuggest()` 组装 `SuggestOptions`（含 module/category/tag 过滤），调用 `SuggestService::suggest()`。
-- Suggest 数据来自 `ConclusionIndexRepository` 的 `prefixIndex` + `termIndex`。
+- Suggest 数据优先来自索引顶层 `suggestions`（`optionalSuggestions()`），不足时再回退 `prefixIndex` + `termIndex`。
 - 结果写入 `suggestionList_`；点击建议项触发 `runSearch(..., "suggest_click")`。
 
 ```mermaid
@@ -62,8 +62,11 @@ sequenceDiagram
   SP->>SP: onQueryTextChanged()
   SP->>SP: runSuggest(query)
   SP->>SG: suggest(query, SuggestOptions)
-  SG->>IR: forEachPrefixEntry()/forEachTermEntry()
-  IR-->>SG: 候选 posting
+  SG->>IR: optionalSuggestions()
+  alt seed 候选不足
+    SG->>IR: forEachPrefixEntry()/forEachTermEntry()
+    IR-->>SG: 候选 posting
+  end
   SG-->>SP: SuggestionResult
   SP-->>U: suggestionList_ 更新
   U->>SP: 点击建议项

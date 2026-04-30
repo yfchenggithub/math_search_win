@@ -31,7 +31,7 @@
 namespace {
 
 constexpr int kInfoLabelMinWidth = 132;
-const QString kFeedbackEmail = QStringLiteral("support@example.com");
+const QString kFeedbackEmail = QStringLiteral("18912964525@163.com");
 
 QString normalizedNativePath(const QString& path)
 {

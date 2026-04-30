@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-30T12:00:00+08:00",
+  "stats": {
+    "documents": 3,
+    "terms": 2,
+    "prefixes": 2,
+    "suggestions": 5,
+    "modules": 2,
+    "moduleStats": [
+      {
+        "module": "algebra",
+        "scanned": 2,
+        "built": 2,
+        "filtered": 0,
+        "skipped": 0
+      },
+      {
+        "module": "geometry",
+        "scanned": 1,
+        "built": 1,
+        "filtered": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "buildOptions": {
+    "prefixDocLimit": 32,
+    "suggestionLimit": 16,
+    "targetModules": ["algebra", "geometry"],
+    "targetItems": []
+  },
+  "fieldMaskLegend": {
+    "title": 1,
+    "keyword": 4,
+    "query_template": 32,
+    "tag": 256,
+    "formula": 1024,
+    "summary": 2048
+  },
+  "docs": {
+    "S001": {
+      "id": "S001",
+      "module": "algebra",
+      "moduleDir": "fixture/suggest",
+      "title": "Seed Alpha",
+      "summary": "Seed suggestion alpha doc.",
+      "category": "inequality",
+      "tags": ["seed", "alpha"],
+      "coreFormula": "a+b>=2sqrt(ab)",
+      "rank": 20,
+      "difficulty": 2.0,
+      "searchBoost": 0.2,
+      "hotScore": 10.0,
+      "examFrequency": 0.1,
+      "examScore": 1.0
+    },
+    "S002": {
+      "id": "S002",
+      "module": "geometry",
+      "moduleDir": "fixture/suggest",
+      "title": "Seed Beta",
+      "summary": "Seed suggestion beta doc.",
+      "category": "triangle",
+      "tags": ["seed", "beta"],
+      "coreFormula": "a+b>c",
+      "rank": 18,
+      "difficulty": 2.5,
+      "searchBoost": 0.4,
+      "hotScore": 9.0,
+      "examFrequency": 0.2,
+      "examScore": 2.0
+    },
+    "S003": {
+      "id": "S003",
+      "module": "algebra",
+      "moduleDir": "fixture/suggest",
+      "title": "Fallback Target",
+      "summary": "Used for fallback prefix/term checks.",
+      "category": "practice",
+      "tags": ["fallback"],
+      "coreFormula": "x>=0",
+      "rank": 12,
+      "difficulty": 1.5,
+      "searchBoost": 0.1,
+      "hotScore": 7.0,
+      "examFrequency": 0.0,
+      "examScore": 0.0
+    }
+  },
+  "termIndex": {
+    "seed term": [
+      ["S001", 6.0, 4]
+    ],
+    "fallback term": [
+      ["S003", 8.0, 4]
+    ]
+  },
+  "prefixIndex": {
+    "seed prefix": [
+      ["S001", 7.0, 1],
+      ["S002", 5.0, 1]
+    ],
+    "fallback prefix": [
+      ["S003", 9.0, 1]
+    ]
+  },
+  "suggestions": [
+    ["seed alpha", "S001", 120],
+    ["seed beta", "S002", 115],
+    ["seed orphan", "", 110],
+    ["seed alpha", "S001", 100],
+    ["fallback prefix", "S003", 40]
+  ]
+}

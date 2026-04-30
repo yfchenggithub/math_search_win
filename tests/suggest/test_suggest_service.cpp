@@ -75,14 +75,18 @@ private slots:
     void behaviorRound2_prefixAndTermIndex_hitContracts();
     void behaviorRound2_dedupAndSorting_contracts();
     void behaviorRound2_limitAndNoiseWhitespaceCase_contracts();
+    void indexedSuggestions_usedWhenAvailable();
+    void indexedSuggestions_respectFiltersAndFallback();
 
     void realIndex_smoke_ifAvailable();
 
 private:
     infrastructure::data::ConclusionIndexRepository fixtureRepository_;
     infrastructure::data::ConclusionIndexRepository fixtureRepositoryRound2_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryWithSuggestions_;
     domain::services::SuggestService service_;
     domain::services::SuggestService serviceRound2_;
+    domain::services::SuggestService serviceWithSuggestions_;
 };
 
 void SuggestServiceTest::initTestCase()
@@ -99,6 +103,14 @@ void SuggestServiceTest::initTestCase()
         qPrintable(errorSummary));
     QVERIFY2(fixtureRepositoryRound2_.docCount() > 0, "round2 fixture repository should contain docs");
     serviceRound2_.setRepository(&fixtureRepositoryRound2_);
+
+    errorSummary.clear();
+    QVERIFY2(tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexWithSuggestionsPath(),
+                                                   &fixtureRepositoryWithSuggestions_,
+                                                   &errorSummary),
+             qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryWithSuggestions_.docCount() > 0, "suggestion fixture repository should contain docs");
+    serviceWithSuggestions_.setRepository(&fixtureRepositoryWithSuggestions_);
 }
 
 void SuggestServiceTest::emptyQuery_returnsEmpty_data()
@@ -553,6 +565,107 @@ void SuggestServiceTest::behaviorRound2_limitAndNoiseWhitespaceCase_contracts()
                                            noiseOnlyQuery,
                                            normalizeOptions,
                                            noiseOnlyResult)));
+}
+
+void SuggestServiceTest::indexedSuggestions_usedWhenAvailable()
+{
+    const QString query = QStringLiteral("seed");
+    domain::models::SuggestOptions options;
+    options.maxResults = 4;
+
+    const auto result = serviceWithSuggestions_.suggest(query, options);
+    QVERIFY2(result.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("seed-backed fixture should return suggestions"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("seed alpha")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("indexed seed suggestion should appear in result"),
+                                           query,
+                                           options,
+                                           result)));
+
+    bool hasSeedSource = false;
+    for (const auto& item : result.items) {
+        if (item.source == QStringLiteral("indexed_suggestion")) {
+            hasSeedSource = true;
+            break;
+        }
+    }
+    QVERIFY2(hasSeedSource,
+             qPrintable(makeFailureContext(QStringLiteral("result should contain indexed_suggestion source"),
+                                           query,
+                                           options,
+                                           result)));
+}
+
+void SuggestServiceTest::indexedSuggestions_respectFiltersAndFallback()
+{
+    const QString query = QStringLiteral("seed");
+    domain::models::SuggestOptions geometryOnly;
+    geometryOnly.maxResults = 6;
+    geometryOnly.moduleFilter = {QStringLiteral("geometry")};
+
+    const auto filtered = serviceWithSuggestions_.suggest(query, geometryOnly);
+    QVERIFY2(filtered.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("geometry filter should still keep matched suggestion"),
+                                           query,
+                                           geometryOnly,
+                                           filtered)));
+    QVERIFY2(indexOfSuggestion(filtered.items, QStringLiteral("seed beta")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("geometry-backed seed should remain"),
+                                           query,
+                                           geometryOnly,
+                                           filtered)));
+    QVERIFY2(indexOfSuggestion(filtered.items, QStringLiteral("seed alpha")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("algebra-backed seed should be filtered out"),
+                                           query,
+                                           geometryOnly,
+                                           filtered)));
+    QVERIFY2(indexOfSuggestion(filtered.items, QStringLiteral("seed orphan")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("seed without docId should be removed when filters exist"),
+                                           query,
+                                           geometryOnly,
+                                           filtered)));
+
+    for (const auto& item : filtered.items) {
+        for (const QString& docId : item.targetDocIds) {
+            const auto* doc = fixtureRepositoryWithSuggestions_.getDocById(docId);
+            QVERIFY2(doc != nullptr,
+                     qPrintable(makeFailureContext(QStringLiteral("target doc id should exist"),
+                                                   query,
+                                                   geometryOnly,
+                                                   filtered)));
+            QVERIFY2(doc->module.compare(QStringLiteral("geometry"), Qt::CaseInsensitive) == 0,
+                     qPrintable(makeFailureContext(QStringLiteral("filtered targets should satisfy geometry module"),
+                                                   query,
+                                                   geometryOnly,
+                                                   filtered)));
+        }
+    }
+
+    const QString fallbackQuery = QStringLiteral("fallback t");
+    domain::models::SuggestOptions fallbackOptions;
+    fallbackOptions.maxResults = 6;
+    const auto fallbackResult = serviceWithSuggestions_.suggest(fallbackQuery, fallbackOptions);
+    QVERIFY2(indexOfSuggestion(fallbackResult.items, QStringLiteral("fallback term")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("missing seed hit should fallback to term index"),
+                                           fallbackQuery,
+                                           fallbackOptions,
+                                           fallbackResult)));
+
+    bool hasTermSource = false;
+    for (const auto& item : fallbackResult.items) {
+        if (item.source == QStringLiteral("term_index")) {
+            hasTermSource = true;
+            break;
+        }
+    }
+    QVERIFY2(hasTermSource,
+             qPrintable(makeFailureContext(QStringLiteral("fallback query should include term_index source"),
+                                           fallbackQuery,
+                                           fallbackOptions,
+                                           fallbackResult)));
 }
 
 void SuggestServiceTest::realIndex_smoke_ifAvailable()
