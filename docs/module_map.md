@@ -32,7 +32,7 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体与渲染模式持久化、PDF 页码导航与导出 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`onPdfExportButtonClicked` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`onPdfExportButtonClicked`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页导航与最近/收藏预览 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |

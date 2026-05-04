@@ -14,6 +14,7 @@
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
 - PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），并在详情头部提供“上一页/下一页/页码”导航控件，以及“导出PDF”按钮（当前展示 PDF 另存为）。
+- 详情全屏体验：详情头部已接入“右侧详情区全屏模式”切换按钮；`F11` 可切换，`Esc` 可退出；进入时隐藏搜索页顶部栏和左侧结果栏，退出时恢复。
 - 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页回跳搜索页打开详情。
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
@@ -265,6 +266,7 @@ flowchart TD
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
 - `SearchPage`：详情头部新增字体档位按钮，切换后会实时影响 Web 详情缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
+- `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。
 - `FavoritesPage`：已接线到真实收藏数据；筛选按钮未实现。
 - `RecentSearchesPage`：已接线到真实历史数据。
 - `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”；已实现数据目录/日志目录打开，README 打开链路增加失败兜底（记事本/打开 docs）。
@@ -329,6 +331,7 @@ flowchart TD
   - `renderDetailInPdfView()` + `resolveDetailPdfPath()`（PDF 分支）
   - `jumpToPdfPage()` + `updatePdfPageNavigationUi()`（PDF 页码跳转、导航状态与导出按钮状态刷新）
   - `onPdfExportButtonClicked()`（当前 PDF 另存为导出）
+  - `onDetailFullscreenButtonClicked()` + `enterDetailFullscreen()` + `leaveDetailFullscreen()`（详情区全屏切换与退出）
   - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`（Web 分支）
   - `DetailFallbackContentBuilder::buildFallbackHtml/buildTrialPreviewHtml()`（文本回退和 trial 预览分支）
   - `DetailHtmlRenderer::buildRenderScript()` -> `window.DetailRuntime.renderDetail(...)`

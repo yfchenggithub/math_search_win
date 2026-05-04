@@ -119,6 +119,7 @@ flowchart TD
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
 - PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），通过保存对话框选择目标路径后执行文件复制（另存为）。
+- 详情全屏：`onDetailFullscreenButtonClicked()` 切换 Search 页“右侧详情区全屏模式”；进入后隐藏顶部搜索栏与左侧结果栏，仅保留 `detailShell`，`F11` 绑定同一入口切换，`Esc` 调用 `leaveDetailFullscreen()` 退出并恢复 splitter 尺寸。
 - 授权分支：
   - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
   - 已开 `FullDetail` 且模式允许 PDF -> `renderDetailInPdfView()`（失败可按模式回退）
@@ -162,6 +163,10 @@ sequenceDiagram
     SP->>NAV: updatePdfPageNavigationUi()
     U->>SP: 点击 导出PDF
     SP->>FS: getSaveFileName + copy(source,target)
+    U->>SP: 点击全屏 / 按F11
+    SP->>SP: onDetailFullscreenButtonClicked()
+    U->>SP: 按Esc
+    SP->>SP: leaveDetailFullscreen()
     alt Pdf失败且mode=auto
       SP->>DP: renderDetail(payload)
       DP->>JS: DetailRuntime.renderDetail(payload)

@@ -28,6 +28,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QHideEvent>
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QLabel>
@@ -37,6 +38,7 @@
 #include <QPdfDocument>
 #include <QPdfPageNavigator>
 #include <QPdfView>
+#include <QShortcut>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
@@ -64,6 +66,8 @@ constexpr int kTrialPreviewLimit = 5;
 constexpr int kDetailFontScaleMinLevel = 0;
 constexpr int kDetailFontScaleDefaultLevel = 1;
 constexpr int kDetailFontScaleMaxLevel = 2;
+const QString kDetailFullscreenEnterText = QStringLiteral("全屏");
+const QString kDetailFullscreenExitText = QStringLiteral("退出全屏");
 
 int clampDetailFontScaleLevel(int level)
 {
@@ -313,6 +317,14 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
 bool SearchPage::isDetailWebReady() const
 {
     return webDetailEnabled_;
+}
+
+void SearchPage::hideEvent(QHideEvent* event)
+{
+    if (detailPaneFullscreen_) {
+        leaveDetailFullscreen();
+    }
+    QWidget::hideEvent(event);
 }
 
 void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
@@ -688,6 +700,83 @@ void SearchPage::onDetailFontButtonClicked()
     persistDetailFontScaleSetting();
 }
 
+void SearchPage::onDetailFullscreenButtonClicked()
+{
+    if (detailPaneFullscreen_) {
+        leaveDetailFullscreen();
+        return;
+    }
+    enterDetailFullscreen();
+}
+
+void SearchPage::enterDetailFullscreen()
+{
+    if (detailPaneFullscreen_) {
+        syncDetailFullscreenButtonState();
+        return;
+    }
+
+    if (searchWorkbenchSplitter_ == nullptr || searchLeftColumn_ == nullptr || detailShell_ == nullptr
+        || searchTopBar_ == nullptr) {
+        LOG_WARN(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen skipped reason=missing_ui_nodes"));
+        return;
+    }
+
+    detailPaneNormalSplitterSizes_ = searchWorkbenchSplitter_->sizes();
+    searchTopBar_->setVisible(false);
+    searchLeftColumn_->setVisible(false);
+    detailShell_->setVisible(true);
+    searchWorkbenchSplitter_->setSizes({0, 1});
+
+    detailPaneFullscreen_ = true;
+    syncDetailFullscreenButtonState();
+    LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen entered"));
+}
+
+void SearchPage::syncDetailFullscreenButtonState()
+{
+    if (detailFullscreenButton_ == nullptr) {
+        return;
+    }
+
+    if (detailPaneFullscreen_) {
+        detailFullscreenButton_->setText(kDetailFullscreenExitText);
+        detailFullscreenButton_->setToolTip(QStringLiteral("退出详情全屏（Esc）"));
+    } else {
+        detailFullscreenButton_->setText(kDetailFullscreenEnterText);
+        detailFullscreenButton_->setToolTip(QStringLiteral("详情区域全屏显示（F11）"));
+    }
+}
+
+void SearchPage::leaveDetailFullscreen()
+{
+    if (!detailPaneFullscreen_) {
+        syncDetailFullscreenButtonState();
+        return;
+    }
+
+    if (searchTopBar_ != nullptr) {
+        searchTopBar_->setVisible(true);
+    }
+    if (searchLeftColumn_ != nullptr) {
+        searchLeftColumn_->setVisible(true);
+    }
+    if (detailShell_ != nullptr) {
+        detailShell_->setVisible(true);
+    }
+    if (searchWorkbenchSplitter_ != nullptr) {
+        if (detailPaneNormalSplitterSizes_.size() >= 2) {
+            searchWorkbenchSplitter_->setSizes(detailPaneNormalSplitterSizes_);
+        } else {
+            searchWorkbenchSplitter_->setSizes({460, 1180});
+        }
+    }
+
+    detailPaneFullscreen_ = false;
+    syncDetailFullscreenButtonState();
+    LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen exited"));
+}
+
 void SearchPage::onPdfPrevPageClicked()
 {
     if (detailPdfView_ == nullptr || detailPdfView_->pageNavigator() == nullptr) {
@@ -843,6 +932,9 @@ void SearchPage::persistDetailFontScaleSetting()
 
 void SearchPage::buildUi()
 {
+    detailPaneFullscreen_ = false;
+    detailPaneNormalSplitterSizes_.clear();
+
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(ui::style::tokens::kPageOuterMargin,
                                    ui::style::tokens::kPageOuterMargin,
@@ -851,6 +943,7 @@ void SearchPage::buildUi()
     mainLayout->setSpacing(ui::style::tokens::kMediumSpacing);
 
     auto* topBar = new QWidget(this);
+    searchTopBar_ = topBar;
     topBar->setObjectName(QStringLiteral("searchTopBar"));
     topBar->setAttribute(Qt::WA_StyledBackground, true);
     auto* topBarLayout = new QVBoxLayout(topBar);
@@ -903,11 +996,13 @@ void SearchPage::buildUi()
     workbenchLayout->setSpacing(0);
 
     auto* splitter = new QSplitter(Qt::Horizontal, workbench);
+    searchWorkbenchSplitter_ = splitter;
     splitter->setObjectName(QStringLiteral("searchWorkbenchSplitter"));
     splitter->setChildrenCollapsible(false);
     splitter->setHandleWidth(1);
 
     auto* leftPanel = new QWidget(splitter);
+    searchLeftColumn_ = leftPanel;
     leftPanel->setObjectName(QStringLiteral("searchLeftColumn"));
     auto* leftLayout = new QVBoxLayout(leftPanel);
     leftLayout->setContentsMargins(0, 0, 0, 0);
@@ -1006,6 +1101,7 @@ void SearchPage::buildUi()
     leftLayout->addWidget(resultPanel, 1);
 
     auto* detailShell = new QWidget(splitter);
+    detailShell_ = detailShell;
     detailShell->setObjectName(QStringLiteral("detailShell"));
     detailShell->setAttribute(Qt::WA_StyledBackground, true);
     auto* rightLayout = new QVBoxLayout(detailShell);
@@ -1043,6 +1139,11 @@ void SearchPage::buildUi()
     detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
     detailFontButton_->setProperty("fontScale", detailFontScaleTokenForLevel(detailFontScaleLevel_));
 
+    detailFullscreenButton_ = new QPushButton(kDetailFullscreenEnterText, detailHeader);
+    detailFullscreenButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
+    detailFullscreenButton_->setCursor(Qt::PointingHandCursor);
+    detailFullscreenButton_->setToolTip(QStringLiteral("详情区域全屏显示（F11）"));
+
     detailPdfPrevButton_ = new QPushButton(QStringLiteral("上一页"), detailHeader);
     detailPdfPrevButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
     detailPdfPrevButton_->setCursor(Qt::PointingHandCursor);
@@ -1079,6 +1180,7 @@ void SearchPage::buildUi()
     detailActionRow->setContentsMargins(0, 0, 0, 0);
     detailActionRow->setSpacing(6);
     detailActionRow->addWidget(detailFontButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailFullscreenButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPrevButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPageLabel_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfNextButton_, 0, Qt::AlignVCenter);
@@ -1152,7 +1254,14 @@ void SearchPage::buildUi()
 
     workbenchLayout->addWidget(splitter, 1);
     mainLayout->addWidget(workbench, 1);
+
+    detailFullscreenShortcut_ = new QShortcut(QKeySequence(Qt::Key_F11), this);
+    detailFullscreenShortcut_->setContext(Qt::WidgetWithChildrenShortcut);
+    detailExitFullscreenShortcut_ = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    detailExitFullscreenShortcut_->setContext(Qt::WidgetWithChildrenShortcut);
+
     updatePdfPageNavigationUi();
+    syncDetailFullscreenButtonState();
 }
 
 void SearchPage::connectSignals()
@@ -1180,9 +1289,16 @@ void SearchPage::connectSignals()
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
     connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
     connect(detailFontButton_, &QPushButton::clicked, this, &SearchPage::onDetailFontButtonClicked);
+    connect(detailFullscreenButton_, &QPushButton::clicked, this, &SearchPage::onDetailFullscreenButtonClicked);
     connect(detailPdfPrevButton_, &QPushButton::clicked, this, &SearchPage::onPdfPrevPageClicked);
     connect(detailPdfNextButton_, &QPushButton::clicked, this, &SearchPage::onPdfNextPageClicked);
     connect(detailPdfExportButton_, &QPushButton::clicked, this, &SearchPage::onPdfExportButtonClicked);
+    connect(detailFullscreenShortcut_, &QShortcut::activated, this, &SearchPage::onDetailFullscreenButtonClicked);
+    connect(detailExitFullscreenShortcut_, &QShortcut::activated, this, [this]() {
+        if (detailPaneFullscreen_) {
+            leaveDetailFullscreen();
+        }
+    });
 
     if (detailPdfDocument_ != nullptr) {
         connect(detailPdfDocument_, &QPdfDocument::pageCountChanged, this, [this](int) { updatePdfPageNavigationUi(); });

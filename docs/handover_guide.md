@@ -33,6 +33,7 @@ powershell .\run-debug.ps1
 - 当使用 PDF 渲染时，确认详情区可滚动跨页，且“上一页/下一页”按钮可用（多页 PDF）。
 - 当使用 PDF 渲染时，点击“导出PDF”并保存到临时路径，确认可生成副本文件。
 - 点击详情区 `Aa` 按钮，确认小/中/大三档字体循环并即时生效。
+- 点击详情区“全屏”，确认仅右侧详情区进入沉浸模式（顶部搜索栏和左侧结果栏隐藏）；按 `Esc` 或再次点击“退出全屏”可恢复。
 - 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
 - 进入“设置/关于”，点击“打开 README”，确认至少可通过默认程序或记事本打开。
 
@@ -82,6 +83,8 @@ powershell .\run-debug.ps1
     - 翻页入口：`onPdfPrevPageClicked` / `onPdfNextPageClicked` -> `jumpToPdfPage`
     - 状态刷新：`updatePdfPageNavigationUi`（页码文本与按钮可用性）
     - 导出入口：`onPdfExportButtonClicked`（读取 `currentDetailPdfPath_` 后执行“另存为”复制）
+    - 全屏入口：`onDetailFullscreenButtonClicked`；快捷键 `F11` 切换，`Esc` 退出（`leaveDetailFullscreen`）
+    - 页面控制：`enterDetailFullscreen()` 隐藏 `searchTopBar_` 与 `searchLeftColumn_`，退出时恢复并还原 splitter 尺寸
   - Web 模式：`DetailPane` + `app_resources/detail/detail_template.html` + `detail.js` + `katex`
   - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser` + `DetailFallbackContentBuilder::buildFallbackHtml`）
   - Trial 预览：`showTrialDetailPreview` + `DetailFallbackContentBuilder::buildTrialPreviewHtml`
@@ -155,6 +158,11 @@ powershell .\run-debug.ps1
 - 检查 `detailPdfExportButton_` 是否处于可点击状态（仅当前展示 PDF 时可用）。
 - 断点 `SearchPage::onPdfExportButtonClicked`，确认 `currentDetailPdfPath_` 非空且源文件存在。
 - 检查目标路径是否可写、是否被同名文件占用（覆盖路径会先尝试删除旧文件）。
+
+### 详情全屏无法退出怎么办
+- 优先按 `Esc`；若无效，再按 `F11`（两者都走 `SearchPage` 的全屏切换链路）。
+- 断点 `SearchPage::onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen`。
+- 检查 `detailPaneFullscreen_` 状态位，以及 `searchTopBar_` / `searchLeftColumn_` / `searchWorkbenchSplitter_` 是否可用。
 
 ### 收藏保存失败怎么办
 - 断点 `SearchPage::onFavoriteButtonClicked`。

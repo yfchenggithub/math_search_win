@@ -271,6 +271,7 @@ private slots:
     void webDetailDispatch_viewportResetLoggedBeforeEveryDispatch();
     void detailPdfPathResolution_prefersMapThenAssetThenId();
     void detailPdfViewer_usesMultiPageModeAndNavStartsDisabled();
+    void detailFullscreenButton_togglesDetailPaneFocusMode();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -573,6 +574,50 @@ void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabl
     QVERIFY(!page.detailPdfNextButton_->isEnabled());
     QVERIFY(!page.detailPdfExportButton_->isEnabled());
     QCOMPARE(page.detailPdfPageLabel_->text(), QStringLiteral("PDF --/--"));
+}
+
+void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.detailFullscreenButton_ != nullptr);
+    QVERIFY(page.searchTopBar_ != nullptr);
+    QVERIFY(page.searchLeftColumn_ != nullptr);
+    QVERIFY(page.detailShell_ != nullptr);
+    QVERIFY(page.searchWorkbenchSplitter_ != nullptr);
+    QCOMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
+
+    page.show();
+    QTRY_VERIFY(page.isVisible());
+    QVERIFY(!page.isFullScreen());
+    QVERIFY(page.searchTopBar_->isVisible());
+    QVERIFY(page.searchLeftColumn_->isVisible());
+    QVERIFY(page.detailShell_->isVisible());
+
+    QTest::mouseClick(page.detailFullscreenButton_, Qt::LeftButton);
+    QTRY_VERIFY(page.detailPaneFullscreen_);
+    QVERIFY(!page.searchTopBar_->isVisible());
+    QVERIFY(!page.searchLeftColumn_->isVisible());
+    QVERIFY(page.detailShell_->isVisible());
+    QVERIFY(!page.isFullScreen());
+    QTRY_COMPARE(page.detailFullscreenButton_->text(), QStringLiteral("退出全屏"));
+
+    QTest::mouseClick(page.detailFullscreenButton_, Qt::LeftButton);
+    QTRY_VERIFY(!page.detailPaneFullscreen_);
+    QVERIFY(page.searchTopBar_->isVisible());
+    QVERIFY(page.searchLeftColumn_->isVisible());
+    QVERIFY(page.detailShell_->isVisible());
+    QVERIFY(!page.isFullScreen());
+    QTRY_COMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

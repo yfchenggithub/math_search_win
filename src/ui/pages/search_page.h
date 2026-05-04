@@ -11,6 +11,7 @@
 #include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QWidget>
 #include <memory>
@@ -21,8 +22,11 @@ class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
+class QShortcut;
+class QHideEvent;
 class QPdfDocument;
 class QPdfView;
+class QSplitter;
 class QTextBrowser;
 class QTimer;
 class QWebEngineView;
@@ -82,6 +86,9 @@ signals:
     void favoritesChanged();
     void historyChanged();
 
+protected:
+    void hideEvent(QHideEvent* event) override;
+
 private slots:
     void onQueryTextChanged(const QString& text);
     void onQueryReturnPressed();
@@ -93,6 +100,7 @@ private slots:
     void onClearFiltersClicked();
     void onFavoriteButtonClicked();
     void onDetailFontButtonClicked();
+    void onDetailFullscreenButtonClicked();
     void onPdfPrevPageClicked();
     void onPdfNextPageClicked();
     void onPdfExportButtonClicked();
@@ -218,6 +226,9 @@ private:
     void loadDetailFontScaleSetting();
     void applyDetailFontScale();
     void persistDetailFontScaleSetting();
+    void enterDetailFullscreen();
+    void syncDetailFullscreenButtonState();
+    void leaveDetailFullscreen();
 
 private:
     domain::services::SearchService* searchService_ = nullptr;
@@ -258,7 +269,12 @@ private:
 
     QLineEdit* queryInput_ = nullptr;
     QPushButton* searchButton_ = nullptr;
+    QWidget* searchTopBar_ = nullptr;
+    QSplitter* searchWorkbenchSplitter_ = nullptr;
+    QWidget* searchLeftColumn_ = nullptr;
+    QWidget* detailShell_ = nullptr;
     QPushButton* detailFontButton_ = nullptr;
+    QPushButton* detailFullscreenButton_ = nullptr;
     QPushButton* detailPdfPrevButton_ = nullptr;
     QPushButton* detailPdfNextButton_ = nullptr;
     QPushButton* detailPdfExportButton_ = nullptr;
@@ -279,6 +295,8 @@ private:
     QLabel* resultEmptyTitleLabel_ = nullptr;
     QLabel* resultEmptyDescriptionLabel_ = nullptr;
     QTimer* detailSelectionCoalesceTimer_ = nullptr;
+    QShortcut* detailFullscreenShortcut_ = nullptr;
+    QShortcut* detailExitFullscreenShortcut_ = nullptr;
     QPdfDocument* detailPdfDocument_ = nullptr;
     QPdfView* detailPdfView_ = nullptr;
     QWebEngineView* detailWebView_ = nullptr;
@@ -293,4 +311,6 @@ private:
     ui::detail::DetailPerfAggregator detailPerfAggregator_;
     quint64 activeDetailTimingRequestId_ = 0;
     int detailFontScaleLevel_ = 1;
+    bool detailPaneFullscreen_ = false;
+    QList<int> detailPaneNormalSplitterSizes_;
 };
