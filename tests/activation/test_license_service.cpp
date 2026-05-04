@@ -123,6 +123,7 @@ private slots:
     void reload_whenFormatVersionInvalid_setsInvalidState();
     void reload_whenRequiredFieldMissing_setsInvalidState();
     void reload_whenExpired_setsInvalidState();
+    void reload_whenExpireAtFormatInvalid_setsInvalidState();
     void reload_whenTrialFallback_onlyEnablesTrialFeatures();
     void reload_whenValidFull_setsFullState();
     void reload_invalidThenValid_transitionsAndEmitsSignals();
@@ -228,6 +229,26 @@ void LicenseServiceTest::reload_whenExpired_setsInvalidState()
     QVERIFY(!state.isFull);
     QCOMPARE(state.expireAt, yesterday);
     QVERIFY(state.technicalReason.contains(QStringLiteral("license expired")));
+}
+
+void LicenseServiceTest::reload_whenExpireAtFormatInvalid_setsInvalidState()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    const QMap<QString, QString> fields = buildValidFullFields(QStringLiteral("2026/04/20"));
+
+    license::LicenseService licenseService(nullptr);
+    QVERIFY(writeUtf8File(licenseService.licenseFilePath(), serializeLicenseFields(fields)));
+
+    licenseService.reload();
+
+    const license::LicenseState state = licenseService.currentState();
+    QCOMPARE(state.status, license::LicenseStatus::Invalid);
+    QVERIFY(state.isTrial);
+    QVERIFY(!state.isFull);
+    QCOMPARE(state.expireAt, QStringLiteral("2026/04/20"));
+    QVERIFY(state.technicalReason.contains(QStringLiteral("expire_at invalid format")));
 }
 
 void LicenseServiceTest::reload_whenTrialFallback_onlyEnablesTrialFeatures()
