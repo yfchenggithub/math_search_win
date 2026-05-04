@@ -567,9 +567,11 @@ void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabl
 
     QVERIFY(page.detailPdfPrevButton_ != nullptr);
     QVERIFY(page.detailPdfNextButton_ != nullptr);
+    QVERIFY(page.detailPdfExportButton_ != nullptr);
     QVERIFY(page.detailPdfPageLabel_ != nullptr);
     QVERIFY(!page.detailPdfPrevButton_->isEnabled());
     QVERIFY(!page.detailPdfNextButton_->isEnabled());
+    QVERIFY(!page.detailPdfExportButton_->isEnabled());
     QCOMPARE(page.detailPdfPageLabel_->text(), QStringLiteral("PDF --/--"));
 }
 

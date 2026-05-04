@@ -118,6 +118,7 @@ flowchart TD
 - PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
+- PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），通过保存对话框选择目标路径后执行文件复制（另存为）。
 - 授权分支：
   - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
   - 已开 `FullDetail` 且模式允许 PDF -> `renderDetailInPdfView()`（失败可按模式回退）
@@ -136,6 +137,7 @@ sequenceDiagram
   participant DRP as DetailRenderPathResolver
   participant PDF as QPdfView/QPdfDocument
   participant NAV as QPdfPageNavigator
+  participant FS as QFileDialog/QFile
   participant DP as DetailPane
   participant FB as DetailFallbackContentBuilder
   participant JS as app_resources/detail/detail.js
@@ -158,6 +160,8 @@ sequenceDiagram
     SP->>SP: resolveDetailPdfPath(docId)
     SP->>PDF: renderDetailInPdfView(path)
     SP->>NAV: updatePdfPageNavigationUi()
+    U->>SP: 点击 导出PDF
+    SP->>FS: getSaveFileName + copy(source,target)
     alt Pdf失败且mode=auto
       SP->>DP: renderDetail(payload)
       DP->>JS: DetailRuntime.renderDetail(payload)

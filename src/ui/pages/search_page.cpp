@@ -24,6 +24,8 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QDir>
+#include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -704,6 +706,57 @@ void SearchPage::onPdfNextPageClicked()
     jumpToPdfPage(detailPdfView_->pageNavigator()->currentPage() + 1);
 }
 
+void SearchPage::onPdfExportButtonClicked()
+{
+    const QString sourcePath = currentDetailPdfPath_.trimmed();
+    if (sourcePath.isEmpty()) {
+        updateStatusLine(QStringLiteral("当前无可导出的 PDF。"), QStringLiteral("请先打开一条 PDF 详情。"));
+        updatePdfPageNavigationUi();
+        return;
+    }
+
+    const QFileInfo sourceInfo(sourcePath);
+    if (!sourceInfo.exists() || !sourceInfo.isFile()) {
+        updateStatusLine(QStringLiteral("导出失败：源 PDF 不存在。"), sourceInfo.absoluteFilePath());
+        currentDetailPdfPath_.clear();
+        updatePdfPageNavigationUi();
+        return;
+    }
+
+    const QString docId = currentDetailDocId_.trimmed();
+    const QString defaultName = docId.isEmpty() ? QStringLiteral("detail_export.pdf") : QStringLiteral("%1.pdf").arg(docId);
+    QString targetPath = QFileDialog::getSaveFileName(this,
+                                                      QStringLiteral("导出当前 PDF"),
+                                                      QDir::home().filePath(defaultName),
+                                                      QStringLiteral("PDF 文件 (*.pdf);;所有文件 (*.*)"));
+    if (targetPath.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (QFileInfo(targetPath).suffix().trimmed().isEmpty()) {
+        targetPath.append(QStringLiteral(".pdf"));
+    }
+
+    const QString normalizedSource = sourceInfo.absoluteFilePath();
+    const QString normalizedTarget = QFileInfo(targetPath).absoluteFilePath();
+    if (QDir::cleanPath(normalizedSource) == QDir::cleanPath(normalizedTarget)) {
+        updateStatusLine(QStringLiteral("PDF 已位于目标位置。"), normalizedTarget);
+        return;
+    }
+
+    if (QFileInfo::exists(normalizedTarget) && !QFile::remove(normalizedTarget)) {
+        updateStatusLine(QStringLiteral("导出失败：无法覆盖目标文件。"), normalizedTarget);
+        return;
+    }
+
+    if (!QFile::copy(normalizedSource, normalizedTarget)) {
+        updateStatusLine(QStringLiteral("导出失败：文件复制失败。"), normalizedTarget);
+        return;
+    }
+
+    updateStatusLine(QStringLiteral("PDF 导出完成。"), normalizedTarget);
+}
+
 void SearchPage::loadDetailFontScaleSetting()
 {
     detailFontScaleLevel_ = kDetailFontScaleDefaultLevel;
@@ -1006,6 +1059,12 @@ void SearchPage::buildUi()
     detailPdfNextButton_->setEnabled(false);
     detailPdfNextButton_->setToolTip(QStringLiteral("跳转到下一页 PDF"));
 
+    detailPdfExportButton_ = new QPushButton(QStringLiteral("导出PDF"), detailHeader);
+    detailPdfExportButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
+    detailPdfExportButton_->setCursor(Qt::PointingHandCursor);
+    detailPdfExportButton_->setEnabled(false);
+    detailPdfExportButton_->setToolTip(QStringLiteral("将当前 PDF 另存为文件"));
+
     favoriteButton_ = new QPushButton(QStringLiteral("收藏当前结论"), detailHeader);
     favoriteButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
     favoriteButton_->setCursor(Qt::PointingHandCursor);
@@ -1023,6 +1082,7 @@ void SearchPage::buildUi()
     detailActionRow->addWidget(detailPdfPrevButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPageLabel_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfNextButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailPdfExportButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(favoriteButton_, 0, Qt::AlignVCenter);
     detailHeaderRightLayout->addLayout(detailActionRow);
     detailHeaderRightLayout->addWidget(detailTimingLabel_, 0, Qt::AlignRight);
@@ -1122,6 +1182,7 @@ void SearchPage::connectSignals()
     connect(detailFontButton_, &QPushButton::clicked, this, &SearchPage::onDetailFontButtonClicked);
     connect(detailPdfPrevButton_, &QPushButton::clicked, this, &SearchPage::onPdfPrevPageClicked);
     connect(detailPdfNextButton_, &QPushButton::clicked, this, &SearchPage::onPdfNextPageClicked);
+    connect(detailPdfExportButton_, &QPushButton::clicked, this, &SearchPage::onPdfExportButtonClicked);
 
     if (detailPdfDocument_ != nullptr) {
         connect(detailPdfDocument_, &QPdfDocument::pageCountChanged, this, [this](int) { updatePdfPageNavigationUi(); });
@@ -1867,6 +1928,7 @@ void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::Conclusio
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    currentDetailPdfPath_.clear();
     updatePdfPageNavigationUi();
 }
 
@@ -1874,6 +1936,7 @@ bool SearchPage::renderDetailInPdfView(const QString& docId,
                                        const domain::adapters::ConclusionDetailViewData& detailView,
                                        QString* failureReason)
 {
+    currentDetailPdfPath_.clear();
     const auto assignFailure = [failureReason](const QString& reason) {
         if (failureReason != nullptr) {
             *failureReason = reason;
@@ -1911,6 +1974,7 @@ bool SearchPage::renderDetailInPdfView(const QString& docId,
         detailBrowser_->setVisible(false);
     }
 
+    currentDetailPdfPath_ = pdfInfo.absoluteFilePath();
     jumpToPdfPage(0);
     resetPdfDetailViewportToTop();
     updatePdfPageNavigationUi();
@@ -1969,6 +2033,8 @@ void SearchPage::updatePdfPageNavigationUi()
         (detailPdfDocument_ != nullptr && detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr);
     const bool pdfVisible = viewReady && detailPdfView_->isVisible();
     const int pageCount = viewReady ? detailPdfDocument_->pageCount() : 0;
+    const QString exportSourcePath = currentDetailPdfPath_.trimmed();
+    const bool canExport = pdfVisible && !exportSourcePath.isEmpty() && QFileInfo::exists(exportSourcePath);
 
     int currentPage = -1;
     if (pageCount > 0) {
@@ -1986,6 +2052,11 @@ void SearchPage::updatePdfPageNavigationUi()
     }
     if (detailPdfNextButton_ != nullptr) {
         detailPdfNextButton_->setEnabled(canGoNext);
+    }
+    if (detailPdfExportButton_ != nullptr) {
+        detailPdfExportButton_->setEnabled(canExport);
+        detailPdfExportButton_->setToolTip(canExport ? QStringLiteral("将当前 PDF 另存为文件")
+                                                     : QStringLiteral("请先加载可用的 PDF 详情"));
     }
 }
 
@@ -2008,6 +2079,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
         detailRenderCoordinator_->clearRenderedDetail();
     }
     currentDetailDocId_.clear();
+    currentDetailPdfPath_.clear();
     refreshFavoriteButtonState();
 
     if (shouldDispatchStateToWeb()) {
@@ -2042,6 +2114,7 @@ void SearchPage::showDetailError(const QString& message)
         detailRenderCoordinator_->clearRenderedDetail();
     }
     currentDetailDocId_.clear();
+    currentDetailPdfPath_.clear();
     refreshFavoriteButtonState();
 
     if (shouldDispatchStateToWeb()) {
@@ -2145,6 +2218,7 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(true);
     }
+    currentDetailPdfPath_.clear();
     updatePdfPageNavigationUi();
     ui::detail::DetailPane::RequestContext requestContext;
     requestContext.payload = payload;
@@ -2743,6 +2817,7 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    currentDetailPdfPath_.clear();
     updatePdfPageNavigationUi();
 }
 

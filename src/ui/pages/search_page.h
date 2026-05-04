@@ -95,6 +95,7 @@ private slots:
     void onDetailFontButtonClicked();
     void onPdfPrevPageClicked();
     void onPdfNextPageClicked();
+    void onPdfExportButtonClicked();
     void flushPendingDetailRequest();
 
 private:
@@ -245,6 +246,7 @@ private:
     quint64 pendingDetailRequestId_ = 0;
     qint64 pendingDetailSelectionTimestampMs_ = 0;
     QString currentDetailDocId_;
+    QString currentDetailPdfPath_;
 
     QHash<QString, domain::adapters::ConclusionDetailViewData> detailViewCache_;
     QHash<QString, QJsonObject> detailPayloadCache_;
@@ -259,6 +261,7 @@ private:
     QPushButton* detailFontButton_ = nullptr;
     QPushButton* detailPdfPrevButton_ = nullptr;
     QPushButton* detailPdfNextButton_ = nullptr;
+    QPushButton* detailPdfExportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
     QLabel* detailMetaLabel_ = nullptr;
