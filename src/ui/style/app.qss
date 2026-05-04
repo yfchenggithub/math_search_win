@@ -945,6 +945,38 @@ QPushButton#detailFontSizeButton[fontScale="large"] {
     color: #5d6a7b;
 }
 
+QPushButton#detailPdfNavButton {
+    min-height: 30px;
+    min-width: 56px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid #d9e0e8;
+    background-color: #f7f9fc;
+    color: #6f7b8c;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#detailPdfNavButton:hover:enabled {
+    border-color: #cdd7e3;
+    background-color: #f2f6fb;
+    color: #5f6d80;
+}
+
+QPushButton#detailPdfNavButton:disabled {
+    border-color: #e5eaf0;
+    background-color: #f7f9fb;
+    color: #aeb7c1;
+}
+
+QLabel#detailPdfPageLabel {
+    min-width: 78px;
+    padding: 0 4px;
+    color: #758191;
+    font-size: 12px;
+    font-weight: 500;
+}
+
 QWidget#detailShellBody {
     border: 1px solid #e8edf3;
     border-radius: 12px;

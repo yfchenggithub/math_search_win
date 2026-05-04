@@ -116,6 +116,8 @@ flowchart TD
 - `DetailRenderPathResolver::resolveForMode()` 统一决定当前请求走 `TrialPreview / Pdf / Web / FallbackText` 分支。
 - 详情渲染模式来源：`MATH_SEARCH_DETAIL_RENDER_MODE`（优先）> `cache/settings.json` 中 `detail_render_mode` > 默认 `pdf`。
 - PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
+- PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
+- PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
 - 授权分支：
   - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
   - 已开 `FullDetail` 且模式允许 PDF -> `renderDetailInPdfView()`（失败可按模式回退）
@@ -133,6 +135,7 @@ sequenceDiagram
   participant M as DetailViewDataMapper
   participant DRP as DetailRenderPathResolver
   participant PDF as QPdfView/QPdfDocument
+  participant NAV as QPdfPageNavigator
   participant DP as DetailPane
   participant FB as DetailFallbackContentBuilder
   participant JS as app_resources/detail/detail.js
@@ -154,6 +157,7 @@ sequenceDiagram
   else Pdf
     SP->>SP: resolveDetailPdfPath(docId)
     SP->>PDF: renderDetailInPdfView(path)
+    SP->>NAV: updatePdfPageNavigationUi()
     alt Pdf失败且mode=auto
       SP->>DP: renderDetail(payload)
       DP->>JS: DetailRuntime.renderDetail(payload)

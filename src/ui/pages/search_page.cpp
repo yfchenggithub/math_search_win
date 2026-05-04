@@ -33,6 +33,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QPdfDocument>
+#include <QPdfPageNavigator>
 #include <QPdfView>
 #include <QSet>
 #include <QSignalBlocker>
@@ -683,6 +684,24 @@ void SearchPage::onDetailFontButtonClicked()
     persistDetailFontScaleSetting();
 }
 
+void SearchPage::onPdfPrevPageClicked()
+{
+    if (detailPdfView_ == nullptr || detailPdfView_->pageNavigator() == nullptr) {
+        return;
+    }
+
+    jumpToPdfPage(detailPdfView_->pageNavigator()->currentPage() - 1);
+}
+
+void SearchPage::onPdfNextPageClicked()
+{
+    if (detailPdfView_ == nullptr || detailPdfView_->pageNavigator() == nullptr) {
+        return;
+    }
+
+    jumpToPdfPage(detailPdfView_->pageNavigator()->currentPage() + 1);
+}
+
 void SearchPage::loadDetailFontScaleSetting()
 {
     detailFontScaleLevel_ = kDetailFontScaleDefaultLevel;
@@ -724,6 +743,15 @@ void SearchPage::loadDetailRenderModeSetting()
         LOG_WARN(LogCategory::Config,
                  QStringLiteral("invalid detail render mode from settings value=%1 fallback=pdf").arg(savedModeRaw));
     }
+}
+
+static QString detailPageIndicatorText(int currentPage, int pageCount)
+{
+    if (pageCount <= 0 || currentPage < 0) {
+        return QStringLiteral("PDF --/--");
+    }
+
+    return QStringLiteral("PDF %1/%2").arg(currentPage + 1).arg(pageCount);
 }
 
 void SearchPage::applyDetailFontScale()
@@ -960,6 +988,22 @@ void SearchPage::buildUi()
     detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
     detailFontButton_->setProperty("fontScale", detailFontScaleTokenForLevel(detailFontScaleLevel_));
 
+    detailPdfPrevButton_ = new QPushButton(QStringLiteral("上一页"), detailHeader);
+    detailPdfPrevButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
+    detailPdfPrevButton_->setCursor(Qt::PointingHandCursor);
+    detailPdfPrevButton_->setEnabled(false);
+    detailPdfPrevButton_->setToolTip(QStringLiteral("跳转到上一页 PDF"));
+
+    detailPdfPageLabel_ = new QLabel(QStringLiteral("PDF --/--"), detailHeader);
+    detailPdfPageLabel_->setObjectName(QStringLiteral("detailPdfPageLabel"));
+    detailPdfPageLabel_->setAlignment(Qt::AlignCenter);
+
+    detailPdfNextButton_ = new QPushButton(QStringLiteral("下一页"), detailHeader);
+    detailPdfNextButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
+    detailPdfNextButton_->setCursor(Qt::PointingHandCursor);
+    detailPdfNextButton_->setEnabled(false);
+    detailPdfNextButton_->setToolTip(QStringLiteral("跳转到下一页 PDF"));
+
     favoriteButton_ = new QPushButton(QStringLiteral("收藏当前结论"), detailHeader);
     favoriteButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
     favoriteButton_->setCursor(Qt::PointingHandCursor);
@@ -974,6 +1018,9 @@ void SearchPage::buildUi()
     detailActionRow->setContentsMargins(0, 0, 0, 0);
     detailActionRow->setSpacing(6);
     detailActionRow->addWidget(detailFontButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailPdfPrevButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailPdfPageLabel_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailPdfNextButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(favoriteButton_, 0, Qt::AlignVCenter);
     detailHeaderRightLayout->addLayout(detailActionRow);
     detailHeaderRightLayout->addWidget(detailTimingLabel_, 0, Qt::AlignRight);
@@ -994,6 +1041,7 @@ void SearchPage::buildUi()
     detailPdfView_->setObjectName(QStringLiteral("detailPdfView"));
     detailPdfView_->setVisible(false);
     detailPdfView_->setDocument(detailPdfDocument_);
+    detailPdfView_->setPageMode(QPdfView::PageMode::MultiPage);
     detailBodyLayout->addWidget(detailPdfView_, 1);
 
     detailWebView_ = new QWebEngineView(detailBody);
@@ -1042,6 +1090,7 @@ void SearchPage::buildUi()
 
     workbenchLayout->addWidget(splitter, 1);
     mainLayout->addWidget(workbench, 1);
+    updatePdfPageNavigationUi();
 }
 
 void SearchPage::connectSignals()
@@ -1069,6 +1118,18 @@ void SearchPage::connectSignals()
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
     connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
     connect(detailFontButton_, &QPushButton::clicked, this, &SearchPage::onDetailFontButtonClicked);
+    connect(detailPdfPrevButton_, &QPushButton::clicked, this, &SearchPage::onPdfPrevPageClicked);
+    connect(detailPdfNextButton_, &QPushButton::clicked, this, &SearchPage::onPdfNextPageClicked);
+
+    if (detailPdfDocument_ != nullptr) {
+        connect(detailPdfDocument_, &QPdfDocument::pageCountChanged, this, [this](int) { updatePdfPageNavigationUi(); });
+    }
+    if (detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr) {
+        connect(detailPdfView_->pageNavigator(),
+                &QPdfPageNavigator::currentPageChanged,
+                this,
+                [this](int) { updatePdfPageNavigationUi(); });
+    }
 
     if (detailPane_ != nullptr) {
         connect(detailPane_.get(), &ui::detail::DetailPane::shellReadyChanged, this, [this](bool ready) {
@@ -1804,6 +1865,7 @@ void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::Conclusio
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    updatePdfPageNavigationUi();
 }
 
 bool SearchPage::renderDetailInPdfView(const QString& docId,
@@ -1847,7 +1909,9 @@ bool SearchPage::renderDetailInPdfView(const QString& docId,
         detailBrowser_->setVisible(false);
     }
 
+    jumpToPdfPage(0);
     resetPdfDetailViewportToTop();
+    updatePdfPageNavigationUi();
     updateDetailShellMeta(QStringLiteral("PDF 详情预览"), QStringLiteral("neutral"));
     return true;
 }
@@ -1879,6 +1943,48 @@ QString SearchPage::resolveDetailPdfPath(const QString& docId,
     }
 
     return QDir(detailPdfDirectory_).filePath(QStringLiteral("%1.pdf").arg(normalizedDocId));
+}
+
+void SearchPage::jumpToPdfPage(int pageIndex)
+{
+    if (detailPdfDocument_ == nullptr || detailPdfView_ == nullptr || detailPdfView_->pageNavigator() == nullptr) {
+        return;
+    }
+
+    const int pageCount = detailPdfDocument_->pageCount();
+    if (pageCount <= 0) {
+        return;
+    }
+
+    const int clampedPage = std::clamp(pageIndex, 0, pageCount - 1);
+    detailPdfView_->pageNavigator()->jump(clampedPage, QPointF(), detailPdfView_->zoomFactor());
+    updatePdfPageNavigationUi();
+}
+
+void SearchPage::updatePdfPageNavigationUi()
+{
+    const bool viewReady =
+        (detailPdfDocument_ != nullptr && detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr);
+    const bool pdfVisible = viewReady && detailPdfView_->isVisible();
+    const int pageCount = viewReady ? detailPdfDocument_->pageCount() : 0;
+
+    int currentPage = -1;
+    if (pageCount > 0) {
+        currentPage = std::clamp(detailPdfView_->pageNavigator()->currentPage(), 0, pageCount - 1);
+    }
+
+    if (detailPdfPageLabel_ != nullptr) {
+        detailPdfPageLabel_->setText(detailPageIndicatorText(currentPage, pageCount));
+    }
+
+    const bool canGoPrev = (pdfVisible && pageCount > 0 && currentPage > 0);
+    const bool canGoNext = (pdfVisible && pageCount > 0 && currentPage < (pageCount - 1));
+    if (detailPdfPrevButton_ != nullptr) {
+        detailPdfPrevButton_->setEnabled(canGoPrev);
+    }
+    if (detailPdfNextButton_ != nullptr) {
+        detailPdfNextButton_->setEnabled(canGoNext);
+    }
 }
 
 #if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
@@ -1921,6 +2027,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    updatePdfPageNavigationUi();
 }
 
 void SearchPage::showDetailError(const QString& message)
@@ -1954,6 +2061,7 @@ void SearchPage::showDetailError(const QString& message)
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    updatePdfPageNavigationUi();
 }
 
 void SearchPage::resetWebDetailViewportToTop()
@@ -2035,6 +2143,7 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(true);
     }
+    updatePdfPageNavigationUi();
     ui::detail::DetailPane::RequestContext requestContext;
     requestContext.payload = payload;
     requestContext.detailId = docId.trimmed().isEmpty() ? payload.value(QStringLiteral("detailId")).toString().trimmed()
@@ -2632,6 +2741,7 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    updatePdfPageNavigationUi();
 }
 
 void SearchPage::applySort(QVector<domain::models::SearchHit>* hits) const

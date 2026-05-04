@@ -22,8 +22,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPdfView>
 #include <QPushButton>
 #include <QRandomGenerator>
 #include <QRegularExpression>
@@ -268,6 +270,7 @@ private slots:
     void favoriteToggle_emitsFavoritesChangedSignalAndPersists();
     void webDetailDispatch_viewportResetLoggedBeforeEveryDispatch();
     void detailPdfPathResolution_prefersMapThenAssetThenId();
+    void detailPdfViewer_usesMultiPageModeAndNavStartsDisabled();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -544,6 +547,30 @@ void SearchPageRound5UiTest::detailPdfPathResolution_prefersMapThenAssetThenId()
     const QString idFallbackPath = page.resolveDetailPdfPathForTest(QStringLiteral("I100"), detailView);
     QCOMPARE(QDir::cleanPath(idFallbackPath),
              QDir::cleanPath(sandbox.path(QStringLiteral("data/conclusion_pdfs/I100.pdf"))));
+}
+
+void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabled()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.detailPdfView_ != nullptr);
+    QCOMPARE(page.detailPdfView_->pageMode(), QPdfView::PageMode::MultiPage);
+
+    QVERIFY(page.detailPdfPrevButton_ != nullptr);
+    QVERIFY(page.detailPdfNextButton_ != nullptr);
+    QVERIFY(page.detailPdfPageLabel_ != nullptr);
+    QVERIFY(!page.detailPdfPrevButton_->isEnabled());
+    QVERIFY(!page.detailPdfNextButton_->isEnabled());
+    QCOMPARE(page.detailPdfPageLabel_->text(), QStringLiteral("PDF --/--"));
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

@@ -93,6 +93,8 @@ private slots:
     void onClearFiltersClicked();
     void onFavoriteButtonClicked();
     void onDetailFontButtonClicked();
+    void onPdfPrevPageClicked();
+    void onPdfNextPageClicked();
     void flushPendingDetailRequest();
 
 private:
@@ -145,6 +147,8 @@ private:
     void showDetailPlaceholder(const QString& message);
     void showDetailError(const QString& message);
     QString resolveDetailPdfPath(const QString& docId, const domain::adapters::ConclusionDetailViewData& detailView) const;
+    void jumpToPdfPage(int pageIndex);
+    void updatePdfPageNavigationUi();
     void resetWebDetailViewportToTop();
     void resetPdfDetailViewportToTop();
     void resetFallbackDetailViewportToTop();
@@ -253,10 +257,13 @@ private:
     QLineEdit* queryInput_ = nullptr;
     QPushButton* searchButton_ = nullptr;
     QPushButton* detailFontButton_ = nullptr;
+    QPushButton* detailPdfPrevButton_ = nullptr;
+    QPushButton* detailPdfNextButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
     QLabel* detailMetaLabel_ = nullptr;
     QLabel* detailTimingLabel_ = nullptr;
+    QLabel* detailPdfPageLabel_ = nullptr;
     QPushButton* favoriteButton_ = nullptr;
     QListWidget* suggestionList_ = nullptr;
     QComboBox* moduleFilterCombo_ = nullptr;
