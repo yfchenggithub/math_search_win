@@ -15,6 +15,7 @@
 #include "ui/widgets/top_bar.h"
 
 #include <QHBoxLayout>
+#include <QJsonParseError>
 #include <QStackedWidget>
 #include <QStringList>
 #include <QVBoxLayout>
@@ -241,6 +242,7 @@ void MainWindow::loadSearchData()
 {
     indexLoaded_ = indexRepository_.loadFromFile();
     contentLoaded_ = contentRepository_.loadFromFile();
+    const bool domainTopicMapLoaded = indexLoaded_ ? indexRepository_.loadDomainTopicMap() : false;
 
     if (indexLoaded_) {
         LOG_DEBUG(LogCategory::SearchIndex,
@@ -250,6 +252,29 @@ void MainWindow::loadSearchData()
                       .arg(indexRepository_.prefixCount())
                       .arg(indexRepository_.modules().size())
                       .arg(indexRepository_.activeIndexPath()));
+        const auto& domainDiag = indexRepository_.domainTopicMapDiagnostics();
+        if (domainTopicMapLoaded) {
+            LOG_INFO(LogCategory::SearchIndex,
+                     QStringLiteral("domain topic map loaded domains=%1 topics=%2 aliases=%3 path=%4")
+                         .arg(domainDiag.domainCount)
+                         .arg(domainDiag.topicCount)
+                         .arg(domainDiag.aliasCount)
+                         .arg(indexRepository_.activeDomainTopicMapPath()));
+        } else if (!domainDiag.fileExists) {
+            LOG_WARN(LogCategory::SearchIndex,
+                     QStringLiteral("domain topic map missing path=%1 suggest_mode=flat_fallback")
+                         .arg(domainDiag.filePath.trimmed().isEmpty() ? QStringLiteral("<unset>") : domainDiag.filePath));
+        } else if (domainDiag.parseError.error != QJsonParseError::NoError) {
+            LOG_WARN(LogCategory::SearchIndex,
+                     QStringLiteral("domain topic map parse failed path=%1 error=%2 offset=%3 suggest_mode=flat_fallback")
+                         .arg(domainDiag.filePath)
+                         .arg(domainDiag.parseError.errorString())
+                         .arg(domainDiag.parseError.offset));
+        } else {
+            LOG_WARN(LogCategory::SearchIndex,
+                     QStringLiteral("domain topic map empty path=%1 suggest_mode=flat_fallback")
+                         .arg(domainDiag.filePath.trimmed().isEmpty() ? QStringLiteral("<unset>") : domainDiag.filePath));
+        }
     } else {
         const auto& diagnostics = indexRepository_.diagnostics();
         LOG_ERROR(LogCategory::SearchIndex,
@@ -274,19 +299,20 @@ void MainWindow::loadSearchData()
     }
 
     LOG_INFO(LogCategory::DataLoader,
-             QStringLiteral("data loaded index_ready=%1 content_ready=%2 index_docs=%3 content_records=%4 modules=%5")
+             QStringLiteral("data loaded index_ready=%1 content_ready=%2 domain_topic_ready=%3 index_docs=%4 content_records=%5 modules=%6")
                  .arg(indexLoaded_ ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(contentLoaded_ ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(domainTopicMapLoaded ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(indexLoaded_ ? QString::number(indexRepository_.docCount()) : QStringLiteral("0"))
                  .arg(contentLoaded_ ? QString::number(contentRepository_.size()) : QStringLiteral("0"))
                  .arg(indexLoaded_ ? QString::number(indexRepository_.modules().size()) : QStringLiteral("0")));
 
     if (indexLoaded_ && contentLoaded_) {
-        startupStatusLine_ =
-            QStringLiteral("数据已加载 content=%1 index=%2 modules=%3")
+        startupStatusLine_ = QStringLiteral("数据已加载 content=%1 index=%2 modules=%3 domain_topic=%4")
                 .arg(contentRepository_.size())
                 .arg(indexRepository_.docCount())
-                .arg(indexRepository_.modules().size());
+                .arg(indexRepository_.modules().size())
+                .arg(domainTopicMapLoaded ? QStringLiteral("ready") : QStringLiteral("missing"));
     } else {
         QStringList errorParts;
         if (!indexLoaded_) {

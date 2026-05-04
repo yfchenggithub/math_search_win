@@ -1,0 +1,15 @@
+{
+  "domains": [
+    {
+      "name": "不等式",
+      "aliases": ["inequality"],
+      "topics": [
+        {
+          "name": "柯西不等式",
+          "aliases": ["cauchy"],
+          "docIds": ["I005"]
+        }
+      ]
+    }
+  ]
+

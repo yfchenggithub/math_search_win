@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-04T10:00:00+08:00",
+  "stats": {
+    "documents": 2,
+    "terms": 1,
+    "prefixes": 0,
+    "suggestions": 0,
+    "modules": 1,
+    "moduleStats": [
+      {
+        "module": "algebra",
+        "scanned": 2,
+        "built": 2,
+        "filtered": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "buildOptions": {
+    "prefixDocLimit": 32,
+    "suggestionLimit": 16,
+    "targetModules": ["algebra"],
+    "targetItems": []
+  },
+  "fieldMaskLegend": {
+    "title": 1,
+    "keyword": 4,
+    "intent": 64
+  },
+  "docs": {
+    "IC01": {
+      "id": "IC01",
+      "module": "algebra",
+      "moduleDir": "fixture/intent",
+      "title": "Intent Core Candidate",
+      "summary": "intent+keyword hit candidate",
+      "category": "intent",
+      "tags": ["intent"],
+      "coreFormula": "",
+      "rank": 0,
+      "difficulty": 1.0,
+      "searchBoost": 0.0,
+      "hotScore": 0.0,
+      "examFrequency": 0.0,
+      "examScore": 0.0
+    },
+    "IC02": {
+      "id": "IC02",
+      "module": "algebra",
+      "moduleDir": "fixture/intent",
+      "title": "Title Only Candidate",
+      "summary": "title-only hit candidate",
+      "category": "intent",
+      "tags": ["intent"],
+      "coreFormula": "",
+      "rank": 0,
+      "difficulty": 1.0,
+      "searchBoost": 0.0,
+      "hotScore": 0.0,
+      "examFrequency": 0.0,
+      "examScore": 0.0
+    }
+  },
+  "termIndex": {
+    "intent focus": [
+      ["IC01", 8.0, 68],
+      ["IC02", 9.0, 1]
+    ]
+  },
+  "prefixIndex": {}
+}
+

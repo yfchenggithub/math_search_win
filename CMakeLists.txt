@@ -20,6 +20,7 @@ add_executable(math_search_win
     src/domain/models/conclusion_record.cpp
     src/domain/models/search_index_models.h
     src/domain/models/search_index_models.cpp
+    src/domain/models/domain_topic_map_models.h
     src/domain/models/search_result_models.h
     src/domain/models/search_result_models.cpp
     src/domain/models/search_history_item.h
@@ -45,6 +46,8 @@ add_executable(math_search_win
     src/infrastructure/data/conclusion_content_repository.cpp
     src/infrastructure/data/backend_search_index_loader.h
     src/infrastructure/data/backend_search_index_loader.cpp
+    src/infrastructure/data/domain_topic_map_loader.h
+    src/infrastructure/data/domain_topic_map_loader.cpp
     src/infrastructure/data/conclusion_index_repository.h
     src/infrastructure/data/conclusion_index_repository.cpp
     src/infrastructure/storage/local_storage_service.h

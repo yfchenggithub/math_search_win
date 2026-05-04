@@ -10,7 +10,7 @@
 
 #### 已实现
 - 应用启动、主窗口装配、页面切换与跨页信号联动。
-- 搜索链路：关键词搜索、基础筛选、排序、结果展示。
+- 搜索链路：关键词搜索、基础筛选、排序、结果展示；已支持 `intent + (title/alias/keyword)` 交叉加权。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> WebEngine 渲染；并提供文本回退模式。
 - 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页回跳搜索页打开详情。
@@ -25,6 +25,7 @@
 #### 部分实现
 - 设置持久化：`SettingsRepository` 实现完整且有测试，但运行时页面未接线到真实设置读写流程。
 - 激活/授权安全校验链路：激活闭环可用，但关键安全校验（签名/加密等）仍是 TODO stub。
+- `domain_topic_map.json`：已接入启动加载、诊断和降级；`SuggestService` 已消费该映射做 domain/topic 层级候选扩展。
 
 #### 仅骨架 / 预留
 - 收藏页筛选按钮（文案“筛选（即将支持）”）当前无实际逻辑。
@@ -95,6 +96,7 @@ flowchart LR
 
   subgraph Infra[基础设施层]
     IL[BackendSearchIndexLoader]
+    DTL[DomainTopicMapLoader]
     CL[CanonicalContentLoader]
     LSS[LocalStorageService]
     LOG[Logger]
@@ -117,6 +119,7 @@ flowchart LR
   subgraph Data[本地资源/持久化]
     IDX[data/backend_search_index.json]
     CNT[data/canonical_content_v2.json]
+    DTM[data/domain_topic_map.json]
     CF[cache/favorites.json]
     CH[cache/history.json]
     CS[cache/settings.json]
@@ -150,6 +153,7 @@ flowchart LR
   LS --> DFS
 
   IR --> IL --> IDX
+  IR --> DTL --> DTM
   CR --> CL --> CNT
 
   FR --> LSS --> CF
@@ -200,7 +204,7 @@ flowchart LR
 - 构造函数中关键步骤：
   1. `licenseService_.initialize()`。
   2. `featureGate_.setLicenseState(licenseService_.currentState())`。
-  3. `loadSearchData()`：加载 index + content。
+  3. `loadSearchData()`：加载 index + content，并尝试加载 `domain_topic_map.json`（失败仅告警并降级）。
   4. `setupUi()` + `setupPages()` 装配页面。
   5. `searchPage_->setBackendStatus(indexLoaded_, contentLoaded_)`。
   6. 首次切页 `switchPageWithTrigger(kPageHome, "startup_default")`。
@@ -279,6 +283,8 @@ flowchart TD
 - 机制细节：
   - 支持 term + prefix。
   - 支持 module/category/tag 过滤（受 `AdvancedFilter` 功能门控）。
+  - `fieldMaskWeight` 已覆盖 `intent/usage/knowledge_node`（对应 bit 存在时生效；旧索引自动兼容）。
+  - `SearchOptions` 新增 `enableIntentCrossBoost`（默认 `true`），当同一文档同时命中 `intent` 与 `title/alias/keyword` 时追加交叉加分。
   - 结果排序支持相关度/标题/难度（在 UI 层再次排序）。
   - 体验版结果数量裁剪（`kTrialPreviewLimit`）。
 - 风险/待确认：
@@ -290,11 +296,14 @@ flowchart TD
 - 关键调用：
   - `SearchPage::runSuggest()`
   - `SuggestService::suggest(query, SuggestOptions)`
+  - `ConclusionIndexRepository::hasDomainTopicMap/domainTopicMap`（可用时先做 domain/topic 扩展候选）
   - `ConclusionIndexRepository::optionalSuggestions()`
   - `ConclusionIndexRepository::forEachPrefixEntry/forEachTermEntry`（seed 不足时）
 - 数据来源：index 顶层 `suggestions` + `prefixIndex/termIndex`。
 - 输出：建议列表；点击项 `onSuggestionClicked()` 后 `runSearch(..., "suggest_click")`。
 - 当前状态：已实现。
+- 当前状态补充：`SuggestService` 在 map 可用时会先执行 domain/topic 扩展（`source=domain_topic`，允许“域命中 -> topic 非前缀候选”），再合并原有 `indexed/prefix/term` 候选链路。
+- 质量控制补充：在 prefix/term 候选合并前会过滤未闭合括号半截词，并过滤“可被更长同义候选覆盖”的语义截断前缀（例如 `柯西不等`、`柯西不等式推`），降低脏候选进入 UI 的概率。
 - 风险/待确认：
   - `optionalSuggestions()` 里的 `docId` 允许为空，当前实现会在有 module/category/tag 过滤时跳过此类 seed（见 `collectSuggestionSeedSignal`）。
 
@@ -384,7 +393,7 @@ flowchart TD
 ## 7. 核心模块职责拆解
 
 ### 7.1 Repository
-- `ConclusionIndexRepository`：索引查询接口（term/prefix/doc）。
+- `ConclusionIndexRepository`：索引查询接口（term/prefix/doc）+ `domain_topic_map` 加载与诊断接口（`loadDomainTopicMap/hasDomainTopicMap/domainTopicMapDiagnostics`）。
 - `ConclusionContentRepository`：内容记录按 ID 读取与枚举。
 - `FavoritesRepository`：收藏 ID 集合持久化。
 - `HistoryRepository`：搜索历史去重、限长、持久化。
@@ -426,6 +435,7 @@ flowchart TD
 ### 8.1 数据文件
 - 索引：`data/backend_search_index.json`。
 - 内容：`data/canonical_content_v2.json`。
+- 领域映射（可选）：`data/domain_topic_map.json`（加载器兼容 `domains/topics` 的对象/数组两种结构，以及 `docs/docIds` 字段；缺失/损坏时降级，不阻断启动）。
 - 收藏：`cache/favorites.json`。
 - 历史：`cache/history.json`。
 - 设置：`cache/settings.json`。
@@ -439,6 +449,7 @@ flowchart TD
 
 ### 8.3 内容与索引边界
 - 索引仓库负责“可检索字段与倒排命中”。
+- 索引仓库还负责可选 `domain_topic_map` 的加载和降级诊断；`SuggestService` 在 map 可用时会读取该映射参与候选生成与排序。
 - 内容仓库负责“详情展示结构化内容”。
 - 搜索结果列表主要来自索引；详情正文来自内容。
 
@@ -467,6 +478,7 @@ flowchart TD
 
 ### 9.3 常见失败原因
 - `data/*.json` 缺失或格式异常。
+- `data/domain_topic_map.json` 缺失或 JSON 损坏（会关闭 domain/topic 扩展分支，自动降级为扁平建议，不阻断主搜索）。
 - `app_resources/detail` 或 `app_resources/katex` 缺失导致 Web 详情退化。
 - WebEngine 环境问题导致详情回退文本模式。
 - `license/license.dat` 非法导致降级 trial。

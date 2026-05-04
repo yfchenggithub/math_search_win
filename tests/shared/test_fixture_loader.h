@@ -13,7 +13,12 @@ QString testsSourceDir();
 QString fixtureIndexPath();
 QString fixtureIndexRound2Path();
 QString fixtureIndexWithSuggestionsPath();
+QString fixtureIndexIntentCrossPath();
+QString fixtureIndexFragmentPrefixPath();
 QString malformedFixtureIndexPath();
+QString fixtureDomainTopicMapPath();
+QString fixtureDomainTopicMapObjectDocsPath();
+QString malformedFixtureDomainTopicMapPath();
 QString realIndexPath();
 QString summarizeDiagnostics(const infrastructure::data::ConclusionIndexRepository& repository);
 

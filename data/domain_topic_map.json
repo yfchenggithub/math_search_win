@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "source": "auto-generated from knowledgeNode",
+    "generated_at": "2026-05-04T15:35:30+08:00",
+    "version": 1,
+    "profile": "theorem",
+    "nodeSource": "knowledge-only"
+  },
+  "stats": {
+    "modules": [
+      "00_set",
+      "01_function",
+      "02_sequence",
+      "03_conic",
+      "04_vector",
+      "05_geometry-solid",
+      "06_probability-stat",
+      "07_inequality",
+      "08_trigonometry",
+      "09_geometry-plane",
+      "10_final"
+    ],
+    "scannedMetaFiles": 116,
+    "indexedDocs": 101,
+    "docsWithoutNodes": 15,
+    "invalidJsonFiles": 0,
+    "docsWithoutId": 0,
+    "nodePathsSeen": 101,
+    "domainCount": 10,
+    "topicCount": 25
+  },
+  "domains": {
+    "三角函数": {
+      "aliases": [],
+      "topics": {
+        "三角不等式": {
+          "aliases": [],
+          "docs": [
+            "I029",
+            "I030",
+            "I032",
+            "I037"
+          ]
+        },
+        "单调性": {
+          "aliases": [],
+          "docs": [
+            "I017"
+          ]
+        },
+        "和差化积": {
+          "aliases": [],
+          "docs": [
+            "I018",
+            "I019",
+            "T002",
+            "T003",
+            "T004"
+          ]
+        },
+        "降幂公式": {
+          "aliases": [],
+          "docs": [
+            "I031"
+          ]
+        }
+      }
+    },
+    "不等式": {
+      "aliases": [],
+      "topics": {
+        "三角不等式": {
+          "aliases": [],
+          "docs": [
+            "I007"
+          ]
+        },
+        "分式不等式转化": {
+          "aliases": [],
+          "docs": [
+            "I003"
+          ]
+        },
+        "均值不等式": {
+          "aliases": [],
+          "docs": [
+            "I002",
+            "I004",
+            "I008",
+            "I009",
+            "I010",
+            "I011",
+            "I013",
+            "I015",
+            "I021",
+            "I022",
+            "I023",
+            "I024",
+            "I025",
+            "I027",
+            "I028",
+            "I033",
+            "I038",
+            "I041"
+          ]
+        },
+        "柯西不等式": {
+          "aliases": [],
+          "docs": [
+            "I005",
+            "I006",
+            "I039",
+            "I040",
+            "I042"
+          ]
+        },
+        "琴生不等式": {
+          "aliases": [],
+          "docs": [
+            "I014"
+          ]
+        },
+        "绝对值转化": {
+          "aliases": [],
+          "docs": [
+            "I001"
+          ]
+        },
+        "舒尔不等式": {
+          "aliases": [],
+          "docs": [
+            "I026"
+          ]
+        }
+      }
+    },
+    "其他": {
+      "aliases": [],
+      "topics": {
+        "待定": {
+          "aliases": [],
+          "docs": [
+            "P007",
+            "S001",
+            "S003",
+            "S005",
+            "S006",
+            "S008",
+            "S009",
+            "S010",
+            "T001"
+          ]
+        }
+      }
+    },
+    "函数": {
+      "aliases": [],
+      "topics": {
+        "单调性": {
+          "aliases": [],
+          "docs": [
+            "F001",
+            "F002",
+            "F003"
+          ]
+        },
+        "对数函数": {
+          "aliases": [],
+          "docs": [
+            "I020",
+            "I035",
+            "I036"
+          ]
+        },
+        "指数函数": {
+          "aliases": [],
+          "docs": [
+            "I012",
+            "I016",
+            "I034"
+          ]
+        }
+      }
+    },
+    "向量": {
+      "aliases": [],
+      "topics": {
+        "坐标表示": {
+          "aliases": [],
+          "docs": [
+            "V001",
+            "V002",
+            "V003",
+            "V004",
+            "V005",
+            "V006",
+            "V007",
+            "V008",
+            "V009",
+            "V010",
+            "V011",
+            "V012",
+            "V013",
+            "V014",
+            "V015",
+            "V016",
+            "V017",
+            "V018",
+            "V019"
+          ]
+        }
+      }
+    },
+    "圆锥曲线": {
+      "aliases": [],
+      "topics": {
+        "距离最值": {
+          "aliases": [],
+          "docs": [
+            "C001"
+          ]
+        }
+      }
+    },
+    "数列": {
+      "aliases": [],
+      "topics": {
+        "求和公式": {
+          "aliases": [],
+          "docs": [
+            "L002",
+            "L003"
+          ]
+        },
+        "裂项相消": {
+          "aliases": [],
+          "docs": [
+            "L006"
+          ]
+        },
+        "通项公式": {
+          "aliases": [],
+          "docs": [
+            "L004",
+            "L005"
+          ]
+        },
+        "错位相减": {
+          "aliases": [],
+          "docs": [
+            "L001"
+          ]
+        }
+      }
+    },
+    "概率": {
+      "aliases": [],
+      "topics": {
+        "排列组合": {
+          "aliases": [],
+          "docs": [
+            "R001",
+            "R002",
+            "R003",
+            "R004"
+          ]
+        }
+      }
+    },
+    "立体几何": {
+      "aliases": [],
+      "topics": {
+        "体积": {
+          "aliases": [],
+          "docs": [
+            "G001",
+            "G002"
+          ]
+        }
+      }
+    },
+    "解析几何": {
+      "aliases": [],
+      "topics": {
+        "最值问题": {
+          "aliases": [],
+          "docs": [
+            "P001",
+            "P002",
+            "P003",
+            "P004",
+            "P005",
+            "P006"
+          ]
+        },
+        "椭圆": {
+          "aliases": [],
+          "docs": [
+            "C017",
+            "C018",
+            "C019",
+            "C020",
+            "C021",
+            "C022"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@
 - `logging::Logger::initialize()` 初始化日志。
 - 可选执行 `runContentProbeIfEnabled()`、`runIndexProbeIfEnabled()`。
 - 若带 `--probe-only` 参数，探测后直接退出，不进入 UI。
-- 创建 `MainWindow`：在构造函数内先做授权状态初始化，再加载数据，再装配页面。
+- 创建 `MainWindow`：在构造函数内先做授权状态初始化，再加载数据（index/content + 可选 `domain_topic_map`），再装配页面。
 - `main()` 调用 `window.showMaximized()`，应用启动默认最大化（非独占全屏）。
 - `MainWindow::switchPageWithTrigger(kPageHome, "startup_default")` 设置首页。
 
@@ -49,6 +49,8 @@ sequenceDiagram
 - 非空输入触发 `SearchPage::runSuggest()`。
 - `runSuggest()` 组装 `SuggestOptions`（含 module/category/tag 过滤），调用 `SuggestService::suggest()`。
 - Suggest 数据优先来自索引顶层 `suggestions`（`optionalSuggestions()`），不足时再回退 `prefixIndex` + `termIndex`。
+- `domain_topic_map.json` 在启动阶段由 `ConclusionIndexRepository` 尝试加载；Suggest 在 map 可用时会先做 domain/topic 扩展候选，再并入 `suggestions/prefix/term`（缺失/损坏时自动降级到扁平候选）。
+- Suggest 在 prefix/term 候选并入前会执行文本质量门，过滤未闭合括号半截词（如 `...(`、`...(分`）以及可被更长同义候选覆盖的语义截断前缀（如 `柯西不等`、`柯西不等式推`）。
 - 结果写入 `suggestionList_`；点击建议项触发 `runSearch(..., "suggest_click")`。
 
 ```mermaid
@@ -82,6 +84,9 @@ sequenceDiagram
   - `onFilterChanged()` 在高级筛选可用时触发 `runSearch(..., "filter_change")`
 - `runSearch()` 先做门控检查：
   - 必须至少启用 `BasicSearchPreview` 或 `FullSearch`。
+- `SearchService::search()` 评分补充：
+  - `fieldMaskWeight` 支持 `intent/usage/knowledge_node`（bit 存在时才生效）
+  - `enableIntentCrossBoost=true` 时，`intent` 与 `title/alias/keyword` 共命中文档会追加交叉加分
 - 历史写入策略：仅 `button/return/suggest_click` 触发 `HistoryRepository::addQuery()`。
 - 最终通过 `renderResults()` 刷新列表，并默认选中第一条结果（触发详情流程）。
 

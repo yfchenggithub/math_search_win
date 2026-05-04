@@ -77,6 +77,9 @@ private slots:
     void behaviorRound2_limitAndNoiseWhitespaceCase_contracts();
     void indexedSuggestions_usedWhenAvailable();
     void indexedSuggestions_respectFiltersAndFallback();
+    void domainTopicExpansion_domainMatchSuggestsRelatedTopics();
+    void prefixFragment_unclosedBracketVariants_areFiltered();
+    void prefixFragment_semanticFragments_areFiltered();
 
     void realIndex_smoke_ifAvailable();
 
@@ -84,9 +87,13 @@ private:
     infrastructure::data::ConclusionIndexRepository fixtureRepository_;
     infrastructure::data::ConclusionIndexRepository fixtureRepositoryRound2_;
     infrastructure::data::ConclusionIndexRepository fixtureRepositoryWithSuggestions_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryWithDomainTopic_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryFragmentPrefix_;
     domain::services::SuggestService service_;
     domain::services::SuggestService serviceRound2_;
     domain::services::SuggestService serviceWithSuggestions_;
+    domain::services::SuggestService serviceWithDomainTopic_;
+    domain::services::SuggestService serviceFragmentPrefix_;
 };
 
 void SuggestServiceTest::initTestCase()
@@ -111,6 +118,22 @@ void SuggestServiceTest::initTestCase()
              qPrintable(errorSummary));
     QVERIFY2(fixtureRepositoryWithSuggestions_.docCount() > 0, "suggestion fixture repository should contain docs");
     serviceWithSuggestions_.setRepository(&fixtureRepositoryWithSuggestions_);
+
+    errorSummary.clear();
+    QVERIFY2(tests::shared::loadRepositoryFromFile(
+                 tests::shared::fixtureIndexPath(), &fixtureRepositoryWithDomainTopic_, &errorSummary),
+             qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryWithDomainTopic_.docCount() > 0, "domain-topic fixture repository should contain docs");
+    QVERIFY2(fixtureRepositoryWithDomainTopic_.loadDomainTopicMap(tests::shared::fixtureDomainTopicMapObjectDocsPath()),
+             "domain-topic object fixture should load");
+    serviceWithDomainTopic_.setRepository(&fixtureRepositoryWithDomainTopic_);
+
+    errorSummary.clear();
+    QVERIFY2(tests::shared::loadRepositoryFromFile(
+                 tests::shared::fixtureIndexFragmentPrefixPath(), &fixtureRepositoryFragmentPrefix_, &errorSummary),
+             qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryFragmentPrefix_.docCount() > 0, "fragment-prefix fixture repository should contain docs");
+    serviceFragmentPrefix_.setRepository(&fixtureRepositoryFragmentPrefix_);
 }
 
 void SuggestServiceTest::emptyQuery_returnsEmpty_data()
@@ -666,6 +689,133 @@ void SuggestServiceTest::indexedSuggestions_respectFiltersAndFallback()
                                            fallbackQuery,
                                            fallbackOptions,
                                            fallbackResult)));
+}
+
+void SuggestServiceTest::domainTopicExpansion_domainMatchSuggestsRelatedTopics()
+{
+    const QString query = QStringLiteral("\u4e0d\u7b49");
+    domain::models::SuggestOptions options;
+    options.maxResults = 12;
+
+    const auto result = serviceWithDomainTopic_.suggest(query, options);
+    QVERIFY2(result.total > 0 && !result.items.isEmpty(),
+             qPrintable(makeFailureContext(QStringLiteral("domain-topic fixture query should return suggestions"),
+                                           query,
+                                           options,
+                                           result)));
+
+    const int cauchyIndex = indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f"));
+    QVERIFY2(cauchyIndex >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("domain match should expand to non-prefix topic suggestion"),
+                                           query,
+                                           options,
+                                           result)));
+
+    const auto& cauchy = result.items.at(cauchyIndex);
+    QCOMPARE(cauchy.source, QStringLiteral("domain_topic"));
+    QCOMPARE(cauchy.suggestKind, QStringLiteral("domain_topic"));
+    QCOMPARE(cauchy.domainName, QStringLiteral("\u4e0d\u7b49\u5f0f"));
+    QVERIFY2(cauchy.normalizedText.contains(domain::models::normalizeQueryText(query), Qt::CaseInsensitive),
+             qPrintable(makeFailureContext(QStringLiteral("expanded topic suggestion should stay query-related"),
+                                           query,
+                                           options,
+                                           result)));
+
+    domain::models::SuggestOptions geometryOnly = options;
+    geometryOnly.moduleFilter = {QStringLiteral("geometry")};
+    const auto geometryResult = serviceWithDomainTopic_.suggest(query, geometryOnly);
+    QVERIFY2(indexOfSuggestion(geometryResult.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("domain-topic suggestion should respect module filter"),
+                                           query,
+                                           geometryOnly,
+                                           geometryResult)));
+}
+
+void SuggestServiceTest::prefixFragment_unclosedBracketVariants_areFiltered()
+{
+    const QString query = QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f");
+    domain::models::SuggestOptions options;
+    options.maxResults = 20;
+
+    const auto result = serviceFragmentPrefix_.suggest(query, options);
+    QVERIFY2(result.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("fragment-prefix fixture query should return suggestions"),
+                                           query,
+                                           options,
+                                           result)));
+
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u7279\u4f8b(")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("unclosed bracket prefix should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u7279\u4f8b(\u5206")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("unclosed bracket fragment should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u7279\u4f8b(\u5206\u5f0f")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("unclosed bracket longer fragment should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u7279\u4f8b(\u5206\u5f0f)")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("balanced bracket suggestion should remain"),
+                                           query,
+                                           options,
+                                           result)));
+}
+
+void SuggestServiceTest::prefixFragment_semanticFragments_areFiltered()
+{
+    const QString query = QStringLiteral("\u67ef\u897f");
+    domain::models::SuggestOptions options;
+    options.maxResults = 20;
+
+    const auto result = serviceFragmentPrefix_.suggest(query, options);
+    QVERIFY2(result.total > 0,
+             qPrintable(makeFailureContext(QStringLiteral("semantic-fragment fixture query should return suggestions"),
+                                           query,
+                                           options,
+                                           result)));
+
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("semantic prefix fragment '柯西不' should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("semantic prefix fragment '柯西不等' should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u63a8")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("semantic prefix fragment '柯西不等式推' should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u7279")) < 0,
+             qPrintable(makeFailureContext(QStringLiteral("semantic prefix fragment '柯西不等式特' should be filtered"),
+                                           query,
+                                           options,
+                                           result)));
+
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("term-backed base suggestion should remain"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("term-backed full suggestion should remain"),
+                                           query,
+                                           options,
+                                           result)));
+    QVERIFY2(indexOfSuggestion(result.items, QStringLiteral("\u67ef\u897f\u4e0d\u7b49\u5f0f\u63a8\u5e7f")) >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("term-backed extension suggestion should remain"),
+                                           query,
+                                           options,
+                                           result)));
 }
 
 void SuggestServiceTest::realIndex_smoke_ifAvailable()

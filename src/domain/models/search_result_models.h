@@ -12,6 +12,7 @@ struct SearchOptions {
     bool enablePrefix = true;
     bool enableTerm = true;
     bool enableExactBoost = true;
+    bool enableIntentCrossBoost = true;
     bool enableDebug = false;
     QStringList moduleFilter;
     QStringList categoryFilter;
@@ -43,6 +44,7 @@ struct SuggestOptions {
     int maxResults = 8;
     bool enablePrefix = true;
     bool enableExactDedup = true;
+    bool enableDomainTopicExpansion = true;
     bool enableDebug = false;
     QStringList moduleFilter;
     QStringList categoryFilter;
@@ -54,6 +56,9 @@ struct SuggestionItem {
     QString normalizedText;
     double score = 0.0;
     QString source;
+    QString suggestKind;
+    QString domainName;
+    bool isDomainEntry = false;
     QStringList matchedFields;
     QStringList targetDocIds;
     QJsonObject debugInfo;

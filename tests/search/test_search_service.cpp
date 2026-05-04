@@ -75,14 +75,17 @@ private slots:
     void behaviorRound2_tieScore_secondaryOrderRule();
     void behaviorRound2_trialAndFullResultCap_contracts();
     void performanceBaseline_round2_limitQuery_logsAvgAndP95();
+    void intentCrossBoost_promotesIntentAndCoreCoHit();
 
     void realIndex_smoke_ifAvailable();
 
 private:
     infrastructure::data::ConclusionIndexRepository fixtureRepository_;
     infrastructure::data::ConclusionIndexRepository fixtureRepositoryRound2_;
+    infrastructure::data::ConclusionIndexRepository fixtureRepositoryIntentCross_;
     domain::services::SearchService service_;
     domain::services::SearchService serviceRound2_;
+    domain::services::SearchService serviceIntentCross_;
 };
 
 void SearchServiceTest::initTestCase()
@@ -99,6 +102,13 @@ void SearchServiceTest::initTestCase()
         qPrintable(errorSummary));
     QVERIFY2(fixtureRepositoryRound2_.docCount() > 0, "round2 fixture repository should contain docs");
     serviceRound2_.setRepository(&fixtureRepositoryRound2_);
+
+    errorSummary.clear();
+    QVERIFY2(
+        tests::shared::loadRepositoryFromFile(tests::shared::fixtureIndexIntentCrossPath(), &fixtureRepositoryIntentCross_, &errorSummary),
+        qPrintable(errorSummary));
+    QVERIFY2(fixtureRepositoryIntentCross_.docCount() > 0, "intent-cross fixture repository should contain docs");
+    serviceIntentCross_.setRepository(&fixtureRepositoryIntentCross_);
 }
 
 void SearchServiceTest::emptyQuery_returnsEmpty_data()
@@ -505,6 +515,46 @@ void SearchServiceTest::performanceBaseline_round2_limitQuery_logsAvgAndP95()
              qPrintable(QStringLiteral("search perf baseline p95=%1ms exceeds loose budget %2ms")
                             .arg(QString::number(p95Ms, 'f', 3))
                             .arg(QString::number(kLooseP95BudgetMs, 'f', 1))));
+}
+
+void SearchServiceTest::intentCrossBoost_promotesIntentAndCoreCoHit()
+{
+    const QString query = QStringLiteral("intent focus");
+
+    domain::models::SearchOptions withoutCross;
+    withoutCross.enableIntentCrossBoost = false;
+    withoutCross.maxResults = 10;
+    const auto noCrossResult = serviceIntentCross_.search(query, withoutCross);
+
+    domain::models::SearchOptions withCross = withoutCross;
+    withCross.enableIntentCrossBoost = true;
+    const auto crossResult = serviceIntentCross_.search(query, withCross);
+
+    const int noCrossIC01 = indexOfDocId(noCrossResult.hits, QStringLiteral("IC01"));
+    const int noCrossIC02 = indexOfDocId(noCrossResult.hits, QStringLiteral("IC02"));
+    QVERIFY2(noCrossIC01 >= 0 && noCrossIC02 >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("no-cross result should include IC01/IC02"),
+                                           query,
+                                           withoutCross,
+                                           noCrossResult)));
+    QVERIFY2(noCrossIC02 < noCrossIC01,
+             qPrintable(makeFailureContext(QStringLiteral("without cross boost, higher title score IC02 should rank first"),
+                                           query,
+                                           withoutCross,
+                                           noCrossResult)));
+
+    const int crossIC01 = indexOfDocId(crossResult.hits, QStringLiteral("IC01"));
+    const int crossIC02 = indexOfDocId(crossResult.hits, QStringLiteral("IC02"));
+    QVERIFY2(crossIC01 >= 0 && crossIC02 >= 0,
+             qPrintable(makeFailureContext(QStringLiteral("cross result should include IC01/IC02"),
+                                           query,
+                                           withCross,
+                                           crossResult)));
+    QVERIFY2(crossIC01 < crossIC02,
+             qPrintable(makeFailureContext(QStringLiteral("with cross boost, intent+core IC01 should rank first"),
+                                           query,
+                                           withCross,
+                                           crossResult)));
 }
 
 void SearchServiceTest::realIndex_smoke_ifAvailable()

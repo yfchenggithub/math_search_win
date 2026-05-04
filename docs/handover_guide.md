@@ -53,12 +53,16 @@ powershell .\run-debug.ps1
   - 执行搜索：`onQueryReturnPressed/onSearchButtonClicked/onSuggestionClicked` -> `runSearch()`
 - 算法在 `SearchService::search()`：
   - `termIndex + prefixIndex` 合并评分
+  - `fieldMaskWeight` 已包含 `intent/usage/knowledge_node`（对应 bit 存在时生效）
+  - `enableIntentCrossBoost` 默认开启：同文档命中 `intent` 且命中 `title/alias/keyword` 时追加交叉加分
   - module/category/tag 过滤
   - score 排序
 - Suggest 在 `SuggestService::suggest()`：
   - 优先使用索引顶层 `suggestions` seed（`optionalSuggestions()`）
   - 候选不足时回退 `prefixIndex + termIndex`
-- 数据源在 `ConclusionIndexRepository`，文件是 `data/backend_search_index.json`。
+  - 对 prefix/term 文本执行质量门：过滤未闭合括号半截候选，以及可被更长同义候选覆盖的语义截断前缀，减少 UI 脏词
+- `domain_topic_map.json` 由 `ConclusionIndexRepository::loadDomainTopicMap()` 在启动阶段尝试加载；map 可用时 Suggest 会先走 domain/topic 扩展候选（`source=domain_topic`），缺失/损坏会降级为扁平候选。
+- 数据源在 `ConclusionIndexRepository`，主文件为 `data/backend_search_index.json`，可选 `data/domain_topic_map.json`。
 - 历史写入仅在 `button/return/suggest_click` 三类触发中执行（`HistoryRepository::addQuery`）。
 
 ## 5. 如何理解详情渲染系统
@@ -112,6 +116,7 @@ powershell .\run-debug.ps1
 - 检查 `suggestService_` 和 `indexReady_`。
 - 检查 `lastSuggestSignature_` 是否误判重复。
 - 查看 `SuggestionResult.items` 是否为空。
+- 若你正在做层级推荐联调：先检查 `MainWindow::loadSearchData` 中 `loadDomainTopicMap` 告警日志，再在 `SuggestService::suggest` 里确认是否产生 `source=domain_topic` 候选。
 
 ### 点击结果详情不出来怎么办
 - 断点 `onResultSelectionChanged`、`flushPendingDetailRequest`、`renderDetailForRequest`。

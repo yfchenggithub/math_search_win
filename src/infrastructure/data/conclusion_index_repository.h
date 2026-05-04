@@ -1,7 +1,9 @@
 #pragma once
 
+#include "domain/models/domain_topic_map_models.h"
 #include "domain/models/search_index_models.h"
 #include "infrastructure/data/backend_search_index_loader.h"
+#include "infrastructure/data/domain_topic_map_loader.h"
 
 #include <QString>
 #include <QStringList>
@@ -14,6 +16,7 @@ public:
     using DiagnosticsType = BackendSearchIndexDiagnostics;
 
     bool loadFromFile(const QString& filePath = QString());
+    bool loadDomainTopicMap(const QString& filePath = QString());
 
     const domain::models::IndexDocRecord* getDocById(const QString& docId) const;
     const QVector<domain::models::PostingEntry>* findTerm(const QString& key) const;
@@ -29,6 +32,10 @@ public:
     QStringList availableFieldNames() const;
     const DiagnosticsType& diagnostics() const;
     QString activeIndexPath() const;
+    bool hasDomainTopicMap() const;
+    const domain::models::DomainTopicMap& domainTopicMap() const;
+    const DomainTopicMapDiagnostics& domainTopicMapDiagnostics() const;
+    QString activeDomainTopicMapPath() const;
 
     const domain::models::FieldMaskLegend& fieldMaskLegend() const;
     const QVector<domain::models::IndexedSuggestionSeed>& optionalSuggestions() const;
@@ -59,7 +66,9 @@ private:
     QStringList availableFieldNames_;
     DiagnosticsType diagnostics_;
     QString activeIndexPath_;
+    domain::models::DomainTopicMap domainTopicMap_;
+    DomainTopicMapDiagnostics domainTopicMapDiagnostics_;
+    QString activeDomainTopicMapPath_;
 };
 
 }  // namespace infrastructure::data
-

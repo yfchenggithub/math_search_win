@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "version": 1,
+    "source": "unit-test-object-style"
+  },
+  "domains": {
+    "\u4e0d\u7b49\u5f0f": {
+      "aliases": ["\u4e0d\u7b49", "inequality"],
+      "topics": {
+        "\u67ef\u897f\u4e0d\u7b49\u5f0f": {
+          "aliases": ["\u67ef\u897f", "cauchy"],
+          "docs": ["A001", "A004"]
+        },
+        "\u5747\u503c\u4e0d\u7b49\u5f0f": {
+          "aliases": ["AM-GM"],
+          "docs": ["A004"]
+        }
+      }
+    },
+    "\u51fd\u6570": {
+      "aliases": ["function"],
+      "topics": {
+        "\u5355\u8c03\u6027": {
+          "aliases": ["monotonicity"],
+          "docs": ["A003"]
+        }
+      }
+    }
+  }
+}

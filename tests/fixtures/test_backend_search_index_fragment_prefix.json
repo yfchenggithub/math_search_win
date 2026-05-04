@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-05T09:30:00+08:00",
+  "stats": {
+    "documents": 2,
+    "terms": 4,
+    "prefixes": 13,
+    "suggestions": 0,
+    "modules": 1,
+    "moduleStats": [
+      {
+        "module": "algebra",
+        "scanned": 2,
+        "built": 2,
+        "filtered": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "buildOptions": {
+    "prefixDocLimit": 32,
+    "suggestionLimit": 64,
+    "targetModules": ["algebra"],
+    "targetItems": []
+  },
+  "fieldMaskLegend": {
+    "title": 1,
+    "alias": 2,
+    "keyword": 4,
+    "query_template": 32,
+    "tag": 256
+  },
+  "docs": {
+    "D001": {
+      "id": "D001",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "柯西不等式特例(分式)",
+      "summary": "用于测试 suggest 半截前缀过滤。",
+      "category": "inequality",
+      "tags": ["柯西不等式"],
+      "coreFormula": "(a^2+b^2)(x^2+y^2)>= (ax+by)^2",
+      "rank": 60,
+      "difficulty": 2.0,
+      "searchBoost": 0.2,
+      "hotScore": 30.0,
+      "examFrequency": 0.3,
+      "examScore": 3.0
+    },
+    "D002": {
+      "id": "D002",
+      "module": "algebra",
+      "moduleDir": "07_inequality",
+      "title": "柯西不等式推广",
+      "summary": "用于测试推字半截候选过滤。",
+      "category": "inequality",
+      "tags": ["柯西不等式"],
+      "coreFormula": "(sum ai^2)(sum bi^2)>= (sum aibi)^2",
+      "rank": 58,
+      "difficulty": 2.0,
+      "searchBoost": 0.18,
+      "hotScore": 28.0,
+      "examFrequency": 0.3,
+      "examScore": 3.0
+    }
+  },
+  "termIndex": {
+    "柯西": [
+      ["D001", 22.0, 2],
+      ["D002", 20.0, 2]
+    ],
+    "柯西不等式": [
+      ["D001", 20.0, 1],
+      ["D002", 19.0, 1]
+    ],
+    "柯西不等式特例(分式)": [
+      ["D001", 18.0, 1]
+    ],
+    "柯西不等式推广": [
+      ["D002", 18.0, 1]
+    ]
+  },
+  "prefixIndex": {
+    "柯西": [
+      ["D001", 18.0, 2],
+      ["D002", 17.0, 2]
+    ],
+    "柯西不": [
+      ["D001", 17.0, 1],
+      ["D002", 16.0, 1]
+    ],
+    "柯西不等": [
+      ["D001", 17.0, 1],
+      ["D002", 16.0, 1]
+    ],
+    "柯西不等式": [
+      ["D001", 18.0, 1],
+      ["D002", 17.0, 1]
+    ],
+    "柯西不等式推": [
+      ["D002", 16.0, 1]
+    ],
+    "柯西不等式推广": [
+      ["D002", 17.0, 1]
+    ],
+    "柯西不等式特": [
+      ["D001", 16.0, 2]
+    ],
+    "柯西不等式特例": [
+      ["D001", 16.0, 1]
+    ],
+    "柯西不等式特例(": [
+      ["D001", 16.0, 1]
+    ],
+    "柯西不等式特例(分": [
+      ["D001", 16.0, 1]
+    ],
+    "柯西不等式特例(分式": [
+      ["D001", 16.0, 1]
+    ],
+    "柯西不等式特例(分式)": [
+      ["D001", 16.0, 1]
+    ],
+    "柯西公": [
+      ["D001", 10.0, 4]
+    ]
+  },
+  "suggestions": []
+}

@@ -1,0 +1,32 @@
+{
+  "domains": [
+    {
+      "name": "不等式",
+      "aliases": ["不等", "inequality"],
+      "topics": [
+        {
+          "name": "柯西不等式",
+          "aliases": ["柯西", "cauchy", "C-S"],
+          "docIds": ["I005"]
+        },
+        {
+          "name": "均值不等式",
+          "aliases": ["AM-GM"],
+          "docIds": ["I002", "I021"]
+        }
+      ]
+    },
+    {
+      "name": "圆锥曲线",
+      "aliases": ["conic"],
+      "topics": [
+        {
+          "name": "椭圆切线",
+          "aliases": ["ellipse tangent"],
+          "docIds": ["C007", "C008", "C018"]
+        }
+      ]
+    }
+  ]
+}
+

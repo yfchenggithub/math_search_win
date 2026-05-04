@@ -1,5 +1,8 @@
 #include "infrastructure/data/conclusion_index_repository.h"
 
+#include "shared/paths.h"
+
+#include <QDir>
 #include <QSet>
 
 #include <algorithm>
@@ -50,6 +53,9 @@ bool ConclusionIndexRepository::loadFromFile(const QString& filePath)
         modules_.clear();
         availableFieldNames_.clear();
         activeIndexPath_.clear();
+        domainTopicMap_ = {};
+        domainTopicMapDiagnostics_ = {};
+        activeDomainTopicMapPath_.clear();
         return false;
     }
 
@@ -57,6 +63,19 @@ bool ConclusionIndexRepository::loadFromFile(const QString& filePath)
     activeIndexPath_ = resolvedPath;
     rebuildAggregates();
     return true;
+}
+
+bool ConclusionIndexRepository::loadDomainTopicMap(const QString& filePath)
+{
+    const QString resolvedPath = filePath.trimmed().isEmpty()
+                                     ? QDir(AppPaths::dataDir()).filePath(QStringLiteral("domain_topic_map.json"))
+                                     : filePath.trimmed();
+
+    DomainTopicMapLoader loader;
+    domainTopicMap_ = loader.loadFromFile(resolvedPath);
+    domainTopicMapDiagnostics_ = loader.diagnostics();
+    activeDomainTopicMapPath_ = domainTopicMap_.isEmpty() ? QString() : resolvedPath;
+    return !domainTopicMap_.isEmpty();
 }
 
 const domain::models::IndexDocRecord* ConclusionIndexRepository::getDocById(const QString& docId) const
@@ -147,6 +166,26 @@ QString ConclusionIndexRepository::activeIndexPath() const
     return activeIndexPath_;
 }
 
+bool ConclusionIndexRepository::hasDomainTopicMap() const
+{
+    return !domainTopicMap_.isEmpty();
+}
+
+const domain::models::DomainTopicMap& ConclusionIndexRepository::domainTopicMap() const
+{
+    return domainTopicMap_;
+}
+
+const DomainTopicMapDiagnostics& ConclusionIndexRepository::domainTopicMapDiagnostics() const
+{
+    return domainTopicMapDiagnostics_;
+}
+
+QString ConclusionIndexRepository::activeDomainTopicMapPath() const
+{
+    return activeDomainTopicMapPath_;
+}
+
 const domain::models::FieldMaskLegend& ConclusionIndexRepository::fieldMaskLegend() const
 {
     return index_.fieldMaskLegend;
@@ -190,4 +229,3 @@ QStringList ConclusionIndexRepository::uniqueAndSortCaseInsensitive(const QStrin
 }
 
 }  // namespace infrastructure::data
-

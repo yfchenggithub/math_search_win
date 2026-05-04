@@ -42,9 +42,34 @@ QString fixtureIndexWithSuggestionsPath()
     return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_with_suggestions.json"));
 }
 
+QString fixtureIndexIntentCrossPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_intent_cross.json"));
+}
+
+QString fixtureIndexFragmentPrefixPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_fragment_prefix.json"));
+}
+
 QString malformedFixtureIndexPath()
 {
     return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_backend_search_index_malformed.json"));
+}
+
+QString fixtureDomainTopicMapPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_domain_topic_map.json"));
+}
+
+QString fixtureDomainTopicMapObjectDocsPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_domain_topic_map_object_docs.json"));
+}
+
+QString malformedFixtureDomainTopicMapPath()
+{
+    return QDir(testsSourceDir()).filePath(QStringLiteral("fixtures/test_domain_topic_map_malformed.json"));
 }
 
 QString realIndexPath()

@@ -42,8 +42,8 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchService` | `src/domain/services/search_service.h/.cpp` | term/prefix 命中、过滤、打分、排序 | `SearchPage` | `ConclusionIndexRepository` | `search` |
-| `SuggestService` | `src/domain/services/suggest_service.h/.cpp` | 先消费顶层 `suggestions` seed，再回退 prefix/term 候选收集、评分、去重 | `SearchPage` | `ConclusionIndexRepository` | `suggest` |
+| `SearchService` | `src/domain/services/search_service.h/.cpp` | term/prefix 命中、过滤、打分、排序；支持 intent-core 交叉加权开关 | `SearchPage` | `ConclusionIndexRepository` | `search` |
+| `SuggestService` | `src/domain/services/suggest_service.h/.cpp` | map 可用时先做 domain/topic 层级候选扩展，再合并 `suggestions` seed 与 prefix/term 回退候选，统一评分与去重；并过滤未闭合括号半截候选与语义截断前缀候选 | `SearchPage` | `ConclusionIndexRepository` | `suggest` |
 | `LicenseService` | `src/license/license_service.h/.cpp` | 读写 `license.dat`、解析校验、状态机、发信号 | `MainWindow`、`ActivationPage`、`SettingsPage` | `DeviceFingerprintService`、`FeatureGate` | `initialize`、`reload`、`validateLicense`、`writeLicenseFile` |
 | `ActivationCodeService` | `src/license/activation_code_service.h/.cpp` | 激活码解析、CRC/设备/过期/功能校验、生成 license 内容 | `ActivationPage` | `FeatureGate` | `parseActivationCode`、`validateActivationCode`、`buildLicenseFileContent` |
 | `FeatureGate` | `src/license/feature_gate.h/.cpp` | LicenseState -> 功能启用矩阵 | `MainWindow`、`SearchPage`、`FavoritesPage` | `LicenseState` | `setLicenseState`、`isEnabled`、`disabledReason` |
@@ -53,7 +53,8 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `ConclusionIndexRepository` | `src/infrastructure/data/conclusion_index_repository.h/.cpp` | 索引加载与检索 API | `MainWindow`、`SearchService`、`SuggestService`、页面 | `BackendSearchIndexLoader` | `loadFromFile`、`findTerm`、`findPrefix`、`getDocById` |
+| `ConclusionIndexRepository` | `src/infrastructure/data/conclusion_index_repository.h/.cpp` | 索引加载与检索 API；可选 domain-topic 映射加载与降级诊断 | `MainWindow`、`SearchService`、`SuggestService`、页面 | `BackendSearchIndexLoader`、`DomainTopicMapLoader` | `loadFromFile`、`loadDomainTopicMap`、`findTerm`、`findPrefix`、`getDocById` |
+| `DomainTopicMapLoader` | `src/infrastructure/data/domain_topic_map_loader.h/.cpp` | 解析 `domain_topic_map.json`（兼容 `domains` 数组/对象、`topics` 数组/对象、`docIds/docs`）并构建 alias 查找索引 | `ConclusionIndexRepository` | Qt JSON | `loadFromFile`、`diagnostics` |
 | `ConclusionContentRepository` | `src/infrastructure/data/conclusion_content_repository.h/.cpp` | 内容加载与按 ID 读取 | `MainWindow`、`SearchPage`、`FavoritesPage`、`SettingsPage` | `CanonicalContentLoader` | `loadFromFile`、`getById` |
 | `BackendSearchIndexLoader` | `src/infrastructure/data/backend_search_index_loader.h/.cpp` | 解析索引 JSON，提供 diagnostics | `ConclusionIndexRepository` | `AppPaths` | `loadFromFile` |
 | `CanonicalContentLoader` | `src/infrastructure/data/canonical_content_loader.h/.cpp` | 解析内容 JSON，提供 diagnostics | `ConclusionContentRepository` | 路径探测逻辑 | `loadFromFile` |
@@ -70,6 +71,7 @@
 | `SearchOptions/SearchHit/SearchResult` | `src/domain/models/search_result_models.h/.cpp` | 搜索输入输出模型与 query 归一化 | `SearchService`、`SearchPage` | Qt 容器 | `normalizeQueryText` |
 | `SuggestOptions/SuggestionResult` | `src/domain/models/search_result_models.h/.cpp` | Suggest 输入输出模型 | `SuggestService`、`SearchPage` | Qt 容器 | `maxResults/filters` |
 | `BackendSearchIndex` 及相关结构 | `src/domain/models/search_index_models.h/.cpp` | 索引文档、posting、fieldMask 映射模型 | `BackendSearchIndexLoader`、`ConclusionIndexRepository` | Qt 容器 | `decodeFieldMask` |
+| `DomainTopicMap` 及相关结构 | `src/domain/models/domain_topic_map_models.h` | domain/topic 层级映射与 alias lookup 容器 | `DomainTopicMapLoader`、`ConclusionIndexRepository` | Qt 容器 | `domains`、`domainByAlias`、`topicByAlias` |
 | `AppSettings` | `src/domain/models/app_settings.h/.cpp` | 设置默认值与版本 | `SettingsRepository` | `QVariantMap` | `defaultValues`、`kVersion` |
 | `SearchHistoryItem` | `src/domain/models/search_history_item.h` | 历史记录条目结构 | `HistoryRepository`、UI 页 | `QDateTime` | `query/source/searchedAt` |
 
@@ -115,6 +117,7 @@
 | `src/ui/pages/search_page.cpp` | 最大业务聚合点 | 影响搜索/Suggest/详情/收藏/历史/门控 |
 | `src/domain/services/search_service.cpp` | 搜索算法核心 | 影响命中质量和排序结果 |
 | `src/domain/services/suggest_service.cpp` | 建议算法核心 | 影响输入联想与点击转化 |
+| `src/infrastructure/data/domain_topic_map_loader.cpp` | domain-topic 映射解析与降级诊断 | 影响层级映射数据可用性与启动告警 |
 | `src/ui/detail/detail_pane.cpp` | Web 渲染分发桥 | 影响详情是否展示、是否回退 |
 | `app_resources/detail/detail.js` | 详情前端运行时 | 影响渲染性能与公式显示 |
 | `src/infrastructure/storage/local_storage_service.cpp` | 统一落盘入口 | 影响收藏/历史/设置持久化稳定性 |
@@ -129,12 +132,13 @@
 
 ### 改搜索逻辑
 - 先看：`SearchPage::runSearch`
-- 再看：`SearchService::search`
+- 再看：`SearchService::search`（`fieldMaskWeight` 与 `enableIntentCrossBoost`）
 - 数据侧：`ConclusionIndexRepository`、`BackendSearchIndexLoader`
 
 ### 改 suggest
 - 先看：`SearchPage::runSuggest`、`onSuggestionClicked`
 - 再看：`SuggestService::suggest`
+- 若涉及层级推荐数据：`ConclusionIndexRepository::loadDomainTopicMap` / `DomainTopicMapLoader` + `SuggestService::suggest` 中 `source=domain_topic` 分支
 
 ### 改详情模板与渲染
 - C++ 调度：`SearchPage::renderDetailForRequest`、`DetailPane`

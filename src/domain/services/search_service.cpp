@@ -112,6 +112,15 @@ double fieldMaskWeight(quint32 fieldMask, const FieldMaskLegend& legend)
     if ((fieldMask & bit(QStringLiteral("summary"))) != 0U) {
         weight += 0.08;
     }
+    if ((fieldMask & bit(QStringLiteral("intent"))) != 0U) {
+        weight += 0.35;
+    }
+    if ((fieldMask & bit(QStringLiteral("usage"))) != 0U) {
+        weight += 0.20;
+    }
+    if ((fieldMask & bit(QStringLiteral("knowledge_node"))) != 0U) {
+        weight += 0.30;
+    }
     return weight;
 }
 
@@ -121,6 +130,8 @@ struct ScoreAccumulator {
     int termHits = 0;
     int prefixHits = 0;
     bool exactTermMatch = false;
+    bool hasIntentHit = false;
+    bool hasCoreFieldHit = false;
 };
 
 void applyPostingBatch(const QVector<domain::models::PostingEntry>& postings,
@@ -137,6 +148,10 @@ void applyPostingBatch(const QVector<domain::models::PostingEntry>& postings,
 
     const double sourceWeight = fromTerm ? 1.0 : 0.68;
     const FieldMaskLegend& legend = repository.fieldMaskLegend();
+    const quint32 intentBit = legend.value(QStringLiteral("intent"), 0U);
+    const quint32 titleBit = legend.value(QStringLiteral("title"), 0U);
+    const quint32 aliasBit = legend.value(QStringLiteral("alias"), 0U);
+    const quint32 keywordBit = legend.value(QStringLiteral("keyword"), 0U);
 
     for (const domain::models::PostingEntry& posting : postings) {
         const IndexDocRecord* doc = repository.getDocById(posting.docId);
@@ -152,6 +167,14 @@ void applyPostingBatch(const QVector<domain::models::PostingEntry>& postings,
         ScoreAccumulator& accumulator = (*accumulators)[posting.docId];
         accumulator.postingScore += posting.score * sourceWeight * fieldMaskWeight(posting.fieldMask, legend);
         accumulator.mergedFieldMask |= posting.fieldMask;
+        if (intentBit != 0U && (posting.fieldMask & intentBit) != 0U) {
+            accumulator.hasIntentHit = true;
+        }
+        if ((titleBit != 0U && (posting.fieldMask & titleBit) != 0U)
+            || (aliasBit != 0U && (posting.fieldMask & aliasBit) != 0U)
+            || (keywordBit != 0U && (posting.fieldMask & keywordBit) != 0U)) {
+            accumulator.hasCoreFieldHit = true;
+        }
         if (fromTerm) {
             ++accumulator.termHits;
             accumulator.exactTermMatch = true;
@@ -248,6 +271,9 @@ SearchResult SearchService::search(const QString& query, const SearchOptions& op
         if (options.enableExactBoost && score.exactTermMatch) {
             finalScore += 25.0;
         }
+        if (options.enableIntentCrossBoost && score.hasIntentHit && score.hasCoreFieldHit) {
+            finalScore += 18.0;
+        }
 
         SearchHit hit;
         hit.docId = doc->id;
@@ -265,6 +291,8 @@ SearchResult SearchService::search(const QString& query, const SearchOptions& op
             hit.debugInfo.insert(QStringLiteral("prefix_hits"), score.prefixHits);
             hit.debugInfo.insert(QStringLiteral("posting_score"), score.postingScore);
             hit.debugInfo.insert(QStringLiteral("merged_field_mask"), static_cast<qint64>(score.mergedFieldMask));
+            hit.debugInfo.insert(QStringLiteral("has_intent_hit"), score.hasIntentHit);
+            hit.debugInfo.insert(QStringLiteral("has_core_field_hit"), score.hasCoreFieldHit);
         }
 
         hits.push_back(std::move(hit));

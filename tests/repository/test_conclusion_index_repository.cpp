@@ -1,7 +1,9 @@
 #include "infrastructure/data/conclusion_index_repository.h"
+#include "domain/models/search_result_models.h"
 
 #include "shared/test_fixture_loader.h"
 
+#include <QJsonParseError>
 #include <QtTest/QtTest>
 
 namespace {
@@ -29,6 +31,10 @@ private slots:
     void getDocById_returnsDocRecord();
     void missingDocId_returnsNullptr();
     void malformedIndex_toleratesAndSkipsInvalidRows();
+    void domainTopicMap_validFile_loadsAndBuildsLookup();
+    void domainTopicMap_objectStyleDocsField_loadsAndBuildsLookup();
+    void domainTopicMap_missingFile_degradesGracefully();
+    void domainTopicMap_malformedFile_degradesGracefully();
 
 private:
     infrastructure::data::ConclusionIndexRepository repositoryRound2_;
@@ -103,6 +109,73 @@ void ConclusionIndexRepositoryTest::malformedIndex_toleratesAndSkipsInvalidRows(
     QCOMPARE(prefixPostings->at(0).docId, QStringLiteral("M001"));
 
     QVERIFY(malformedRepository.findPrefix(QStringLiteral("all_bad_pre")) == nullptr);
+}
+
+void ConclusionIndexRepositoryTest::domainTopicMap_validFile_loadsAndBuildsLookup()
+{
+    const QString mapPath = tests::shared::fixtureDomainTopicMapPath();
+    const bool loaded = repositoryRound2_.loadDomainTopicMap(mapPath);
+    QVERIFY2(loaded, "valid domain_topic_map fixture should load");
+    QVERIFY(repositoryRound2_.hasDomainTopicMap());
+
+    const auto& map = repositoryRound2_.domainTopicMap();
+    QVERIFY2(!map.domains.isEmpty(), "domain list should not be empty");
+    QVERIFY2(!map.domainByAlias.isEmpty(), "domain alias lookup should be built");
+    QVERIFY2(!map.topicByAlias.isEmpty(), "topic alias lookup should be built");
+
+    const auto& diag = repositoryRound2_.domainTopicMapDiagnostics();
+    QVERIFY(diag.fileExists);
+    QCOMPARE(diag.parseError.error, QJsonParseError::NoError);
+    QVERIFY(diag.domainCount >= 1);
+    QVERIFY(diag.topicCount >= 1);
+    QVERIFY(diag.aliasCount >= 1);
+}
+
+void ConclusionIndexRepositoryTest::domainTopicMap_objectStyleDocsField_loadsAndBuildsLookup()
+{
+    const QString mapPath = tests::shared::fixtureDomainTopicMapObjectDocsPath();
+    const bool loaded = repositoryRound2_.loadDomainTopicMap(mapPath);
+    QVERIFY2(loaded, "object-style domain_topic_map fixture should load");
+    QVERIFY(repositoryRound2_.hasDomainTopicMap());
+
+    const auto& map = repositoryRound2_.domainTopicMap();
+    QVERIFY2(!map.domains.isEmpty(), "object-style domain list should not be empty");
+    QVERIFY2(!map.domainByAlias.isEmpty(), "object-style domain alias lookup should be built");
+    QVERIFY2(!map.topicByAlias.isEmpty(), "object-style topic alias lookup should be built");
+
+    const QString normalizedDomainAlias = domain::models::normalizeQueryText(QStringLiteral("\u4e0d\u7b49"));
+    QVERIFY2(map.domainByAlias.contains(normalizedDomainAlias), "domain alias lookup should include normalized alias");
+    const QString normalizedTopicAlias = domain::models::normalizeQueryText(QStringLiteral("\u67ef\u897f"));
+    QVERIFY2(map.topicByAlias.contains(normalizedTopicAlias), "topic alias lookup should include normalized alias");
+
+    const auto& diag = repositoryRound2_.domainTopicMapDiagnostics();
+    QVERIFY(diag.fileExists);
+    QCOMPARE(diag.parseError.error, QJsonParseError::NoError);
+    QVERIFY(diag.domainCount >= 1);
+    QVERIFY(diag.topicCount >= 1);
+    QVERIFY(diag.aliasCount >= 1);
+}
+
+void ConclusionIndexRepositoryTest::domainTopicMap_missingFile_degradesGracefully()
+{
+    const QString missingPath = tests::shared::testsSourceDir() + QStringLiteral("/fixtures/not_exists_domain_topic_map.json");
+    const bool loaded = repositoryRound2_.loadDomainTopicMap(missingPath);
+    QVERIFY2(!loaded, "missing domain_topic_map should return false");
+    QVERIFY(!repositoryRound2_.hasDomainTopicMap());
+
+    const auto& diag = repositoryRound2_.domainTopicMapDiagnostics();
+    QVERIFY(!diag.fileExists);
+}
+
+void ConclusionIndexRepositoryTest::domainTopicMap_malformedFile_degradesGracefully()
+{
+    const bool loaded = repositoryRound2_.loadDomainTopicMap(tests::shared::malformedFixtureDomainTopicMapPath());
+    QVERIFY2(!loaded, "malformed domain_topic_map should return false");
+    QVERIFY(!repositoryRound2_.hasDomainTopicMap());
+
+    const auto& diag = repositoryRound2_.domainTopicMapDiagnostics();
+    QVERIFY(diag.fileExists);
+    QVERIFY(diag.parseError.error != QJsonParseError::NoError);
 }
 
 QTEST_APPLESS_MAIN(ConclusionIndexRepositoryTest)

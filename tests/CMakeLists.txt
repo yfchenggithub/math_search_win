@@ -16,6 +16,7 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/license/feature_gate.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_index_models.h
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_index_models.cpp
+    ${PROJECT_SOURCE_DIR}/src/domain/models/domain_topic_map_models.h
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_result_models.h
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_result_models.cpp
     ${PROJECT_SOURCE_DIR}/src/domain/models/search_history_item.h
@@ -33,6 +34,8 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/domain/services/suggest_service.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/backend_search_index_loader.h
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/backend_search_index_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/domain_topic_map_loader.h
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/domain_topic_map_loader.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.h
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/storage/local_storage_service.h
