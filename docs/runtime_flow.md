@@ -113,9 +113,12 @@ flowchart TD
 - 详情请求先进入 `enqueueDetailRenderRequest()`，通过 `DetailRenderCoordinator` 生成 `requestId`。
 - 使用 `detailSelectionCoalesceTimer_`（18ms）合并高频选中切换。
 - `renderDetailForRequest()` 从 `ConclusionContentRepository` 取记录，`ConclusionDetailAdapter` 转 `ConclusionDetailViewData`，`DetailViewDataMapper` 生成 payload。
-- `DetailRenderPathResolver::resolve()` 统一决定当前请求走 `TrialPreview / Web / FallbackText` 分支。
+- `DetailRenderPathResolver::resolveForMode()` 统一决定当前请求走 `TrialPreview / Pdf / Web / FallbackText` 分支。
+- 详情渲染模式来源：`MATH_SEARCH_DETAIL_RENDER_MODE`（优先）> `cache/settings.json` 中 `detail_render_mode` > 默认 `pdf`。
+- PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
 - 授权分支：
   - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
+  - 已开 `FullDetail` 且模式允许 PDF -> `renderDetailInPdfView()`（失败可按模式回退）
   - 已开 `FullDetail` 且 Web 可用 -> `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()` -> `detail.js`
   - Web 不可用/失败 -> `renderDetailInFallbackBrowser()` -> `DetailFallbackContentBuilder::buildFallbackHtml()`
 - 性能链路：`DetailPane::perfPhase` 和 JS `[perf][detail]` 日志都会进入 `SearchPage::logDetailPerf()` -> `DetailPerfAggregator`。
@@ -129,6 +132,7 @@ sequenceDiagram
   participant DA as ConclusionDetailAdapter
   participant M as DetailViewDataMapper
   participant DRP as DetailRenderPathResolver
+  participant PDF as QPdfView/QPdfDocument
   participant DP as DetailPane
   participant FB as DetailFallbackContentBuilder
   participant JS as app_resources/detail/detail.js
@@ -143,10 +147,19 @@ sequenceDiagram
   CR-->>SP: ConclusionRecord
   SP->>DA: toViewData(record)
   SP->>M: buildContentPayload(viewData)
-  SP->>DRP: resolve(fullDetailEnabled, webEnabled, paneReady, mapperReady)
+  SP->>DRP: resolveForMode(fullDetailEnabled, mode, pdfReady, webReady,...)
   alt TrialPreview
     SP->>FB: buildTrialPreviewHtml(viewData, docId, reason)
     SP->>SP: showTrialDetailPreview()
+  else Pdf
+    SP->>SP: resolveDetailPdfPath(docId)
+    SP->>PDF: renderDetailInPdfView(path)
+    alt Pdf失败且mode=auto
+      SP->>DP: renderDetail(payload)
+      DP->>JS: DetailRuntime.renderDetail(payload)
+    else Pdf失败
+      SP->>SP: renderDetailInFallbackBrowser()
+    end
   else Web
     SP->>DP: renderDetail(payload)
     DP->>JS: DetailRuntime.renderDetail(payload)
@@ -213,7 +226,9 @@ sequenceDiagram
 ### 4.3 设置链路（当前状态）
 
 - `SettingsRepository` 和 `AppSettings` 已实现读写默认值、落盘 `cache/settings.json`。
-- `SearchPage` 已接入 `SettingsRepository`：`loadDetailFontScaleSetting()` 读取 `detail_font_scale_level`，点击 `Aa` 按钮后 `persistDetailFontScaleSetting()` 写回。
+- `SearchPage` 已接入 `SettingsRepository`：
+  - `loadDetailFontScaleSetting()` 读取 `detail_font_scale_level`，点击 `Aa` 按钮后 `persistDetailFontScaleSetting()` 写回。
+  - `loadDetailRenderModeSetting()` 读取 `detail_render_mode`（且允许环境变量覆盖）。
 - `SettingsPage` 仍未接入通用设置编辑流程。
 - 当前 `SettingsPage::reloadData()` 展示应用、授权、数据目录、日志目录与帮助信息。
 - 已实现 `openLogDirButton_`：通过 `logging::Logger::instance().logDirectory()` 获取目录后调用 `QDesktopServices::openUrl(...)` 打开日志目录；失败时弹窗并写 `config/file.io` 日志。
@@ -227,7 +242,7 @@ flowchart TD
 
   S1[SearchPage::loadDetailFontScaleSetting] --> S2[SettingsRepository::value detail_font_scale_level]
   S2 --> S3[SearchPage::applyDetailFontScale]
-  S3 --> S4[QWebEngineView::setZoomFactor + QTextBrowser 字号样式]
+  S3 --> S4[QPdfView/QWebEngineView::setZoomFactor + QTextBrowser 字号样式]
   S5[detailFontButton 点击] --> S6[persistDetailFontScaleSetting]
   S6 --> S7[SettingsRepository::setValue]
 
@@ -244,7 +259,7 @@ flowchart TD
 
   REP1[SettingsRepository] --> REP2[load/setValue/save]
   REP2 --> REP3[cache/settings.json]
-  REP3 --> REP4[当前主要由测试覆盖 + SearchPage 字体档位读写]
+  REP3 --> REP4[当前主要由测试覆盖 + SearchPage 字体档位/渲染模式读写]
 ```
 
 ## 5. 激活 / 授权检查流程

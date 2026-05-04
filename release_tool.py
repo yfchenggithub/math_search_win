@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
 """
-Release deploy/pack tool for math_search_win (Windows).
+math_search_win 发布部署/打包工具（Windows）
 
-Purpose:
-- Build a runnable release directory under dist/
-- Deploy Qt runtime with windeployqt
-- Copy project-owned runtime resources with runtime-aware mapping
-- Validate critical runtime files after deployment
-- Optionally pack the release directory as zip
+目标：
+- 在 dist/ 下生成可运行的发布目录
+- 调用 windeployqt 部署 Qt 运行时
+- 复制项目运行所需资源（data / app_resources / license / cache）
+- 对关键发布文件做校验
+- 可选打包为 zip
 
-Inputs:
-- Release executable path (or build directory + exe name)
-- windeployqt path (or Qt bin directory / PATH)
-- Dist output settings and resource copy options
+输入：
+- 可执行文件路径（或 build 目录 + exe 名）
+- windeployqt 路径（或 Qt bin 目录 / PATH 自动发现）
+- 发布目录、打包文件名、资源复制开关等参数
 
-Outputs:
+输出：
 - dist/<dist_name>/...
-- dist/<dist_name>_release.zip (when running package/all)
+- dist/<dist_name>_release.zip（执行 package/all 时）
 
-Usage:
+用法示例：
 - python release_tool.py deploy
 - python release_tool.py verify --verbose
 - python release_tool.py all
+- python release_tool.py --dry-run --verbose deploy
 - python release_tool.py deploy --dry-run --verbose
 """
 
@@ -429,6 +430,8 @@ class ReleaseTool:
             if not ok and check.required:
                 failures.append(f"{check.label}: {check.path}")
 
+        self._verify_conclusion_pdf_payload(failures)
+
         if failures:
             raise RuntimeError(
                 "Release validation failed. Missing required items:\n- "
@@ -444,6 +447,8 @@ class ReleaseTool:
             ValidationCheck("Qt6Core.dll", dist_dir / "Qt6Core.dll", expected="file"),
             ValidationCheck("Qt6Gui.dll", dist_dir / "Qt6Gui.dll", expected="file"),
             ValidationCheck("Qt6Widgets.dll", dist_dir / "Qt6Widgets.dll", expected="file"),
+            ValidationCheck("Qt6Pdf.dll", dist_dir / "Qt6Pdf.dll", expected="file"),
+            ValidationCheck("Qt6PdfWidgets.dll", dist_dir / "Qt6PdfWidgets.dll", expected="file"),
             ValidationCheck("Qt6WebEngineCore.dll", dist_dir / "Qt6WebEngineCore.dll", expected="file"),
             ValidationCheck("Qt6WebEngineWidgets.dll", dist_dir / "Qt6WebEngineWidgets.dll", expected="file"),
             ValidationCheck("QtWebEngineProcess.exe", dist_dir / "QtWebEngineProcess.exe", expected="file"),
@@ -473,6 +478,16 @@ class ReleaseTool:
                 dist_dir / "data" / "canonical_content_v2.json",
                 expected="file",
             ),
+            ValidationCheck(
+                "conclusion_pdf_map.json",
+                dist_dir / "data" / "conclusion_pdf_map.json",
+                expected="file",
+            ),
+            ValidationCheck(
+                "conclusion_pdfs directory",
+                dist_dir / "data" / "conclusion_pdfs",
+                expected="dir",
+            ),
             ValidationCheck("cache directory", dist_dir / "cache", expected="dir"),
             ValidationCheck("license directory", dist_dir / "license", expected="dir"),
             ValidationCheck("imageformats plugin directory", dist_dir / "imageformats", expected="dir", required=False),
@@ -494,6 +509,19 @@ class ReleaseTool:
         if check.expected == "dir":
             return check.path.is_dir()
         return check.path.exists()
+
+    def _verify_conclusion_pdf_payload(self, failures: list[str]) -> None:
+        pdf_dir = self.config.dist_dir / "data" / "conclusion_pdfs"
+        if not pdf_dir.is_dir():
+            return
+
+        has_pdf_file = any(path.is_file() for path in pdf_dir.rglob("*.pdf"))
+        if has_pdf_file:
+            self.info(f"[OK] conclusion_pdfs has pdf files: {pdf_dir}")
+            return
+
+        self.info(f"[FAIL] conclusion_pdfs has no pdf files: {pdf_dir}")
+        failures.append(f"conclusion_pdfs has no pdf files: {pdf_dir}")
 
 
 def resolve_path(base_dir: Path, raw_path: str) -> Path:
@@ -643,6 +671,32 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def normalize_command_first_argv(argv: list[str]) -> list[str]:
+    """兼容 `release_tool.py deploy --dry-run --verbose` 这类参数顺序。
+
+    argparse 默认要求“全局参数在子命令前”，本函数允许“子命令在前、全局参数在后”。
+    """
+    if not argv:
+        return argv
+
+    commands = {"deploy", "verify", "package", "all"}
+    first = argv[0].strip().lower()
+    if first not in commands:
+        return argv
+
+    tail = argv[1:]
+    if not tail:
+        return argv
+
+    # 保持 `release_tool.py deploy -h/--help` 行为不变（显示子命令帮助）。
+    if len(tail) == 1 and tail[0] in {"-h", "--help"}:
+        return argv
+
+    if any(token.startswith("-") for token in tail):
+        return [*tail, argv[0]]
+    return argv
+
+
 def build_config(args: argparse.Namespace) -> ReleaseConfig:
     project_root = resolve_path(Path.cwd(), args.project_root)
     build_dir = resolve_path(project_root, args.build_dir)
@@ -692,7 +746,8 @@ def build_config(args: argparse.Namespace) -> ReleaseConfig:
 
 def main() -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    argv = normalize_command_first_argv(sys.argv[1:])
+    args = parser.parse_args(argv)
 
     try:
         config = build_config(args)

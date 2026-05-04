@@ -2,8 +2,15 @@
 
 namespace ui::detail {
 
+enum class DetailRenderMode {
+    Auto = 0,
+    Pdf,
+    Web,
+};
+
 enum class DetailRenderPath {
     TrialPreview = 0,
+    Pdf,
     Web,
     FallbackText,
 };
@@ -14,6 +21,12 @@ public:
                                     bool webDetailEnabled,
                                     bool hasDetailPane,
                                     bool hasViewDataMapper);
+    static DetailRenderPath resolveForMode(bool fullDetailEnabled,
+                                           DetailRenderMode mode,
+                                           bool pdfDetailEnabled,
+                                           bool webDetailEnabled,
+                                           bool hasDetailPane,
+                                           bool hasViewDataMapper);
 };
 
 }  // namespace ui::detail

@@ -12,7 +12,7 @@
 - 应用启动、主窗口装配、页面切换与跨页信号联动。
 - 搜索链路：关键词搜索、基础筛选、排序、结果展示；已支持 `intent + (title/alias/keyword)` 交叉加权。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
-- 详情链路：结果选中 -> 详情数据映射 -> WebEngine 渲染；并提供文本回退模式。
+- 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
 - 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页回跳搜索页打开详情。
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
@@ -98,6 +98,7 @@ flowchart LR
     IL[BackendSearchIndexLoader]
     DTL[DomainTopicMapLoader]
     CL[CanonicalContentLoader]
+    CPL[ConclusionPdfMapLoader]
     LSS[LocalStorageService]
     LOG[Logger]
     PATH[AppPaths]
@@ -120,6 +121,8 @@ flowchart LR
     IDX[data/backend_search_index.json]
     CNT[data/canonical_content_v2.json]
     DTM[data/domain_topic_map.json]
+    CPM[data/conclusion_pdf_map.json]
+    CPD[data/conclusion_pdfs/*]
     CF[cache/favorites.json]
     CH[cache/history.json]
     CS[cache/settings.json]
@@ -136,6 +139,7 @@ flowchart LR
   P2 --> SS --> IR
   P2 --> SGS --> IR
   P2 --> CR
+  P2 --> CPL
   P2 --> FR
   P2 --> HR
 
@@ -155,6 +159,8 @@ flowchart LR
   IR --> IL --> IDX
   IR --> DTL --> DTM
   CR --> CL --> CNT
+  CPL --> CPM
+  P2 --> CPD
 
   FR --> LSS --> CF
   HR --> LSS --> CH
@@ -317,7 +323,8 @@ flowchart TD
   - `ConclusionContentRepository::getById()`
   - `ConclusionDetailAdapter::toViewData()`
   - `DetailViewDataMapper::buildContentPayload()`
-  - `DetailRenderPathResolver::resolve()`（`TrialPreview / Web / FallbackText` 分支选择）
+  - `DetailRenderPathResolver::resolveForMode()`（`TrialPreview / Pdf / Web / FallbackText` 分支选择）
+  - `renderDetailInPdfView()` + `resolveDetailPdfPath()`（PDF 分支）
   - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`（Web 分支）
   - `DetailFallbackContentBuilder::buildFallbackHtml/buildTrialPreviewHtml()`（文本回退和 trial 预览分支）
   - `DetailHtmlRenderer::buildRenderScript()` -> `window.DetailRuntime.renderDetail(...)`
@@ -327,7 +334,10 @@ flowchart TD
   - `app_resources/detail/detail.css`
   - `app_resources/katex/*`
 - 回退机制：
+  - `detail_render_mode=auto` 时：PDF 失败后可回退 Web，再回退文本。
   - Web 模式不可用或失败 -> `activateTextFallbackMode()` + `renderDetailInFallbackBrowser()`。
+  - PDF 映射文件：`data/conclusion_pdf_map.json`（扁平对象，示例：`{"I028":"I028.pdf"}`）。
+  - PDF 目录：`data/conclusion_pdfs/`。
 - 性能链路：
   - C++ 侧 `DetailPerfAggregator`
   - JS 侧 `[perf][detail]` console log 回传 `DetailPane::handleJsConsoleMessage()`
@@ -363,7 +373,7 @@ flowchart TD
 
 - 现状：
   - `SettingsRepository` + `AppSettings` 有完整读写与默认值体系。
-  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（详情字体档位）。
+  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（详情字体档位）、`detail_render_mode`（`pdf/web/auto`）。
   - `SettingsPage` 仍主要是状态展示（license/data/log/help/feedback），未提供通用设置编辑流程。
   - `SettingsPage::buildDataInfoSection()` 已接入 `openLogDirButton_`，路径来自 `logging::Logger::instance().logDirectory()`。
 - 当前状态：部分实现（已有单项设置接线，未形成完整设置中心）。
@@ -474,10 +484,14 @@ flowchart TD
 ### 9.2 关键依赖
 - Qt6 Widgets
 - Qt6 WebEngineWidgets
+- Qt6 Pdf
+- Qt6 PdfWidgets
 - 本地 `app_resources/` 与 `data/` 目录
 
 ### 9.3 常见失败原因
 - `data/*.json` 缺失或格式异常。
+- `data/conclusion_pdf_map.json` 缺失或映射无效（默认 PDF 模式下会触发回退）。
+- `data/conclusion_pdfs/*.pdf` 缺失或损坏（默认 PDF 模式下会触发回退）。
 - `data/domain_topic_map.json` 缺失或 JSON 损坏（会关闭 domain/topic 扩展分支，自动降级为扁平建议，不阻断主搜索）。
 - `app_resources/detail` 或 `app_resources/katex` 缺失导致 Web 详情退化。
 - WebEngine 环境问题导致详情回退文本模式。

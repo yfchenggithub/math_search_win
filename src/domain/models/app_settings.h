@@ -16,6 +16,7 @@ inline constexpr const char* LastSelectedTags = "last_selected_tags";
 inline constexpr const char* EditionHint = "edition_hint";
 inline constexpr const char* Theme = "theme";
 inline constexpr const char* DetailFontScaleLevel = "detail_font_scale_level";
+inline constexpr const char* DetailRenderMode = "detail_render_mode";
 }  // namespace AppSettingKeys
 
 struct AppSettings final {

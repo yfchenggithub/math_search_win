@@ -34,6 +34,7 @@ struct ConclusionDetailViewData {
     QString summary;
     QString conditionText;
     QString remarkText;
+    QString assetPdfName;
     QVector<DetailVariableViewData> variables;
     QVector<DetailSectionViewData> sections;
     bool isValid = false;

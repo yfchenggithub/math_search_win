@@ -36,6 +36,8 @@ set(MATH_SEARCH_TEST_SUPPORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/backend_search_index_loader.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/domain_topic_map_loader.h
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/domain_topic_map_loader.cpp
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_pdf_map_loader.h
+    ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_pdf_map_loader.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.h
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_index_repository.cpp
     ${PROJECT_SOURCE_DIR}/src/infrastructure/storage/local_storage_service.h
@@ -143,6 +145,17 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
         $<TARGET_FILE:math_search_detail_render_chain_tests>
+)
+
+add_executable(math_search_conclusion_pdf_map_loader_tests
+    detail/test_conclusion_pdf_map_loader.cpp
+)
+configure_math_search_test_target(math_search_conclusion_pdf_map_loader_tests)
+add_test(
+    NAME conclusion_pdf_map_loader_tests
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:math_search_conclusion_pdf_map_loader_tests>
 )
 
 add_executable(math_search_storage_tests
@@ -259,7 +272,7 @@ add_executable(math_search_main_window_round5_tests
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
 )
 configure_math_search_test_target(math_search_main_window_round5_tests)
-target_link_libraries(math_search_main_window_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets)
+target_link_libraries(math_search_main_window_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets Qt6::Pdf Qt6::PdfWidgets)
 add_test(
     NAME main_window_round5_tests
     COMMAND ${CMAKE_COMMAND} -E env
@@ -286,7 +299,7 @@ add_executable(math_search_search_page_round5_tests
     ${PROJECT_SOURCE_DIR}/src/infrastructure/data/conclusion_content_repository.cpp
 )
 configure_math_search_test_target(math_search_search_page_round5_tests)
-target_link_libraries(math_search_search_page_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets)
+target_link_libraries(math_search_search_page_round5_tests PRIVATE Qt6::Widgets Qt6::WebEngineWidgets Qt6::Pdf Qt6::PdfWidgets)
 add_test(
     NAME search_page_round5_tests
     COMMAND ${CMAKE_COMMAND} -E env

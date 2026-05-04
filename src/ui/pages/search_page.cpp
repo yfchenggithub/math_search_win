@@ -10,6 +10,7 @@
 #include "infrastructure/data/conclusion_index_repository.h"
 #include "license/feature_gate.h"
 #include "license/license_service.h"
+#include "shared/paths.h"
 #include "ui/detail/detail_fallback_content_builder.h"
 #include "ui/detail/detail_html_renderer.h"
 #include "ui/detail/detail_pane.h"
@@ -22,6 +23,8 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QDir>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonObject>
@@ -29,6 +32,8 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QPdfDocument>
+#include <QPdfView>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
@@ -65,6 +70,60 @@ int clampDetailFontScaleLevel(int level)
 QString detailFontScaleKey()
 {
     return QString::fromLatin1(domain::models::AppSettingKeys::DetailFontScaleLevel);
+}
+
+QString detailRenderModeKey()
+{
+    return QString::fromLatin1(domain::models::AppSettingKeys::DetailRenderMode);
+}
+
+QString detailRenderModeToken(ui::detail::DetailRenderMode mode)
+{
+    switch (mode) {
+    case ui::detail::DetailRenderMode::Auto:
+        return QStringLiteral("auto");
+    case ui::detail::DetailRenderMode::Web:
+        return QStringLiteral("web");
+    default:
+        return QStringLiteral("pdf");
+    }
+}
+
+bool tryParseDetailRenderMode(const QString& raw, ui::detail::DetailRenderMode* parsed)
+{
+    if (parsed == nullptr) {
+        return false;
+    }
+
+    const QString normalized = raw.trimmed().toLower();
+    if (normalized == QStringLiteral("pdf")) {
+        *parsed = ui::detail::DetailRenderMode::Pdf;
+        return true;
+    }
+    if (normalized == QStringLiteral("web")) {
+        *parsed = ui::detail::DetailRenderMode::Web;
+        return true;
+    }
+    if (normalized == QStringLiteral("auto")) {
+        *parsed = ui::detail::DetailRenderMode::Auto;
+        return true;
+    }
+    return false;
+}
+
+QString detailPdfDirectoryFromEnvOrDefault()
+{
+    const QString envPath = qEnvironmentVariable("MATH_SEARCH_DETAIL_PDF_DIR").trimmed();
+    if (envPath.isEmpty()) {
+        return QDir(AppPaths::dataDir()).filePath(QStringLiteral("conclusion_pdfs"));
+    }
+
+    const QFileInfo envInfo(envPath);
+    if (envInfo.isAbsolute()) {
+        return QDir::cleanPath(QDir::fromNativeSeparators(envPath));
+    }
+
+    return QDir(AppPaths::appRoot()).filePath(QDir::cleanPath(QDir::fromNativeSeparators(envPath)));
 }
 
 qreal detailZoomFactorForLevel(int level)
@@ -191,7 +250,9 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     ui::style::ensureAppStyleSheetLoaded();
     setObjectName(QStringLiteral("searchPage"));
     setProperty("pageRole", QStringLiteral("search"));
+    detailPdfDirectory_ = detailPdfDirectoryFromEnvOrDefault();
     loadDetailFontScaleSetting();
+    loadDetailRenderModeSetting();
     indexReady_ = (indexRepository_ != nullptr && indexRepository_->docCount() > 0);
     contentReady_ = (contentRepository_ != nullptr && contentRepository_->size() > 0);
     detailHtmlRenderer_ = std::make_unique<ui::detail::DetailHtmlRenderer>();
@@ -202,6 +263,22 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
               QStringLiteral("page constructed name=search search_service_null=%1 suggest_service_null=%2")
                   .arg(searchService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false"))
                   .arg(suggestService_ == nullptr ? QStringLiteral("true") : QStringLiteral("false")));
+
+    const bool mapLoaded = conclusionPdfMapLoader_.loadFromFile();
+    if (!mapLoaded) {
+        LOG_WARN(LogCategory::DetailRender,
+                 QStringLiteral("pdf map load failed path=%1 reason=%2")
+                     .arg(conclusionPdfMapLoader_.diagnostics().filePath,
+                          conclusionPdfMapLoader_.diagnostics().fatalError));
+    } else {
+        LOG_INFO(LogCategory::DetailRender,
+                 QStringLiteral("pdf map ready path=%1 entries=%2")
+                     .arg(conclusionPdfMapLoader_.activeFilePath())
+                     .arg(conclusionPdfMapLoader_.diagnostics().loadedEntryCount));
+    }
+    LOG_INFO(LogCategory::DetailRender,
+             QStringLiteral("detail render mode=%1 pdf_dir=%2")
+                 .arg(detailRenderModeToken(detailRenderMode_), detailPdfDirectory_));
 
     detailSelectionCoalesceTimer_ = new QTimer(this);
     detailSelectionCoalesceTimer_->setSingleShot(true);
@@ -620,13 +697,47 @@ void SearchPage::loadDetailFontScaleSetting()
     detailFontScaleLevel_ = clampDetailFontScaleLevel(savedValue.toInt());
 }
 
+void SearchPage::loadDetailRenderModeSetting()
+{
+    detailRenderMode_ = ui::detail::DetailRenderMode::Pdf;
+
+    ui::detail::DetailRenderMode parsedMode = ui::detail::DetailRenderMode::Pdf;
+    const QString envModeRaw = qEnvironmentVariable("MATH_SEARCH_DETAIL_RENDER_MODE").trimmed();
+    if (!envModeRaw.isEmpty()) {
+        if (tryParseDetailRenderMode(envModeRaw, &parsedMode)) {
+            detailRenderMode_ = parsedMode;
+            return;
+        }
+
+        LOG_WARN(LogCategory::Config,
+                 QStringLiteral("invalid detail render mode from env value=%1 fallback=pdf").arg(envModeRaw));
+    }
+
+    const QString savedModeRaw =
+        settingsRepository_.value(detailRenderModeKey(), QStringLiteral("pdf")).toString().trimmed();
+    if (tryParseDetailRenderMode(savedModeRaw, &parsedMode)) {
+        detailRenderMode_ = parsedMode;
+        return;
+    }
+
+    if (!savedModeRaw.isEmpty()) {
+        LOG_WARN(LogCategory::Config,
+                 QStringLiteral("invalid detail render mode from settings value=%1 fallback=pdf").arg(savedModeRaw));
+    }
+}
+
 void SearchPage::applyDetailFontScale()
 {
     detailFontScaleLevel_ = clampDetailFontScaleLevel(detailFontScaleLevel_);
     const QString fontScaleToken = detailFontScaleTokenForLevel(detailFontScaleLevel_);
+    const qreal zoomFactor = detailZoomFactorForLevel(detailFontScaleLevel_);
+
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setZoomFactor(zoomFactor);
+    }
 
     if (detailWebView_ != nullptr) {
-        detailWebView_->setZoomFactor(detailZoomFactorForLevel(detailFontScaleLevel_));
+        detailWebView_->setZoomFactor(zoomFactor);
     }
 
     if (detailBrowser_ != nullptr) {
@@ -878,6 +989,13 @@ void SearchPage::buildUi()
     detailBodyLayout->setContentsMargins(10, 10, 10, 10);
     detailBodyLayout->setSpacing(0);
 
+    detailPdfDocument_ = new QPdfDocument(detailBody);
+    detailPdfView_ = new QPdfView(detailBody);
+    detailPdfView_->setObjectName(QStringLiteral("detailPdfView"));
+    detailPdfView_->setVisible(false);
+    detailPdfView_->setDocument(detailPdfDocument_);
+    detailBodyLayout->addWidget(detailPdfView_, 1);
+
     detailWebView_ = new QWebEngineView(detailBody);
     detailWebView_->setObjectName(QStringLiteral("detailWebView"));
     detailWebView_->setVisible(false);
@@ -893,13 +1011,14 @@ void SearchPage::buildUi()
     updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);
     updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
 
+    pdfDetailEnabled_ = (detailPdfView_ != nullptr && detailPdfDocument_ != nullptr);
     webDetailEnabled_ = detailHtmlRenderer_ != nullptr && detailHtmlRenderer_->isReady();
     if (webDetailEnabled_) {
         detailPane_ = std::make_unique<ui::detail::DetailPane>(detailWebView_, detailBrowser_, detailHtmlRenderer_.get());
         webDetailEnabled_ = detailPane_ != nullptr && detailPane_->isWebModeEnabled();
     }
 
-    if (webDetailEnabled_) {
+    if (webDetailEnabled_ && detailRenderMode_ == ui::detail::DetailRenderMode::Web) {
         detailWebView_->setVisible(true);
         LOG_DEBUG(LogCategory::WebViewKatex,
                   QStringLiteral("web_mode enabled detail_dir=%1 template=%2")
@@ -907,10 +1026,12 @@ void SearchPage::buildUi()
         LOG_DEBUG(LogCategory::PerfWebView, QStringLiteral("event=web_mode_enabled mode=web"));
     } else {
         detailBrowser_->setVisible(true);
-        LOG_WARN(LogCategory::WebViewKatex,
-                 QStringLiteral("renderer unavailable mode=text_fallback reason=%1")
-                     .arg(detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
-                                                         : detailHtmlRenderer_->lastError()));
+        if (!webDetailEnabled_) {
+            LOG_WARN(LogCategory::WebViewKatex,
+                     QStringLiteral("renderer unavailable mode=text_fallback reason=%1")
+                         .arg(detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
+                                                             : detailHtmlRenderer_->lastError()));
+        }
     }
 
     splitter->addWidget(leftPanel);
@@ -1583,8 +1704,14 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
-    const ui::detail::DetailRenderPath renderPath = ui::detail::DetailRenderPathResolver::resolve(
-        isFeatureEnabled(license::Feature::FullDetail), webDetailEnabled_, detailPane_ != nullptr, detailViewDataMapper_ != nullptr);
+    const bool fullDetailEnabled = isFeatureEnabled(license::Feature::FullDetail);
+    const ui::detail::DetailRenderPath renderPath = ui::detail::DetailRenderPathResolver::resolveForMode(
+        fullDetailEnabled,
+        detailRenderMode_,
+        pdfDetailEnabled_,
+        webDetailEnabled_,
+        detailPane_ != nullptr,
+        detailViewDataMapper_ != nullptr);
 
     if (renderPath == ui::detail::DetailRenderPath::TrialPreview) {
         showTrialDetailPreview(detailView, normalizedDocId);
@@ -1600,7 +1727,7 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         return;
     }
 
-    if (renderPath == ui::detail::DetailRenderPath::Web) {
+    const auto dispatchViaWeb = [this, &detailView, &contentPayload, &normalizedDocId, requestId, selectionTimestampMs]() {
         QJsonObject payload = contentPayload;
         if (payload.isEmpty()) {
             payload = detailViewDataMapper_->buildContentPayload(detailView, 0);
@@ -1612,6 +1739,41 @@ void SearchPage::renderDetailForRequest(const QString& docId, quint64 requestId,
         if (detailRenderCoordinator_ != nullptr) {
             detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
         }
+    };
+
+    if (renderPath == ui::detail::DetailRenderPath::Pdf) {
+        QString failureReason;
+        if (renderDetailInPdfView(normalizedDocId, detailView, &failureReason)) {
+            if (detailRenderCoordinator_ != nullptr) {
+                detailRenderCoordinator_->markRendered(normalizedDocId, requestId);
+            }
+            logDetailPerf(normalizedDocId,
+                          requestId,
+                          selectionTimestampMs,
+                          QStringLiteral("total"),
+                          QStringLiteral("dt=%1ms mode=pdf").arg(detailElapsedMs(selectionTimestampMs)));
+            markDetailTimingSuccess(normalizedDocId, requestId, selectionTimestampMs);
+            return;
+        }
+
+        logDetailPerf(normalizedDocId,
+                      requestId,
+                      selectionTimestampMs,
+                      QStringLiteral("pdf_unavailable"),
+                      QStringLiteral("reason=%1").arg(failureReason.trimmed().isEmpty() ? QStringLiteral("unknown")
+                                                                                         : failureReason.trimmed()));
+
+        if (detailRenderMode_ == ui::detail::DetailRenderMode::Auto
+            && ui::detail::DetailRenderPathResolver::resolve(
+                   true, webDetailEnabled_, detailPane_ != nullptr, detailViewDataMapper_ != nullptr)
+                   == ui::detail::DetailRenderPath::Web) {
+            dispatchViaWeb();
+            return;
+        }
+    }
+
+    if (renderPath == ui::detail::DetailRenderPath::Web) {
+        dispatchViaWeb();
         return;
     }
 
@@ -1636,10 +1798,96 @@ void SearchPage::renderDetailInFallbackBrowser(const domain::adapters::Conclusio
     detailBrowser_->setHtml(ui::detail::DetailFallbackContentBuilder::buildFallbackHtml(detailView));
     resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
+    }
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
 }
+
+bool SearchPage::renderDetailInPdfView(const QString& docId,
+                                       const domain::adapters::ConclusionDetailViewData& detailView,
+                                       QString* failureReason)
+{
+    const auto assignFailure = [failureReason](const QString& reason) {
+        if (failureReason != nullptr) {
+            *failureReason = reason;
+        }
+    };
+
+    if (!pdfDetailEnabled_ || detailPdfView_ == nullptr || detailPdfDocument_ == nullptr) {
+        assignFailure(QStringLiteral("pdf_view_not_ready"));
+        return false;
+    }
+
+    const QString pdfPath = resolveDetailPdfPath(docId, detailView);
+    if (pdfPath.trimmed().isEmpty()) {
+        assignFailure(QStringLiteral("pdf_path_not_resolved"));
+        return false;
+    }
+
+    const QFileInfo pdfInfo(pdfPath);
+    if (!pdfInfo.exists() || !pdfInfo.isFile()) {
+        assignFailure(QStringLiteral("pdf_file_missing"));
+        return false;
+    }
+
+    const QPdfDocument::Error loadError = detailPdfDocument_->load(pdfInfo.absoluteFilePath());
+    if (loadError != QPdfDocument::Error::None) {
+        assignFailure(QStringLiteral("pdf_load_error_%1").arg(static_cast<int>(loadError)));
+        return false;
+    }
+
+    detailPdfView_->setVisible(true);
+    if (detailWebView_ != nullptr) {
+        detailWebView_->setVisible(false);
+    }
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->setVisible(false);
+    }
+
+    resetPdfDetailViewportToTop();
+    updateDetailShellMeta(QStringLiteral("PDF 详情预览"), QStringLiteral("neutral"));
+    return true;
+}
+
+QString SearchPage::resolveDetailPdfPath(const QString& docId,
+                                         const domain::adapters::ConclusionDetailViewData& detailView) const
+{
+    const QString normalizedDocId = docId.trimmed();
+    if (normalizedDocId.isEmpty()) {
+        return {};
+    }
+
+    const QString mappedFile = conclusionPdfMapLoader_.mappedPdfFileName(normalizedDocId).trimmed();
+    if (!mappedFile.isEmpty()) {
+        const QFileInfo mapInfo(mappedFile);
+        if (mapInfo.isAbsolute()) {
+            return mapInfo.absoluteFilePath();
+        }
+        return QDir(detailPdfDirectory_).filePath(mappedFile);
+    }
+
+    const QString assetPdf = detailView.assetPdfName.trimmed();
+    if (!assetPdf.isEmpty()) {
+        const QFileInfo assetInfo(assetPdf);
+        if (assetInfo.isAbsolute()) {
+            return assetInfo.absoluteFilePath();
+        }
+        return QDir(detailPdfDirectory_).filePath(assetPdf);
+    }
+
+    return QDir(detailPdfDirectory_).filePath(QStringLiteral("%1.pdf").arg(normalizedDocId));
+}
+
+#if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
+QString SearchPage::resolveDetailPdfPathForTest(const QString& docId,
+                                                const domain::adapters::ConclusionDetailViewData& detailView) const
+{
+    return resolveDetailPdfPath(docId, detailView);
+}
+#endif
 
 void SearchPage::showDetailPlaceholder(const QString& message)
 {
@@ -1654,7 +1902,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     currentDetailDocId_.clear();
     refreshFavoriteButtonState();
 
-    if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
+    if (shouldDispatchStateToWeb()) {
         const QJsonObject payload = detailViewDataMapper_->buildEmptyPayload(fallbackMessage);
         dispatchPayloadToWeb(payload);
         return;
@@ -1667,6 +1915,9 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#666;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
     resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
+    }
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
@@ -1684,7 +1935,7 @@ void SearchPage::showDetailError(const QString& message)
     currentDetailDocId_.clear();
     refreshFavoriteButtonState();
 
-    if (webDetailEnabled_ && detailViewDataMapper_ != nullptr) {
+    if (shouldDispatchStateToWeb()) {
         const QJsonObject payload = detailViewDataMapper_->buildErrorPayload(fallbackMessage);
         dispatchPayloadToWeb(payload);
         return;
@@ -1697,6 +1948,9 @@ void SearchPage::showDetailError(const QString& message)
     detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#9a3412;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
     resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
+    }
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
@@ -1708,6 +1962,18 @@ void SearchPage::resetWebDetailViewportToTop()
         return;
     }
     detailPane_->resetViewportToTop();
+}
+
+void SearchPage::resetPdfDetailViewportToTop()
+{
+    if (detailPdfView_ == nullptr) {
+        return;
+    }
+
+    QScrollBar* scrollBar = detailPdfView_->verticalScrollBar();
+    if (scrollBar != nullptr) {
+        scrollBar->setValue(scrollBar->minimum());
+    }
 }
 
 void SearchPage::resetFallbackDetailViewportToTop()
@@ -1734,8 +2000,14 @@ void SearchPage::resetFallbackDetailViewportToTop()
 
 void SearchPage::resetDetailViewportToTop()
 {
+    resetPdfDetailViewportToTop();
     resetWebDetailViewportToTop();
     resetFallbackDetailViewportToTop();
+}
+
+bool SearchPage::shouldDispatchStateToWeb() const
+{
+    return detailRenderMode_ == ui::detail::DetailRenderMode::Web && webDetailEnabled_ && detailViewDataMapper_ != nullptr;
 }
 
 void SearchPage::ensureDetailShellLoaded()
@@ -1756,6 +2028,9 @@ void SearchPage::dispatchPayloadToWeb(const QJsonObject& payload,
     }
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setVisible(false);
+    }
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
     }
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(true);
@@ -2251,6 +2526,9 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);
     }
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
+    }
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setVisible(true);
     }
@@ -2347,6 +2625,9 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
             ui::detail::DetailFallbackContentBuilder::buildTrialPreviewHtml(detailView, docId, reason, 220));
         resetFallbackDetailViewportToTop();
         detailBrowser_->setVisible(true);
+    }
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->setVisible(false);
     }
     if (detailWebView_ != nullptr) {
         detailWebView_->setVisible(false);

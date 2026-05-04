@@ -204,6 +204,7 @@ private slots:
     void resources_missingDetailFiles_routesToFallback();
     void resources_missingKatexFiles_routesToFallback();
     void resources_complete_routesToWeb();
+    void renderPathResolver_modeContracts_pdfWebAuto();
 
     void fallbackBuilder_outputsCoreContent_andSectionOrder();
     void fallbackBuilder_trialPreviewSnippet_andTruncation();
@@ -373,6 +374,29 @@ void DetailRenderingChainTest::resources_complete_routesToWeb()
     const ui::detail::DetailRenderPath path = ui::detail::DetailRenderPathResolver::resolve(
         true, renderer.isReady(), true, true);
     QCOMPARE(path, ui::detail::DetailRenderPath::Web);
+}
+
+void DetailRenderingChainTest::renderPathResolver_modeContracts_pdfWebAuto()
+{
+    const ui::detail::DetailRenderPath pdfPath = ui::detail::DetailRenderPathResolver::resolveForMode(
+        true, ui::detail::DetailRenderMode::Pdf, true, true, true, true);
+    QCOMPARE(pdfPath, ui::detail::DetailRenderPath::Pdf);
+
+    const ui::detail::DetailRenderPath pdfFallback = ui::detail::DetailRenderPathResolver::resolveForMode(
+        true, ui::detail::DetailRenderMode::Pdf, false, true, true, true);
+    QCOMPARE(pdfFallback, ui::detail::DetailRenderPath::FallbackText);
+
+    const ui::detail::DetailRenderPath webPath = ui::detail::DetailRenderPathResolver::resolveForMode(
+        true, ui::detail::DetailRenderMode::Web, true, true, true, true);
+    QCOMPARE(webPath, ui::detail::DetailRenderPath::Web);
+
+    const ui::detail::DetailRenderPath autoPathPdfFirst = ui::detail::DetailRenderPathResolver::resolveForMode(
+        true, ui::detail::DetailRenderMode::Auto, true, true, true, true);
+    QCOMPARE(autoPathPdfFirst, ui::detail::DetailRenderPath::Pdf);
+
+    const ui::detail::DetailRenderPath autoPathWebFallback = ui::detail::DetailRenderPathResolver::resolveForMode(
+        true, ui::detail::DetailRenderMode::Auto, false, true, true, true);
+    QCOMPARE(autoPathWebFallback, ui::detail::DetailRenderPath::Web);
 }
 
 void DetailRenderingChainTest::fallbackBuilder_outputsCoreContent_andSectionOrder()

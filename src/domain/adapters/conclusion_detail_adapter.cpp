@@ -441,6 +441,7 @@ ConclusionDetailViewData ConclusionDetailAdapter::toViewData(const models::Concl
     viewData.summary = firstNonEmpty({record.meta.summary, record.content.plain.summary, record.content.plain.statement});
     viewData.conditionText = buildConditionFallbackText(record);
     viewData.remarkText = record.meta.remarks.trimmed();
+    viewData.assetPdfName = record.assets.pdf.trimmed();
     viewData.variables = buildVariables(record);
     viewData.sections = buildSections(record, viewData.summary, viewData.conditionText, viewData.remarkText, viewData.variables);
     viewData.isValid = !viewData.title.trimmed().isEmpty()

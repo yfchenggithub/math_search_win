@@ -951,6 +951,7 @@ QWidget#detailShellBody {
     background-color: #fbfcfd;
 }
 
+QPdfView#detailPdfView,
 QWebEngineView#detailWebView,
 QTextBrowser#detailFallbackView {
     border: none;

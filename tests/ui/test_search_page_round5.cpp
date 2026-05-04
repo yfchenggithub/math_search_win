@@ -62,6 +62,18 @@ bool copyFileStrict(const QString& sourcePath, const QString& targetPath)
     return QFile::copy(sourcePath, targetPath);
 }
 
+bool writeJsonObjectFile(const QString& targetPath, const QJsonObject& object)
+{
+    QFile file(targetPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        return false;
+    }
+    const QByteArray payload = QJsonDocument(object).toJson(QJsonDocument::Indented);
+    const qint64 written = file.write(payload);
+    file.close();
+    return written == payload.size();
+}
+
 QString readUtf8File(const QString& path)
 {
     QFile file(path);
@@ -255,6 +267,7 @@ private slots:
     void suggestRefresh_resetsSuggestionListScrollToTop();
     void favoriteToggle_emitsFavoritesChangedSignalAndPersists();
     void webDetailDispatch_viewportResetLoggedBeforeEveryDispatch();
+    void detailPdfPathResolution_prefersMapThenAssetThenId();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -496,6 +509,41 @@ void SearchPageRound5UiTest::webDetailDispatch_viewportResetLoggedBeforeEveryDis
     }
 
     QVERIFY2(positiveDispatchCount > 0, "at least one positive request_id dispatch should be asserted");
+}
+
+void SearchPageRound5UiTest::detailPdfPathResolution_prefersMapThenAssetThenId()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    QJsonObject mapRoot;
+    mapRoot.insert(QStringLiteral("I028"), QStringLiteral("mapped_I028.pdf"));
+    QVERIFY2(writeJsonObjectFile(sandbox.path(QStringLiteral("data/conclusion_pdf_map.json")), mapRoot),
+             "conclusion_pdf_map.json should be writable");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    domain::adapters::ConclusionDetailViewData detailView;
+    detailView.assetPdfName = QStringLiteral("asset_fallback.pdf");
+
+    const QString mappedPath = page.resolveDetailPdfPathForTest(QStringLiteral("I028"), detailView);
+    QCOMPARE(QDir::cleanPath(mappedPath),
+             QDir::cleanPath(sandbox.path(QStringLiteral("data/conclusion_pdfs/mapped_I028.pdf"))));
+
+    const QString assetPath = page.resolveDetailPdfPathForTest(QStringLiteral("I099"), detailView);
+    QCOMPARE(QDir::cleanPath(assetPath),
+             QDir::cleanPath(sandbox.path(QStringLiteral("data/conclusion_pdfs/asset_fallback.pdf"))));
+
+    detailView.assetPdfName.clear();
+    const QString idFallbackPath = page.resolveDetailPdfPathForTest(QStringLiteral("I100"), detailView);
+    QCOMPARE(QDir::cleanPath(idFallbackPath),
+             QDir::cleanPath(sandbox.path(QStringLiteral("data/conclusion_pdfs/I100.pdf"))));
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

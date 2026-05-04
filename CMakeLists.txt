@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include(CTest)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets Pdf PdfWidgets)
 
 add_executable(math_search_win
     src/main.cpp
@@ -48,6 +48,8 @@ add_executable(math_search_win
     src/infrastructure/data/backend_search_index_loader.cpp
     src/infrastructure/data/domain_topic_map_loader.h
     src/infrastructure/data/domain_topic_map_loader.cpp
+    src/infrastructure/data/conclusion_pdf_map_loader.h
+    src/infrastructure/data/conclusion_pdf_map_loader.cpp
     src/infrastructure/data/conclusion_index_repository.h
     src/infrastructure/data/conclusion_index_repository.cpp
     src/infrastructure/storage/local_storage_service.h
@@ -118,6 +120,8 @@ endif()
 target_link_libraries(math_search_win PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
+    Qt6::Pdf
+    Qt6::PdfWidgets
 )
 
 if(BUILD_TESTING)

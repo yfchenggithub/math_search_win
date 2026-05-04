@@ -2,7 +2,7 @@
 
 ## 1. 项目一句话说明
 
-这是一个 `C++17 + Qt 6 Widgets + QWebEngine` 的 Windows 本地离线桌面应用，当前已实现“搜索 -> 详情查看 -> 收藏/历史 -> 离线激活门控”的可运行闭环。
+这是一个 `C++17 + Qt 6 Widgets + QWebEngine + QPdfView` 的 Windows 本地离线桌面应用，当前已实现“搜索 -> 详情查看 -> 收藏/历史 -> 离线激活门控”的可运行闭环。
 
 ## 2. 第一天如何快速跑起来
 
@@ -73,11 +73,16 @@ powershell .\run-debug.ps1
   - `ConclusionDetailAdapter::toViewData()`
   - `DetailViewDataMapper::buildContentPayload()`
 - 分支决策：
-  - `DetailRenderPathResolver::resolve()` 决定 `TrialPreview / Web / FallbackText`
+  - `DetailRenderPathResolver::resolveForMode()` 决定 `TrialPreview / Pdf / Web / FallbackText`
 - 渲染模式：
+  - PDF 模式（默认）：`QPdfView` + `QPdfDocument`，路径由 `resolveDetailPdfPath()` 解析
   - Web 模式：`DetailPane` + `app_resources/detail/detail_template.html` + `detail.js` + `katex`
   - 回退模式：`QTextBrowser`（`renderDetailInFallbackBrowser` + `DetailFallbackContentBuilder::buildFallbackHtml`）
   - Trial 预览：`showTrialDetailPreview` + `DetailFallbackContentBuilder::buildTrialPreviewHtml`
+- PDF 路径规则（已实现）：
+  - map：`data/conclusion_pdf_map.json`（扁平 `id -> pdf`）
+  - 目录：`data/conclusion_pdfs/`
+  - 兜底顺序：map -> `record.assets.pdf` -> `<id>.pdf`
 - 并发与抖动控制：
   - `DetailRenderCoordinator` 管 requestId/stale
   - `detailSelectionCoalesceTimer_` 18ms 合并快速切换
@@ -89,7 +94,7 @@ powershell .\run-debug.ps1
   - 收藏：`FavoritesRepository` -> `cache/favorites.json`
   - 历史：`HistoryRepository` -> `cache/history.json`
   - 设置：`SettingsRepository` -> `cache/settings.json`
-- 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情字体档位持久化（`detail_font_scale_level`）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
+- 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情字体档位与渲染模式持久化（`detail_font_scale_level`、`detail_render_mode`）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
 
 ## 7. 如何理解激活/授权系统
 
@@ -128,6 +133,12 @@ powershell .\run-debug.ps1
 - 确认 `app_resources/detail/*` 与 `app_resources/katex/*` 存在。
 - 断点 `DetailPane::onShellLoadFinished`、`dispatchNow`。
 - 看 `SearchPage::activateTextFallbackMode` 是否被触发（说明已回退文本模式）。
+
+### PDF 详情不显示怎么办
+- 先检查 `data/conclusion_pdf_map.json` 是否是扁平对象格式（仅支持 `{ "I028": "I028.pdf" }`）。
+- 检查 `data/conclusion_pdfs/` 中目标文件是否存在。
+- 断点 `SearchPage::resolveDetailPdfPath`、`renderDetailInPdfView`，确认失败原因。
+- 查看 `detail.render` 日志里的 `pdf_unavailable` / `pdf map` 相关记录。
 
 ### 收藏保存失败怎么办
 - 断点 `SearchPage::onFavoriteButtonClicked`。

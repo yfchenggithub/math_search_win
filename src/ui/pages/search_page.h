@@ -4,7 +4,9 @@
 #include "domain/repositories/favorites_repository.h"
 #include "domain/repositories/history_repository.h"
 #include "domain/repositories/settings_repository.h"
+#include "infrastructure/data/conclusion_pdf_map_loader.h"
 #include "ui/detail/detail_perf_aggregator.h"
+#include "ui/detail/detail_render_path_resolver.h"
 
 #include <QElapsedTimer>
 #include <QHash>
@@ -19,6 +21,8 @@ class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
+class QPdfDocument;
+class QPdfView;
 class QTextBrowser;
 class QTimer;
 class QWebEngineView;
@@ -69,6 +73,10 @@ public:
     void triggerSearchFromRecent(const QString& query, const QString& module = QString());
     void openConclusionById(const QString& conclusionId);
     void refreshFavoriteState();
+#if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
+    QString resolveDetailPdfPathForTest(const QString& docId,
+                                        const domain::adapters::ConclusionDetailViewData& detailView) const;
+#endif
 
 signals:
     void favoritesChanged();
@@ -130,13 +138,20 @@ private:
     void renderResults(const QVector<domain::models::SearchHit>& hits);
     void enqueueDetailRenderRequest(const QString& docId);
     void renderDetailForRequest(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
+    bool renderDetailInPdfView(const QString& docId,
+                               const domain::adapters::ConclusionDetailViewData& detailView,
+                               QString* failureReason = nullptr);
     void renderDetailInFallbackBrowser(const domain::adapters::ConclusionDetailViewData& detailView);
     void showDetailPlaceholder(const QString& message);
     void showDetailError(const QString& message);
+    QString resolveDetailPdfPath(const QString& docId, const domain::adapters::ConclusionDetailViewData& detailView) const;
     void resetWebDetailViewportToTop();
+    void resetPdfDetailViewportToTop();
     void resetFallbackDetailViewportToTop();
     void resetDetailViewportToTop();
     void activateTextFallbackMode(const QString& reason);
+    void loadDetailRenderModeSetting();
+    bool shouldDispatchStateToWeb() const;
     void ensureDetailShellLoaded();
     Q_INVOKABLE void dispatchPayloadToWeb(const QJsonObject& payload,
                                           const QString& docId = QString(),
@@ -214,7 +229,10 @@ private:
     bool contentReady_ = false;
     bool suppressSuggestRefresh_ = false;
     bool webDetailEnabled_ = false;
+    bool pdfDetailEnabled_ = false;
     bool hasPendingDetailRequest_ = false;
+    ui::detail::DetailRenderMode detailRenderMode_ = ui::detail::DetailRenderMode::Pdf;
+    QString detailPdfDirectory_;
 
     static constexpr int kDetailCacheCapacity = 160;
     static constexpr int kDetailSelectionCoalesceMs = 18;
@@ -251,12 +269,15 @@ private:
     QLabel* resultEmptyTitleLabel_ = nullptr;
     QLabel* resultEmptyDescriptionLabel_ = nullptr;
     QTimer* detailSelectionCoalesceTimer_ = nullptr;
+    QPdfDocument* detailPdfDocument_ = nullptr;
+    QPdfView* detailPdfView_ = nullptr;
     QWebEngineView* detailWebView_ = nullptr;
     QTextBrowser* detailBrowser_ = nullptr;
     std::unique_ptr<ui::detail::DetailPane> detailPane_;
     std::unique_ptr<ui::detail::DetailRenderCoordinator> detailRenderCoordinator_;
     std::unique_ptr<ui::detail::DetailViewDataMapper> detailViewDataMapper_;
     std::unique_ptr<ui::detail::DetailHtmlRenderer> detailHtmlRenderer_;
+    infrastructure::data::ConclusionPdfMapLoader conclusionPdfMapLoader_;
 
     QHash<quint64, DetailTimingSession> detailTimingSessions_;
     ui::detail::DetailPerfAggregator detailPerfAggregator_;

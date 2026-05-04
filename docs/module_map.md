@@ -14,6 +14,7 @@
 | `app_resources/detail` | 详情模板、样式、JS 运行时。 |
 | `app_resources/katex` | 数学公式渲染依赖。 |
 | `data` | 运行时业务数据（内容 + 索引）。 |
+| `data/conclusion_pdfs` | 详情 PDF 资源目录（按 ID 或映射文件命名）。 |
 | `cache` | 运行时持久化数据（收藏/历史/设置）。 |
 | `tests` | 搜索、建议、存储、授权、页面 wiring、详情性能与详情链路行为测试。 |
 
@@ -31,7 +32,7 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情、收藏、历史写入、功能门控、详情字体档位持久化 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`onFavoriteButtonClicked`、`applyDetailFontScale` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体与渲染模式持久化 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页导航与最近/收藏预览 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |
@@ -55,6 +56,7 @@
 |---|---|---|---|---|---|
 | `ConclusionIndexRepository` | `src/infrastructure/data/conclusion_index_repository.h/.cpp` | 索引加载与检索 API；可选 domain-topic 映射加载与降级诊断 | `MainWindow`、`SearchService`、`SuggestService`、页面 | `BackendSearchIndexLoader`、`DomainTopicMapLoader` | `loadFromFile`、`loadDomainTopicMap`、`findTerm`、`findPrefix`、`getDocById` |
 | `DomainTopicMapLoader` | `src/infrastructure/data/domain_topic_map_loader.h/.cpp` | 解析 `domain_topic_map.json`（兼容 `domains` 数组/对象、`topics` 数组/对象、`docIds/docs`）并构建 alias 查找索引 | `ConclusionIndexRepository` | Qt JSON | `loadFromFile`、`diagnostics` |
+| `ConclusionPdfMapLoader` | `src/infrastructure/data/conclusion_pdf_map_loader.h/.cpp` | 解析 `data/conclusion_pdf_map.json`（扁平 `id -> pdf`） | `SearchPage` | Qt JSON、`AppPaths` | `loadFromFile`、`mappedPdfFileName` |
 | `ConclusionContentRepository` | `src/infrastructure/data/conclusion_content_repository.h/.cpp` | 内容加载与按 ID 读取 | `MainWindow`、`SearchPage`、`FavoritesPage`、`SettingsPage` | `CanonicalContentLoader` | `loadFromFile`、`getById` |
 | `BackendSearchIndexLoader` | `src/infrastructure/data/backend_search_index_loader.h/.cpp` | 解析索引 JSON，提供 diagnostics | `ConclusionIndexRepository` | `AppPaths` | `loadFromFile` |
 | `CanonicalContentLoader` | `src/infrastructure/data/canonical_content_loader.h/.cpp` | 解析内容 JSON，提供 diagnostics | `ConclusionContentRepository` | 路径探测逻辑 | `loadFromFile` |
@@ -100,7 +102,7 @@
 |---|---|---|---|---|---|
 | `DetailHtmlRenderer` | `src/ui/detail/detail_html_renderer.h/.cpp` | 校验资源完整性，生成 JS init/render 脚本 | `SearchPage`、`DetailPane` | `app_resources/detail`、`app_resources/katex` | `isReady`、`buildInitScript`、`buildRenderScript` |
 | `DetailRenderCoordinator` | `src/ui/detail/detail_render_coordinator.h/.cpp` | 请求 ID、stale 判断、已渲染去重 | `SearchPage` | 时间戳 | `createRequest`、`isRequestStale`、`markRendered` |
-| `DetailRenderPathResolver` | `src/ui/detail/detail_render_path_resolver.h/.cpp` | 详情分支决策（Trial / Web / Fallback） | `SearchPage` | 功能门控状态 + Web 可用性 | `resolve` |
+| `DetailRenderPathResolver` | `src/ui/detail/detail_render_path_resolver.h/.cpp` | 详情分支决策（Trial / Pdf / Web / Fallback） | `SearchPage` | 功能门控状态 + 渲染模式 + Web/PDF 可用性 | `resolve`、`resolveForMode` |
 | `DetailViewDataMapper` | `src/ui/detail/detail_view_data_mapper.h/.cpp` | 详情 ViewData -> Web payload | `SearchPage` | `ConclusionDetailViewData` | `buildContentPayload`、`buildEmptyPayload`、`buildErrorPayload` |
 | `DetailFallbackContentBuilder` | `src/ui/detail/detail_fallback_content_builder.h/.cpp` | 组装文本 fallback 与 trial 预览 HTML | `SearchPage` | `ConclusionDetailViewData` | `buildFallbackHtml`、`buildTrialPreviewHtml` |
 | `DetailPane` | `src/ui/detail/detail_pane.h/.cpp` | Web shell 加载、payload 分发、perf 回传 | `SearchPage` | `QWebEngineView`、`DetailHtmlRenderer` | `ensureShellLoaded`、`renderDetail`、`dispatchNow` |
@@ -142,6 +144,7 @@
 
 ### 改详情模板与渲染
 - C++ 调度：`SearchPage::renderDetailForRequest`、`DetailPane`
+- PDF 路径：`SearchPage::resolveDetailPdfPath` + `ConclusionPdfMapLoader`
 - payload 映射：`DetailViewDataMapper`
 - 前端模板：`app_resources/detail/detail_template.html` / `detail.js` / `detail.css`
 
@@ -158,7 +161,7 @@
 ### 改设置项
 - 模型与默认值：`AppSettings`
 - 仓库：`SettingsRepository`
-- 页面现状：`SearchPage` 已接线 `detail_font_scale_level`（详情字体档位持久化）；`SettingsPage` 仍主要只读展示，已实现“日志目录展示 + 打开日志目录 + README 打开入口与兜底”
+- 页面现状：`SearchPage` 已接线 `detail_font_scale_level`、`detail_render_mode`；`SettingsPage` 仍主要只读展示，已实现“日志目录展示 + 打开日志目录 + README 打开入口与兜底”
 
 ### 改授权/激活
 - 页面：`ActivationPage`
