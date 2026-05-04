@@ -61,7 +61,7 @@ const QString kDetailTimingColorFailed = QStringLiteral("#b06f5a");
 constexpr int kTrialPreviewLimit = 5;
 constexpr int kDetailFontScaleMinLevel = 0;
 constexpr int kDetailFontScaleDefaultLevel = 1;
-constexpr int kDetailFontScaleMaxLevel = 3;
+constexpr int kDetailFontScaleMaxLevel = 2;
 
 int clampDetailFontScaleLevel(int level)
 {
@@ -131,11 +131,13 @@ qreal detailZoomFactorForLevel(int level)
 {
     switch (clampDetailFontScaleLevel(level)) {
     case 0:
-        return 0.92;
-    case 2:
         return 1.14;
+    case 1:
+        return 1.30;
+    case 2:
+        return 1.46;
     default:
-        return 1.0;
+        return 1.30;
     }
 }
 

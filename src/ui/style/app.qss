@@ -992,19 +992,19 @@ QTextBrowser#detailFallbackView {
 
 QTextBrowser#detailFallbackView {
     color: #2a3139;
-    font-size: 13px;
+    font-size: 17px;
 }
 
 QTextBrowser#detailFallbackView[fontScale="small"] {
-    font-size: 12px;
+    font-size: 15px;
 }
 
 QTextBrowser#detailFallbackView[fontScale="medium"] {
-    font-size: 13px;
+    font-size: 17px;
 }
 
 QTextBrowser#detailFallbackView[fontScale="large"] {
-    font-size: 15px;
+    font-size: 19px;
 }
 
 QListWidget#searchSuggestionList QScrollBar:vertical,
