@@ -170,11 +170,11 @@ void HomePage::setupHeroSection()
     heroLayout->setContentsMargins(28, 24, 28, 24);
     heroLayout->setSpacing(10);
 
-    titleLabel_ = new QLabel(QStringLiteral("高中数学结论 3 秒快速检索"), heroWidget_);
+    titleLabel_ = new QLabel(QStringLiteral("高中数学结论检索，孩子做题更快"), heroWidget_);
     titleLabel_->setObjectName(QStringLiteral("homeHeroTitle"));
 
     subtitleLabel_ = new QLabel(
-        QStringLiteral("本地离线、无广告、打开即用。输入关键词即可快速定位高频结论，家长省心，孩子高效。"),
+        QStringLiteral("不装插件、不联网、不折腾。输入关键词就能定位核心结论，家长看得懂、孩子用得快。"),
         heroWidget_);
     subtitleLabel_->setObjectName(QStringLiteral("homeHeroSubtitle"));
     subtitleLabel_->setWordWrap(true);
@@ -183,11 +183,11 @@ void HomePage::setupHeroSection()
     trustRow->setContentsMargins(0, 2, 0, 0);
     trustRow->setSpacing(8);
 
-    auto* trustBadge1 = new QLabel(QStringLiteral("本地离线更安心"), heroWidget_);
+    auto* trustBadge1 = new QLabel(QStringLiteral("不联网也能查"), heroWidget_);
     trustBadge1->setObjectName(QStringLiteral("homeTrustBadge"));
-    auto* trustBadge2 = new QLabel(QStringLiteral("3 秒定位结论"), heroWidget_);
+    auto* trustBadge2 = new QLabel(QStringLiteral("3 秒锁定结论"), heroWidget_);
     trustBadge2->setObjectName(QStringLiteral("homeTrustBadge"));
-    auto* trustBadge3 = new QLabel(QStringLiteral("覆盖高频题型"), heroWidget_);
+    auto* trustBadge3 = new QLabel(QStringLiteral("高频题型可复查"), heroWidget_);
     trustBadge3->setObjectName(QStringLiteral("homeTrustBadge"));
 
     trustRow->addWidget(trustBadge1, 0);
@@ -262,11 +262,11 @@ void HomePage::setupQuickActionsSection()
     sectionLayout->setContentsMargins(18, 16, 18, 16);
     sectionLayout->setSpacing(12);
 
-    auto* sectionTitle = new QLabel(QStringLiteral("为什么家长会觉得省心"), quickActionsWidget_);
+    auto* sectionTitle = new QLabel(QStringLiteral("家长最关心的三件事"), quickActionsWidget_);
     sectionTitle->setObjectName(QStringLiteral("homeValueSectionTitle"));
 
     auto* sectionSubtitle = new QLabel(
-        QStringLiteral("专业结果可复查，检索路径清晰，离线使用稳定。"), quickActionsWidget_);
+        QStringLiteral("查得快、看得准、过程稳，孩子复习更有把握。"), quickActionsWidget_);
     sectionSubtitle->setObjectName(QStringLiteral("homeValueSectionSubtitle"));
     sectionSubtitle->setWordWrap(true);
 
@@ -279,20 +279,20 @@ void HomePage::setupQuickActionsSection()
     gridLayout->setVerticalSpacing(12);
 
     recentQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                   QStringLiteral("快：关键词直达"),
-                                                   QStringLiteral("输入关键词后快速收敛，减少盲目翻找。"),
+                                                   QStringLiteral("快：题目卡住时马上能查"),
+                                                   QStringLiteral("关键词一输即出结果，减少来回翻资料。"),
                                                    &recentQuickActionDescription_,
                                                    false);
 
     favoritesQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                      QStringLiteral("准：筛选更聚焦"),
-                                                      QStringLiteral("支持按模块和分类聚焦常见题型。"),
+                                                      QStringLiteral("准：定位到对应知识点"),
+                                                      QStringLiteral("按模块与分类筛选，少走弯路。"),
                                                       &favoritesQuickActionDescription_,
                                                       false);
 
     settingsQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                     QStringLiteral("稳：本地离线可控"),
-                                                     QStringLiteral("数据与授权都在本地，长期使用更安心。"),
+                                                     QStringLiteral("稳：家里网络波动也不怕"),
+                                                     QStringLiteral("本地离线可用，晚自习和周末都能稳定查。"),
                                                      &settingsQuickActionDescription_,
                                                      true);
 
@@ -531,16 +531,16 @@ void HomePage::updateQuickActionSummary()
 {
     if (recentQuickActionDescription_ != nullptr) {
         recentQuickActionDescription_->setText(
-            QStringLiteral("最近检索 %1 条，支持一键回看高频问题。").arg(recentItemCount_));
+            QStringLiteral("最近查过 %1 条，孩子易错点可快速回看。").arg(recentItemCount_));
     }
 
     if (favoritesQuickActionDescription_ != nullptr) {
         favoritesQuickActionDescription_->setText(
-            QStringLiteral("已收藏 %1 条结论，复习时更快定位重点。").arg(favoriteItemCount_));
+            QStringLiteral("已收藏 %1 条重点，考前复习更省时。").arg(favoriteItemCount_));
     }
 
     if (settingsQuickActionDescription_ != nullptr) {
-        settingsQuickActionDescription_->setText(QStringLiteral("离线授权与本地数据可控，长期使用更稳定。"));
+        settingsQuickActionDescription_->setText(QStringLiteral("本地数据可控，长期使用不折腾。"));
     }
 
     if (recentShortcutButton_ != nullptr) {
@@ -558,7 +558,7 @@ void HomePage::updateActivationSummaryIfNeeded()
         return;
     }
 
-    footerMetaLabel_->setText(QStringLiteral("本地离线模式 / 最近检索 %1 条 / 收藏 %2 条 / %3")
+    footerMetaLabel_->setText(QStringLiteral("离线可用 / 最近检索 %1 条 / 收藏 %2 条 / %3")
                                   .arg(recentItemCount_)
                                   .arg(favoriteItemCount_)
                                   .arg(UiConstants::kStatusVersion));
