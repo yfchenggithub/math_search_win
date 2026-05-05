@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -31,8 +32,11 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSignalSpy>
+#include <QTextBrowser>
+#include <QWheelEvent>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #ifndef MATH_SEARCH_TESTS_SOURCE_DIR
@@ -272,6 +276,8 @@ private slots:
     void detailPdfPathResolution_prefersMapThenAssetThenId();
     void detailPdfViewer_usesMultiPageModeAndNavStartsDisabled();
     void detailFullscreenButton_togglesDetailPaneFocusMode();
+    void detailFontButton_cyclesLevels();
+    void detailCtrlWheel_adjustsContinuousZoom();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -595,6 +601,7 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QVERIFY(page.detailShell_ != nullptr);
     QVERIFY(page.searchWorkbenchSplitter_ != nullptr);
     QCOMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
 
     page.show();
     QTRY_VERIFY(page.isVisible());
@@ -609,6 +616,7 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QVERIFY(!page.searchLeftColumn_->isVisible());
     QVERIFY(page.detailShell_->isVisible());
     QVERIFY(!page.isFullScreen());
+    QCOMPARE(page.detailFontScaleLevel_, 2);
     QTRY_COMPARE(page.detailFullscreenButton_->text(), QStringLiteral("退出全屏"));
 
     QTest::mouseClick(page.detailFullscreenButton_, Qt::LeftButton);
@@ -617,7 +625,100 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QVERIFY(page.searchLeftColumn_->isVisible());
     QVERIFY(page.detailShell_->isVisible());
     QVERIFY(!page.isFullScreen());
+    QCOMPARE(page.detailFontScaleLevel_, 0);
     QTRY_COMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
+}
+
+void SearchPageRound5UiTest::detailFontButton_cyclesLevels()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.detailFontButton_ != nullptr);
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+
+    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
+    QCOMPARE(page.detailFontScaleLevel_, 2);
+
+    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
+    QCOMPARE(page.detailFontScaleLevel_, 1);
+
+    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+}
+
+void SearchPageRound5UiTest::detailCtrlWheel_adjustsContinuousZoom()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.detailBrowser_ != nullptr);
+    QWidget* wheelTarget = page.detailBrowser_->viewport();
+    QVERIFY(wheelTarget != nullptr);
+
+    auto sendWheel = [&](int angleDeltaY, Qt::KeyboardModifiers modifiers) {
+        QWheelEvent wheelEvent(QPointF(8.0, 8.0),
+                               QPointF(8.0, 8.0),
+                               QPoint(),
+                               QPoint(0, angleDeltaY),
+                               Qt::NoButton,
+                               modifiers,
+                               Qt::ScrollUpdate,
+                               false);
+        return QCoreApplication::sendEvent(wheelTarget, &wheelEvent);
+    };
+
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QCOMPARE(page.detailFontWheelTicks_, 0);
+    QVERIFY(page.detailPdfView_ != nullptr);
+    const qreal initialZoom = page.detailPdfView_->zoomFactor();
+
+    QVERIFY(sendWheel(120, Qt::ControlModifier));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(page.detailFontWheelTicks_ > 0);
+    QVERIFY(page.detailPdfView_->zoomFactor() > initialZoom);
+
+    const int ticksAfterFirstUp = page.detailFontWheelTicks_;
+    const qreal zoomAfterFirstUp = page.detailPdfView_->zoomFactor();
+
+    QVERIFY(sendWheel(120, Qt::ControlModifier));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(page.detailFontWheelTicks_ > ticksAfterFirstUp);
+    QVERIFY(page.detailPdfView_->zoomFactor() > zoomAfterFirstUp);
+    const qreal zoomAfterSecondUp = page.detailPdfView_->zoomFactor();
+
+    QVERIFY(sendWheel(-120, Qt::ControlModifier));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(page.detailFontWheelTicks_ == ticksAfterFirstUp);
+    QVERIFY(page.detailPdfView_->zoomFactor() < zoomAfterSecondUp);
+
+    QVERIFY(sendWheel(-120, Qt::ControlModifier));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(page.detailFontWheelTicks_ == 0);
+
+    const qreal zoomAfterBackToZero = page.detailPdfView_->zoomFactor();
+    QVERIFY(std::fabs(zoomAfterBackToZero - initialZoom) < 1e-6);
+
+    QVERIFY(sendWheel(120, Qt::NoModifier));
+    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QCOMPARE(page.detailFontWheelTicks_, 0);
+    QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - initialZoom) < 1e-6);
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

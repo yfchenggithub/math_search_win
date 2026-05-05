@@ -33,7 +33,9 @@ powershell .\run-debug.ps1
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
 - 当使用 PDF 渲染时，确认详情区可滚动跨页，且“上一页/下一页”按钮可用（多页 PDF）。
 - 当使用 PDF 渲染时，点击“导出PDF”并保存到临时路径，确认可生成副本文件。
-- 点击详情区 `Aa` 按钮，确认小/中/大三档字体循环并即时生效。
+- 点击详情区“全屏”，确认字体自动切换为大档；退出全屏后自动切回小档。
+- 点击 `Aa` 按钮，确认可循环切换三档（`2 -> 1 -> 0 -> 2`）。
+- 在详情区按住 `Ctrl` 滚动鼠标滚轮，确认字体可连续放大/缩小（不受三档限制）并即时生效。
 - 点击详情区“全屏”，确认仅右侧详情区进入沉浸模式（顶部搜索栏和左侧结果栏隐藏）；按 `Esc` 或再次点击“退出全屏”可恢复。
 - 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
 - 进入“设置/关于”，点击“打开 README”，确认至少可通过默认程序或记事本打开。
@@ -84,6 +86,7 @@ powershell .\run-debug.ps1
     - 翻页入口：`onPdfPrevPageClicked` / `onPdfNextPageClicked` -> `jumpToPdfPage`
     - 状态刷新：`updatePdfPageNavigationUi`（页码文本与按钮可用性）
     - 导出入口：`onPdfExportButtonClicked`（读取 `currentDetailPdfPath_` 后执行“另存为”复制）
+    - 字体滚轮入口：`eventFilter` -> `tryAdjustDetailFontScaleByWheelDelta`（详情区 `Ctrl + 鼠标滚轮`）
     - 全屏入口：`onDetailFullscreenButtonClicked`；快捷键 `F11` 切换，`Esc` 退出（`leaveDetailFullscreen`）
     - 页面控制：`enterDetailFullscreen()` 隐藏 `searchTopBar_` 与 `searchLeftColumn_`，退出时恢复并还原 splitter 尺寸
   - Web 模式：`DetailPane` + `app_resources/detail/detail_template.html` + `detail.js` + `katex`
@@ -104,7 +107,7 @@ powershell .\run-debug.ps1
   - 收藏：`FavoritesRepository` -> `cache/favorites.json`
   - 历史：`HistoryRepository` -> `cache/history.json`
   - 设置：`SettingsRepository` -> `cache/settings.json`
-- 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情字体档位与渲染模式持久化（`detail_font_scale_level`、`detail_render_mode`）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
+- 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情渲染模式持久化（`detail_render_mode`）与详情字体状态缓存（`detail_font_scale_level` 三档 + `detail_font_wheel_ticks` 连续缩放偏移）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
 
 ## 7. 如何理解激活/授权系统
 
@@ -172,7 +175,7 @@ powershell .\run-debug.ps1
 - 检查 `cache/favorites.json` 是否可写、是否被外部占用。
 
 ### 设置不持久化怎么办
-- 当前并非“完全不持久化”：`SearchPage` 的详情字体档位已写入 `SettingsRepository`。
+- 当前并非“完全不持久化”：`SearchPage` 会写入 `detail_font_scale_level` 与 `detail_font_wheel_ticks`；运行时默认按详情全屏状态切换大/小档，`Aa` 支持三档循环，详情区 `Ctrl + 鼠标滚轮` 支持连续缩放。
 - 若要把“设置/关于”扩展成完整可编辑设置页，仍需在 `SettingsPage` 增加交互并调用 `SettingsRepository::setValue/save`。
 
 ### 设置页日志目录打不开怎么办

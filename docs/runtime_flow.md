@@ -120,6 +120,9 @@ flowchart TD
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
 - PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），通过保存对话框选择目标路径后执行文件复制（另存为）。
+- 详情字体调节：
+  - `Aa` 按钮通过 `onDetailFontButtonClicked()` 做三档循环（`2 -> 1 -> 0 -> 2`），同时清零滚轮连续缩放偏移。
+  - 详情区视图（`QPdfView/QWebEngineView/QTextBrowser`）通过 `eventFilter()` 捕获 `Ctrl + 鼠标滚轮`，调用 `tryAdjustDetailFontScaleByWheelDelta()` 做连续缩放并持久化偏移。
 - 详情全屏：`onDetailFullscreenButtonClicked()` 切换 Search 页“右侧详情区全屏模式”；进入后隐藏顶部搜索栏与左侧结果栏，仅保留 `detailShell`，`F11` 绑定同一入口切换，`Esc` 调用 `leaveDetailFullscreen()` 退出并恢复 splitter 尺寸。
 - 授权分支：
   - 未开 `FullDetail` -> `showTrialDetailPreview()` -> `DetailFallbackContentBuilder::buildTrialPreviewHtml()`（文本预览）
@@ -241,7 +244,7 @@ sequenceDiagram
 
 - `SettingsRepository` 和 `AppSettings` 已实现读写默认值、落盘 `cache/settings.json`。
 - `SearchPage` 已接入 `SettingsRepository`：
-  - `loadDetailFontScaleSetting()` 读取 `detail_font_scale_level`，点击 `Aa` 按钮后 `persistDetailFontScaleSetting()` 写回。
+  - `loadDetailFontScaleSetting()` 读取 `detail_font_scale_level` 与 `detail_font_wheel_ticks`；运行时默认由详情全屏状态驱动（全屏强制大档、非全屏强制小档），`Aa` 按钮支持三档循环，详情区 `Ctrl + 鼠标滚轮` 支持连续缩放，并通过 `persistDetailFontScaleSetting()` 回写。
   - `loadDetailRenderModeSetting()` 读取 `detail_render_mode`（且允许环境变量覆盖）。
 - `SettingsPage` 仍未接入通用设置编辑流程。
 - 当前 `SettingsPage::reloadData()` 展示应用、授权、数据目录、日志目录与帮助信息。
@@ -254,10 +257,10 @@ flowchart TD
   UIB --> UIC[更新 UI 标签 含 dataDir/logDir]
   UIC --> UID[SettingsPage 不写 settings.json]
 
-  S1[SearchPage::loadDetailFontScaleSetting] --> S2[SettingsRepository::value detail_font_scale_level]
+  S1[SearchPage::loadDetailFontScaleSetting] --> S2[SettingsRepository::value detail_font_scale_level + detail_font_wheel_ticks]
   S2 --> S3[SearchPage::applyDetailFontScale]
   S3 --> S4[QPdfView/QWebEngineView::setZoomFactor + QTextBrowser 字号样式]
-  S5[detailFontButton 点击] --> S6[persistDetailFontScaleSetting]
+  S5[detailFontButton clicked or Ctrl+Wheel or fullscreen toggle] --> S6[persistDetailFontScaleSetting]
   S6 --> S7[SettingsRepository::setValue]
 
   LOG1[openLogDirButton clicked] --> LOG2[Logger::logDirectory]

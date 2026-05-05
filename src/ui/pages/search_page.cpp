@@ -20,10 +20,12 @@
 #include "ui/style/app_style.h"
 
 #include <QAbstractItemView>
+#include <QAbstractScrollArea>
 #include <QComboBox>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -48,9 +50,11 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWebEngineView>
+#include <QWheelEvent>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace {
 
@@ -66,6 +70,13 @@ constexpr int kTrialPreviewLimit = 5;
 constexpr int kDetailFontScaleMinLevel = 0;
 constexpr int kDetailFontScaleDefaultLevel = 1;
 constexpr int kDetailFontScaleMaxLevel = 2;
+constexpr int kDetailFontWheelTicksDefault = 0;
+constexpr int kDetailWheelDeltaUnit = 120;
+constexpr qreal kDetailWheelZoomStepRatio = 1.08;
+constexpr qreal kDetailPdfZoomMinFactor = 0.08;
+constexpr qreal kDetailPdfZoomMaxFactor = 32.0;
+constexpr qreal kDetailWebZoomMinFactor = 0.25;
+constexpr qreal kDetailWebZoomMaxFactor = 5.0;
 const QString kDetailFullscreenEnterText = QStringLiteral("全屏");
 const QString kDetailFullscreenExitText = QStringLiteral("退出全屏");
 
@@ -77,6 +88,11 @@ int clampDetailFontScaleLevel(int level)
 QString detailFontScaleKey()
 {
     return QString::fromLatin1(domain::models::AppSettingKeys::DetailFontScaleLevel);
+}
+
+QString detailFontWheelTicksKey()
+{
+    return QString::fromLatin1(domain::models::AppSettingKeys::DetailFontWheelTicks);
 }
 
 QString detailRenderModeKey()
@@ -175,12 +191,23 @@ QString detailFontButtonTipForLevel(int level)
 {
     switch (clampDetailFontScaleLevel(level)) {
     case 0:
-        return QStringLiteral("详情字体：小（点击切换）");
+        return QStringLiteral("详情字体：小（非全屏默认，Ctrl+滚轮连续缩放）");
     case 2:
-        return QStringLiteral("详情字体：大（点击切换）");
+        return QStringLiteral("详情字体：大（全屏默认，Ctrl+滚轮连续缩放）");
     default:
-        return QStringLiteral("详情字体：中（点击切换）");
+        return QStringLiteral("详情字体：中（Ctrl+滚轮连续缩放）");
     }
+}
+
+int detailFontScaleLevelForFullscreen(bool fullscreen)
+{
+    return fullscreen ? kDetailFontScaleMaxLevel : kDetailFontScaleMinLevel;
+}
+
+int nextDetailFontScaleLevelByCycle(int currentLevel)
+{
+    const int clampedLevel = clampDetailFontScaleLevel(currentLevel);
+    return clampedLevel <= kDetailFontScaleMinLevel ? kDetailFontScaleMaxLevel : (clampedLevel - 1);
 }
 
 int findComboDataIndex(const QComboBox* combo, const QString& value)
@@ -295,7 +322,10 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
 
     buildUi();
     connectSignals();
+    detailFontScaleLevel_ = detailFontScaleLevelForFullscreen(false);
+    detailFontWheelTicks_ = kDetailFontWheelTicksDefault;
     applyDetailFontScale();
+    persistDetailFontScaleSetting();
     ensureDetailShellLoaded();
     rebuildFilterOptions();
     applyFeatureGate();
@@ -325,6 +355,30 @@ void SearchPage::hideEvent(QHideEvent* event)
         leaveDetailFullscreen();
     }
     QWidget::hideEvent(event);
+}
+
+bool SearchPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event != nullptr && event->type() == QEvent::Wheel) {
+        QObject* detailPdfViewport = detailPdfView_ == nullptr ? nullptr : detailPdfView_->viewport();
+        QObject* detailBrowserViewport = detailBrowser_ == nullptr ? nullptr : detailBrowser_->viewport();
+        const bool isDetailWheelTarget = watched == detailPdfView_
+                                         || watched == detailWebView_
+                                         || watched == detailBrowser_
+                                         || watched == detailPdfViewport
+                                         || watched == detailBrowserViewport;
+        if (isDetailWheelTarget) {
+            const auto* wheelEvent = static_cast<QWheelEvent*>(event);
+            int deltaY = wheelEvent->angleDelta().y();
+            if (deltaY == 0) {
+                deltaY = wheelEvent->pixelDelta().y();
+            }
+            if (tryAdjustDetailFontScaleByWheelDelta(deltaY, wheelEvent->modifiers())) {
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void SearchPage::setBackendStatus(bool indexReady, bool contentReady)
@@ -694,10 +748,41 @@ void SearchPage::onFavoriteButtonClicked()
 
 void SearchPage::onDetailFontButtonClicked()
 {
-    detailFontScaleLevel_ = detailFontScaleLevel_ >= kDetailFontScaleMaxLevel ? kDetailFontScaleMinLevel
-                                                                               : (detailFontScaleLevel_ + 1);
+    detailFontScaleLevel_ = nextDetailFontScaleLevelByCycle(detailFontScaleLevel_);
+    resetDetailWheelZoom();
     applyDetailFontScale();
     persistDetailFontScaleSetting();
+}
+
+bool SearchPage::tryAdjustDetailFontScaleByWheelDelta(int deltaY, Qt::KeyboardModifiers modifiers)
+{
+    if (!modifiers.testFlag(Qt::ControlModifier) || deltaY == 0) {
+        return false;
+    }
+
+    int wheelSteps = deltaY / kDetailWheelDeltaUnit;
+    if (wheelSteps == 0) {
+        wheelSteps = deltaY > 0 ? 1 : -1;
+    }
+
+    const qint64 nextTicks64 = static_cast<qint64>(detailFontWheelTicks_) + static_cast<qint64>(wheelSteps);
+    const qint64 clampedTicks64 = std::clamp(nextTicks64,
+                                             static_cast<qint64>(std::numeric_limits<int>::min()),
+                                             static_cast<qint64>(std::numeric_limits<int>::max()));
+    const int nextTicks = static_cast<int>(clampedTicks64);
+    if (nextTicks == detailFontWheelTicks_) {
+        return true;
+    }
+
+    detailFontWheelTicks_ = nextTicks;
+    applyDetailFontScale();
+    persistDetailFontScaleSetting();
+    return true;
+}
+
+void SearchPage::resetDetailWheelZoom()
+{
+    detailFontWheelTicks_ = kDetailFontWheelTicksDefault;
 }
 
 void SearchPage::onDetailFullscreenButtonClicked()
@@ -729,6 +814,10 @@ void SearchPage::enterDetailFullscreen()
     searchWorkbenchSplitter_->setSizes({0, 1});
 
     detailPaneFullscreen_ = true;
+    detailFontScaleLevel_ = detailFontScaleLevelForFullscreen(true);
+    resetDetailWheelZoom();
+    applyDetailFontScale();
+    persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
     LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen entered"));
 }
@@ -773,6 +862,10 @@ void SearchPage::leaveDetailFullscreen()
     }
 
     detailPaneFullscreen_ = false;
+    detailFontScaleLevel_ = detailFontScaleLevelForFullscreen(false);
+    resetDetailWheelZoom();
+    applyDetailFontScale();
+    persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
     LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen exited"));
 }
@@ -849,6 +942,7 @@ void SearchPage::onPdfExportButtonClicked()
 void SearchPage::loadDetailFontScaleSetting()
 {
     detailFontScaleLevel_ = kDetailFontScaleDefaultLevel;
+    detailFontWheelTicks_ = kDetailFontWheelTicksDefault;
 
     const bool loaded = settingsRepository_.load();
     if (!loaded) {
@@ -858,6 +952,8 @@ void SearchPage::loadDetailFontScaleSetting()
 
     const QVariant savedValue = settingsRepository_.value(detailFontScaleKey(), kDetailFontScaleDefaultLevel);
     detailFontScaleLevel_ = clampDetailFontScaleLevel(savedValue.toInt());
+    const QVariant savedWheelTicks = settingsRepository_.value(detailFontWheelTicksKey(), kDetailFontWheelTicksDefault);
+    detailFontWheelTicks_ = savedWheelTicks.toInt();
 }
 
 void SearchPage::loadDetailRenderModeSetting()
@@ -902,19 +998,35 @@ void SearchPage::applyDetailFontScale()
 {
     detailFontScaleLevel_ = clampDetailFontScaleLevel(detailFontScaleLevel_);
     const QString fontScaleToken = detailFontScaleTokenForLevel(detailFontScaleLevel_);
-    const qreal zoomFactor = detailZoomFactorForLevel(detailFontScaleLevel_);
+    const qreal baseZoomFactor = detailZoomFactorForLevel(detailFontScaleLevel_);
+    const qreal wheelZoomFactor = std::pow(kDetailWheelZoomStepRatio, static_cast<qreal>(detailFontWheelTicks_));
+    const qreal combinedZoomFactor = (std::isfinite(wheelZoomFactor) && wheelZoomFactor > 0.0)
+                                         ? (baseZoomFactor * wheelZoomFactor)
+                                         : (detailFontWheelTicks_ >= 0 ? std::numeric_limits<qreal>::max()
+                                                                       : std::numeric_limits<qreal>::min());
+    const qreal pdfZoomFactor = std::clamp(combinedZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+    const qreal webZoomFactor = std::clamp(combinedZoomFactor, kDetailWebZoomMinFactor, kDetailWebZoomMaxFactor);
 
     if (detailPdfView_ != nullptr) {
-        detailPdfView_->setZoomFactor(zoomFactor);
+        detailPdfView_->setZoomFactor(pdfZoomFactor);
     }
 
     if (detailWebView_ != nullptr) {
-        detailWebView_->setZoomFactor(zoomFactor);
+        detailWebView_->setZoomFactor(webZoomFactor);
     }
 
     if (detailBrowser_ != nullptr) {
         detailBrowser_->setProperty("fontScale", fontScaleToken);
         repolishWidget(detailBrowser_);
+
+        const int browserTickDelta = detailFontWheelTicks_ - detailBrowserAppliedWheelTicks_;
+        if (browserTickDelta > 0) {
+            detailBrowser_->zoomIn(browserTickDelta);
+            detailBrowserAppliedWheelTicks_ = detailFontWheelTicks_;
+        } else if (browserTickDelta < 0) {
+            detailBrowser_->zoomOut(-browserTickDelta);
+            detailBrowserAppliedWheelTicks_ = detailFontWheelTicks_;
+        }
     }
 
     if (detailFontButton_ != nullptr) {
@@ -928,6 +1040,7 @@ void SearchPage::applyDetailFontScale()
 void SearchPage::persistDetailFontScaleSetting()
 {
     settingsRepository_.setValue(detailFontScaleKey(), clampDetailFontScaleLevel(detailFontScaleLevel_));
+    settingsRepository_.setValue(detailFontWheelTicksKey(), detailFontWheelTicks_);
 }
 
 void SearchPage::buildUi()
@@ -1218,6 +1331,22 @@ void SearchPage::buildUi()
     detailBrowser_->setOpenExternalLinks(false);
     detailBrowser_->setVisible(false);
     detailBodyLayout->addWidget(detailBrowser_, 1);
+
+    if (detailPdfView_ != nullptr) {
+        detailPdfView_->installEventFilter(this);
+        if (detailPdfView_->viewport() != nullptr) {
+            detailPdfView_->viewport()->installEventFilter(this);
+        }
+    }
+    if (detailWebView_ != nullptr) {
+        detailWebView_->installEventFilter(this);
+    }
+    if (detailBrowser_ != nullptr) {
+        detailBrowser_->installEventFilter(this);
+        if (detailBrowser_->viewport() != nullptr) {
+            detailBrowser_->viewport()->installEventFilter(this);
+        }
+    }
 
     rightLayout->addWidget(detailBody, 1);
     updateDetailTimingLabel(kDetailTimingIdleText, kDetailTimingColorIdle);

@@ -32,7 +32,7 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`onPdfExportButtonClicked`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体（默认全屏大档/非全屏小档，`Aa` 三档循环 + `Ctrl+滚轮` 连续缩放）与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`onPdfExportButtonClicked`、`onDetailFontButtonClicked`、`eventFilter`、`tryAdjustDetailFontScaleByWheelDelta`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页信任信息展示、主搜索入口、价值证明卡片、最近/收藏预览与导航分发 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `setupHeroSection`、`setupQuickActionsSection`、`reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |
@@ -163,7 +163,7 @@
 ### 改设置项
 - 模型与默认值：`AppSettings`
 - 仓库：`SettingsRepository`
-- 页面现状：`SearchPage` 已接线 `detail_font_scale_level`、`detail_render_mode`；`SettingsPage` 仍主要只读展示，已实现“日志目录展示 + 打开日志目录 + README 打开入口与兜底”
+- 页面现状：`SearchPage` 已接线 `detail_render_mode`，并自动维护 `detail_font_scale_level`（默认全屏=大档、非全屏=小档，`Aa` 三档循环）与 `detail_font_wheel_ticks`（详情区 `Ctrl+滚轮` 连续缩放偏移）；`SettingsPage` 仍主要只读展示，已实现“日志目录展示 + 打开日志目录 + README 打开入口与兜底”
 
 ### 改授权/激活
 - 页面：`ActivationPage`

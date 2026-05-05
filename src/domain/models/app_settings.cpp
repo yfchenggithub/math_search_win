@@ -18,6 +18,7 @@ QVariantMap AppSettings::defaultValues()
         {key(AppSettingKeys::EditionHint), QStringLiteral("trial")},
         {key(AppSettingKeys::Theme), QStringLiteral("system")},
         {key(AppSettingKeys::DetailFontScaleLevel), 1},
+        {key(AppSettingKeys::DetailFontWheelTicks), 0},
         {key(AppSettingKeys::DetailRenderMode), QStringLiteral("pdf")},
     };
 }

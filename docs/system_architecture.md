@@ -19,7 +19,7 @@
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
 - 设置页日志入口：已支持展示日志目录并在“日志操作”中打开日志目录。
-- 搜索页阅读体验增强：详情区支持三档字体（`Aa-/Aa/Aa+`）并持久化到 `cache/settings.json`。
+- 搜索页阅读体验增强：详情区字体默认由全屏状态驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮支持三档循环（`2 -> 1 -> 0 -> 2`）；并支持在详情区使用 `Ctrl + 鼠标滚轮` 连续缩放（非三档限制）；状态会回写 `cache/settings.json`。
 - 搜索输入框已启用右侧清空按钮（`QLineEdit::setClearButtonEnabled(true)`）。
 - 应用启动后主窗口默认最大化显示（`showMaximized()`）。
 - 本地持久化底座：`cache/favorites.json`、`cache/history.json`、`cache/settings.json` 原子写盘。
@@ -264,7 +264,7 @@ flowchart TD
 
 ### 5.4 页面实现状态
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
-- `SearchPage`：详情头部新增字体档位按钮，切换后会实时影响 Web 详情缩放与 fallback 文本字号。
+- `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮可循环切换三档；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
 - `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。
 - `FavoritesPage`：已接线到真实收藏数据；筛选按钮未实现。
@@ -331,6 +331,7 @@ flowchart TD
   - `renderDetailInPdfView()` + `resolveDetailPdfPath()`（PDF 分支）
   - `jumpToPdfPage()` + `updatePdfPageNavigationUi()`（PDF 页码跳转、导航状态与导出按钮状态刷新）
   - `onPdfExportButtonClicked()`（当前 PDF 另存为导出）
+  - `eventFilter()` + `tryAdjustDetailFontScaleByWheelDelta()`（详情区 `Ctrl + 鼠标滚轮` 连续缩放）
   - `onDetailFullscreenButtonClicked()` + `enterDetailFullscreen()` + `leaveDetailFullscreen()`（详情区全屏切换与退出）
   - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`（Web 分支）
   - `DetailFallbackContentBuilder::buildFallbackHtml/buildTrialPreviewHtml()`（文本回退和 trial 预览分支）
@@ -380,7 +381,7 @@ flowchart TD
 
 - 现状：
   - `SettingsRepository` + `AppSettings` 有完整读写与默认值体系。
-  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（详情字体档位）、`detail_render_mode`（`pdf/web/auto`）。
+  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（全屏默认档位与按钮三档循环）、`detail_font_wheel_ticks`（`Ctrl + 鼠标滚轮` 连续缩放偏移）、`detail_render_mode`（`pdf/web/auto`）。
   - `SettingsPage` 仍主要是状态展示（license/data/log/help/feedback），未提供通用设置编辑流程。
   - `SettingsPage::buildDataInfoSection()` 已接入 `openLogDirButton_`，路径来自 `logging::Logger::instance().logDirectory()`。
 - 当前状态：部分实现（已有单项设置接线，未形成完整设置中心）。

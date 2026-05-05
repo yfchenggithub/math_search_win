@@ -17,10 +17,12 @@
 #include <memory>
 
 class QComboBox;
+class QEvent;
 class QLabel;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
+class QObject;
 class QPushButton;
 class QShortcut;
 class QHideEvent;
@@ -88,6 +90,7 @@ signals:
 
 protected:
     void hideEvent(QHideEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onQueryTextChanged(const QString& text);
@@ -226,6 +229,8 @@ private:
     void loadDetailFontScaleSetting();
     void applyDetailFontScale();
     void persistDetailFontScaleSetting();
+    bool tryAdjustDetailFontScaleByWheelDelta(int deltaY, Qt::KeyboardModifiers modifiers);
+    void resetDetailWheelZoom();
     void enterDetailFullscreen();
     void syncDetailFullscreenButtonState();
     void leaveDetailFullscreen();
@@ -311,6 +316,8 @@ private:
     ui::detail::DetailPerfAggregator detailPerfAggregator_;
     quint64 activeDetailTimingRequestId_ = 0;
     int detailFontScaleLevel_ = 1;
+    int detailFontWheelTicks_ = 0;
+    int detailBrowserAppliedWheelTicks_ = 0;
     bool detailPaneFullscreen_ = false;
     QList<int> detailPaneNormalSplitterSizes_;
 };
