@@ -96,6 +96,7 @@ private slots:
     void homePage_navigationButtons_emitSignals();
     void recentSearchesPage_researchDeleteClear_emitSignalsAndRefresh();
     void favoritesPage_openAndUnfavorite_emitSignalsAndRefresh();
+    void favoritesPage_clearAllButton_clearsRepositoryAndRefreshes();
 };
 
 void PageWiringTest::cleanupTestCase()
@@ -217,6 +218,36 @@ void PageWiringTest::favoritesPage_openAndUnfavorite_emitSignalsAndRefresh()
     auto* unfavoriteButton = card->findChild<QPushButton*>(QStringLiteral("weakDangerButton"));
     QVERIFY(unfavoriteButton != nullptr);
     QTest::mouseClick(unfavoriteButton, Qt::LeftButton);
+
+    QCOMPARE(changedSpy.count(), 1);
+    QTRY_COMPARE(page.findChildren<FavoriteItemCard*>().size(), 0);
+
+    QVERIFY(favoritesRepository.load());
+    QCOMPARE(favoritesRepository.count(), 0);
+}
+
+void PageWiringTest::favoritesPage_clearAllButton_clearsRepositoryAndRefreshes()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    domain::repositories::FavoritesRepository favoritesRepository;
+    QVERIFY(favoritesRepository.load());
+    favoritesRepository.add(QStringLiteral("A001"));
+    favoritesRepository.add(QStringLiteral("B002"));
+    QVERIFY(favoritesRepository.load());
+    QCOMPARE(favoritesRepository.count(), 2);
+
+    FavoritesPage page(nullptr, nullptr, nullptr, nullptr);
+
+    QSignalSpy changedSpy(&page, &FavoritesPage::favoritesChanged);
+    QVERIFY(changedSpy.isValid());
+
+    auto* clearAllButton = page.findChild<QPushButton*>(QStringLiteral("secondaryButton"));
+    QVERIFY(clearAllButton != nullptr);
+    QVERIFY(clearAllButton->isEnabled());
+
+    QTest::mouseClick(clearAllButton, Qt::LeftButton);
 
     QCOMPARE(changedSpy.count(), 1);
     QTRY_COMPARE(page.findChildren<FavoriteItemCard*>().size(), 0);

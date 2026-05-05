@@ -13,9 +13,9 @@
 - 搜索链路：关键词搜索、基础筛选、排序、结果展示；已支持 `intent + (title/alias/keyword)` 交叉加权。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
-- PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），并在详情头部提供“上一页/下一页/页码”导航控件，以及“导出PDF”按钮（当前展示 PDF 另存为）。
+- PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），并在详情头部提供“上一页/下一页/页码”导航控件，以及“导出PDF”按钮（当前展示 PDF 另存为；导出成功后弹窗提示并可直接打开导出目录）。
 - 详情全屏体验：详情头部已接入“右侧详情区全屏模式”切换按钮；`F11` 可切换，`Esc` 可退出；进入时隐藏搜索页顶部栏和左侧结果栏，退出时恢复。
-- 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页回跳搜索页打开详情。
+- 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页一键清空、收藏页回跳搜索页打开详情。
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
 - 设置页日志入口：已支持展示日志目录并在“日志操作”中打开日志目录。
@@ -330,7 +330,7 @@ flowchart TD
   - `DetailRenderPathResolver::resolveForMode()`（`TrialPreview / Pdf / Web / FallbackText` 分支选择）
   - `renderDetailInPdfView()` + `resolveDetailPdfPath()`（PDF 分支）
   - `jumpToPdfPage()` + `updatePdfPageNavigationUi()`（PDF 页码跳转、导航状态与导出按钮状态刷新）
-  - `onPdfExportButtonClicked()`（当前 PDF 另存为导出）
+  - `onPdfExportButtonClicked()`（当前 PDF 另存为导出，成功后 `QMessageBox` 提示并支持“打开导出目录”）
   - `eventFilter()` + `tryAdjustDetailFontScaleByWheelDelta()`（详情区 `Ctrl + 鼠标滚轮` 连续缩放）
   - `onDetailFullscreenButtonClicked()` + `enterDetailFullscreen()` + `leaveDetailFullscreen()`（详情区全屏切换与退出）
   - `dispatchPayloadToWeb()` -> `DetailPane::renderDetail()`（Web 分支）
@@ -361,7 +361,7 @@ flowchart TD
   - `LocalStorageService::writeJsonFileAtomically(favorites.json)`
   - `emit favoritesChanged()` -> MainWindow 联动刷新。
 - 收藏页：`FavoritesPage::reloadData()` 从 repo 读取并渲染 `FavoriteItemCard`。
-- 当前状态：已实现（收藏增删查、回看详情）。
+- 当前状态：已实现（收藏增删查、一键清空、回看详情）。
 - 部分实现：
   - `FavoritesPage` 过滤按钮无业务逻辑（空 lambda）。
 - 待确认：

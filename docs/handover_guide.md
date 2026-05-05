@@ -32,12 +32,13 @@ powershell .\run-debug.ps1
 - 搜索框右侧清空按钮可用（非空时显示，点击后清空）。
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
 - 当使用 PDF 渲染时，确认详情区可滚动跨页，且“上一页/下一页”按钮可用（多页 PDF）。
-- 当使用 PDF 渲染时，点击“导出PDF”并保存到临时路径，确认可生成副本文件。
+- 当使用 PDF 渲染时，点击“导出PDF”并保存到临时路径，确认可生成副本文件；导出成功后弹出提示框，且可通过“打开导出目录”按钮直接定位文件目录。
 - 点击详情区“全屏”，确认字体自动切换为大档；退出全屏后自动切回小档。
 - 点击 `Aa` 按钮，确认可循环切换三档（`2 -> 1 -> 0 -> 2`）。
 - 在详情区按住 `Ctrl` 滚动鼠标滚轮，确认字体可连续放大/缩小（不受三档限制）并即时生效。
 - 点击详情区“全屏”，确认仅右侧详情区进入沉浸模式（顶部搜索栏和左侧结果栏隐藏）；按 `Esc` 或再次点击“退出全屏”可恢复。
 - 收藏/取消收藏一条，确认 `cache/favorites.json` 有变化。
+- 进入“我的收藏”页，点击“清空收藏”，确认列表清空且 `cache/favorites.json` 变为空集合。
 - 进入“设置/关于”，点击“打开 README”，确认至少可通过默认程序或记事本打开。
 
 ## 3. 先读哪些文件最容易建立全局认识
@@ -85,7 +86,7 @@ powershell .\run-debug.ps1
     - 视图模式：`QPdfView::PageMode::MultiPage`
     - 翻页入口：`onPdfPrevPageClicked` / `onPdfNextPageClicked` -> `jumpToPdfPage`
     - 状态刷新：`updatePdfPageNavigationUi`（页码文本与按钮可用性）
-    - 导出入口：`onPdfExportButtonClicked`（读取 `currentDetailPdfPath_` 后执行“另存为”复制）
+    - 导出入口：`onPdfExportButtonClicked`（读取 `currentDetailPdfPath_` 后执行“另存为”复制；成功后弹窗提示并提供“打开导出目录”）
     - 字体滚轮入口：`eventFilter` -> `tryAdjustDetailFontScaleByWheelDelta`（详情区 `Ctrl + 鼠标滚轮`）
     - 全屏入口：`onDetailFullscreenButtonClicked`；快捷键 `F11` 切换，`Esc` 退出（`leaveDetailFullscreen`）
     - 页面控制：`enterDetailFullscreen()` 隐藏 `searchTopBar_` 与 `searchLeftColumn_`，退出时恢复并还原 splitter 尺寸

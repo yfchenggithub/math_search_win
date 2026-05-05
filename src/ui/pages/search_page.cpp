@@ -23,6 +23,7 @@
 #include <QAbstractScrollArea>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QElapsedTimer>
 #include <QDir>
 #include <QEvent>
@@ -36,6 +37,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QPdfDocument>
 #include <QPdfPageNavigator>
@@ -48,6 +50,7 @@
 #include <QStyle>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWebEngineView>
 #include <QWheelEvent>
@@ -937,6 +940,28 @@ void SearchPage::onPdfExportButtonClicked()
     }
 
     updateStatusLine(QStringLiteral("PDF 导出完成。"), normalizedTarget);
+    QMessageBox messageBox(this);
+    messageBox.setIcon(QMessageBox::Information);
+    messageBox.setWindowTitle(QStringLiteral("导出成功"));
+    messageBox.setText(QStringLiteral("PDF 已导出到：\n%1").arg(QDir::toNativeSeparators(normalizedTarget)));
+
+    QPushButton* openDirButton = messageBox.addButton(QStringLiteral("打开导出目录"), QMessageBox::ActionRole);
+    QPushButton* okButton = messageBox.addButton(QStringLiteral("确定"), QMessageBox::AcceptRole);
+    messageBox.setDefaultButton(okButton);
+    messageBox.exec();
+
+    if (messageBox.clickedButton() == openDirButton) {
+        const QString exportDirectory = QFileInfo(normalizedTarget).absolutePath();
+        const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(exportDirectory));
+        if (!openOk) {
+            updateStatusLine(QStringLiteral("PDF 导出完成，但无法打开导出目录。"),
+                             QDir::toNativeSeparators(exportDirectory));
+            QMessageBox::warning(this,
+                                 QStringLiteral("打开目录失败"),
+                                 QStringLiteral("无法打开目录：\n%1")
+                                     .arg(QDir::toNativeSeparators(exportDirectory)));
+        }
+    }
 }
 
 void SearchPage::loadDetailFontScaleSetting()

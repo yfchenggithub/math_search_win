@@ -65,6 +65,7 @@ private:
     void applySort();
     void rebuildCards();
     void clearCards();
+    void handleClearAll();
     void updateEmptyState();
     void applyFeatureGate();
     void rebuildFavoriteTimestampIndex();
@@ -92,6 +93,7 @@ private:
     QWidget* toolbarWidget_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
     QComboBox* sortComboBox_ = nullptr;
+    QPushButton* clearAllButton_ = nullptr;
     QPushButton* filterButton_ = nullptr;
     QScrollArea* scrollArea_ = nullptr;
     QWidget* cardsContainer_ = nullptr;

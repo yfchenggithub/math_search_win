@@ -165,6 +165,10 @@ void FavoritesPage::setupUi()
     sortComboBox_->addItem(QStringLiteral("按标题"), static_cast<int>(SortMode::TitleAsc));
     sortComboBox_->addItem(QStringLiteral("按模块"), static_cast<int>(SortMode::ModuleAsc));
 
+    clearAllButton_ = new QPushButton(QStringLiteral("清空收藏"), toolbarWidget_);
+    clearAllButton_->setObjectName(QStringLiteral("secondaryButton"));
+    clearAllButton_->setCursor(Qt::PointingHandCursor);
+
     filterButton_ = new QPushButton(QStringLiteral("筛选（即将支持）"), toolbarWidget_);
     filterButton_->setObjectName(QStringLiteral("toolbarButton"));
     filterButton_->setCursor(Qt::PointingHandCursor);
@@ -172,6 +176,7 @@ void FavoritesPage::setupUi()
     toolbarLayout->addWidget(summaryLabel_);
     toolbarLayout->addStretch(1);
     toolbarLayout->addWidget(sortComboBox_, 0);
+    toolbarLayout->addWidget(clearAllButton_, 0);
     toolbarLayout->addWidget(filterButton_, 0);
 
     rootLayout_->addWidget(toolbarWidget_);
@@ -248,6 +253,7 @@ void FavoritesPage::setupConnections()
     });
 
     connect(filterButton_, &QPushButton::clicked, this, []() {});
+    connect(clearAllButton_, &QPushButton::clicked, this, &FavoritesPage::handleClearAll);
     connect(emptyActionButton_, &QPushButton::clicked, this, &FavoritesPage::navigateToSearchRequested);
 }
 
@@ -363,12 +369,24 @@ void FavoritesPage::clearCards()
     }
 }
 
+void FavoritesPage::handleClearAll()
+{
+    if (!favoritesFeatureEnabled_ || items_.isEmpty()) {
+        return;
+    }
+
+    favoritesRepository_.clear();
+    reloadData();
+    emit favoritesChanged();
+}
+
 void FavoritesPage::updateEmptyState()
 {
     if (!favoritesFeatureEnabled_) {
         scrollArea_->setVisible(false);
         emptyStateWidget_->setVisible(true);
         sortComboBox_->setEnabled(false);
+        clearAllButton_->setEnabled(false);
         filterButton_->setEnabled(false);
         summaryLabel_->setText(QStringLiteral("收藏功能未开放"));
 
@@ -384,6 +402,7 @@ void FavoritesPage::updateEmptyState()
     scrollArea_->setVisible(hasItems);
     emptyStateWidget_->setVisible(!hasItems);
     sortComboBox_->setEnabled(hasItems);
+    clearAllButton_->setEnabled(hasItems);
     filterButton_->setEnabled(true);
     emptyActionButton_->setText(QStringLiteral("去搜索"));
 
@@ -594,4 +613,3 @@ QDateTime FavoritesPage::parseDateTime(const QString& rawText)
 
     return {};
 }
-
