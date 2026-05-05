@@ -1,4 +1,4 @@
-#include "ui/pages/home_page.h"
+﻿#include "ui/pages/home_page.h"
 
 #include "core/logging/log_categories.h"
 #include "core/logging/logger.h"
@@ -170,24 +170,40 @@ void HomePage::setupHeroSection()
     heroLayout->setContentsMargins(28, 24, 28, 24);
     heroLayout->setSpacing(10);
 
-    titleLabel_ = new QLabel(QStringLiteral("高中数学二级结论搜索系统"), heroWidget_);
+    titleLabel_ = new QLabel(QStringLiteral("高中数学结论 3 秒快速检索"), heroWidget_);
     titleLabel_->setObjectName(QStringLiteral("homeHeroTitle"));
 
     subtitleLabel_ = new QLabel(
-        QStringLiteral("本地离线使用，3 秒定位结论。先点“立即搜索”，再从最近搜索与收藏快速回访。"),
+        QStringLiteral("本地离线、无广告、打开即用。输入关键词即可快速定位高频结论，家长省心，孩子高效。"),
         heroWidget_);
     subtitleLabel_->setObjectName(QStringLiteral("homeHeroSubtitle"));
     subtitleLabel_->setWordWrap(true);
+
+    auto* trustRow = new QHBoxLayout();
+    trustRow->setContentsMargins(0, 2, 0, 0);
+    trustRow->setSpacing(8);
+
+    auto* trustBadge1 = new QLabel(QStringLiteral("本地离线更安心"), heroWidget_);
+    trustBadge1->setObjectName(QStringLiteral("homeTrustBadge"));
+    auto* trustBadge2 = new QLabel(QStringLiteral("3 秒定位结论"), heroWidget_);
+    trustBadge2->setObjectName(QStringLiteral("homeTrustBadge"));
+    auto* trustBadge3 = new QLabel(QStringLiteral("覆盖高频题型"), heroWidget_);
+    trustBadge3->setObjectName(QStringLiteral("homeTrustBadge"));
+
+    trustRow->addWidget(trustBadge1, 0);
+    trustRow->addWidget(trustBadge2, 0);
+    trustRow->addWidget(trustBadge3, 0);
+    trustRow->addStretch(1);
 
     auto* actionsRow = new QHBoxLayout();
     actionsRow->setContentsMargins(0, 6, 0, 0);
     actionsRow->setSpacing(10);
 
-    startSearchButton_ = new QPushButton(QStringLiteral("立即搜索"), heroWidget_);
+    startSearchButton_ = new QPushButton(QStringLiteral("立即开始搜索"), heroWidget_);
     startSearchButton_->setObjectName(QStringLiteral("homeHeroPrimaryButton"));
     startSearchButton_->setCursor(Qt::PointingHandCursor);
 
-    recentShortcutButton_ = new QPushButton(QStringLiteral("最近搜索"), heroWidget_);
+    recentShortcutButton_ = new QPushButton(QStringLiteral("查看最近搜索"), heroWidget_);
     recentShortcutButton_->setObjectName(QStringLiteral("homeHeroSecondaryButton"));
     recentShortcutButton_->setCursor(Qt::PointingHandCursor);
 
@@ -200,9 +216,38 @@ void HomePage::setupHeroSection()
     actionsRow->addWidget(favoritesShortcutButton_, 0);
     actionsRow->addStretch(1);
 
+    auto* sampleRow = new QHBoxLayout();
+    sampleRow->setContentsMargins(0, 2, 0, 0);
+    sampleRow->setSpacing(8);
+
+    auto* sampleLabel = new QLabel(QStringLiteral("示例关键词："), heroWidget_);
+    sampleLabel->setObjectName(QStringLiteral("homeHeroHelperText"));
+    sampleRow->addWidget(sampleLabel, 0);
+
+    auto* chip1 = new QPushButton(QStringLiteral("导数应用"), heroWidget_);
+    chip1->setObjectName(QStringLiteral("homeKeywordChip"));
+    chip1->setCursor(Qt::PointingHandCursor);
+    auto* chip2 = new QPushButton(QStringLiteral("柯西不等式"), heroWidget_);
+    chip2->setObjectName(QStringLiteral("homeKeywordChip"));
+    chip2->setCursor(Qt::PointingHandCursor);
+    auto* chip3 = new QPushButton(QStringLiteral("圆锥曲线"), heroWidget_);
+    chip3->setObjectName(QStringLiteral("homeKeywordChip"));
+    chip3->setCursor(Qt::PointingHandCursor);
+
+    sampleRow->addWidget(chip1, 0);
+    sampleRow->addWidget(chip2, 0);
+    sampleRow->addWidget(chip3, 0);
+    sampleRow->addStretch(1);
+
+    connect(chip1, &QPushButton::clicked, this, [this]() { emit searchRequested(QStringLiteral("导数应用")); });
+    connect(chip2, &QPushButton::clicked, this, [this]() { emit searchRequested(QStringLiteral("柯西不等式")); });
+    connect(chip3, &QPushButton::clicked, this, [this]() { emit searchRequested(QStringLiteral("圆锥曲线")); });
+
     heroLayout->addWidget(titleLabel_);
     heroLayout->addWidget(subtitleLabel_);
+    heroLayout->addLayout(trustRow);
     heroLayout->addLayout(actionsRow);
+    heroLayout->addLayout(sampleRow);
 
     contentLayout_->addWidget(heroWidget_);
 }
@@ -211,27 +256,43 @@ void HomePage::setupQuickActionsSection()
 {
     quickActionsWidget_ = new QWidget(contentWidget_);
     quickActionsWidget_->setObjectName(QStringLiteral("homeQuickActions"));
+    quickActionsWidget_->setAttribute(Qt::WA_StyledBackground, true);
 
-    auto* gridLayout = new QGridLayout(quickActionsWidget_);
-    gridLayout->setContentsMargins(0, 0, 0, 0);
+    auto* sectionLayout = new QVBoxLayout(quickActionsWidget_);
+    sectionLayout->setContentsMargins(18, 16, 18, 16);
+    sectionLayout->setSpacing(12);
+
+    auto* sectionTitle = new QLabel(QStringLiteral("为什么家长会觉得省心"), quickActionsWidget_);
+    sectionTitle->setObjectName(QStringLiteral("homeValueSectionTitle"));
+
+    auto* sectionSubtitle = new QLabel(
+        QStringLiteral("专业结果可复查，检索路径清晰，离线使用稳定。"), quickActionsWidget_);
+    sectionSubtitle->setObjectName(QStringLiteral("homeValueSectionSubtitle"));
+    sectionSubtitle->setWordWrap(true);
+
+    sectionLayout->addWidget(sectionTitle);
+    sectionLayout->addWidget(sectionSubtitle);
+
+    auto* gridLayout = new QGridLayout();
+    gridLayout->setContentsMargins(0, 2, 0, 0);
     gridLayout->setHorizontalSpacing(12);
     gridLayout->setVerticalSpacing(12);
 
     recentQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                   QStringLiteral("最近搜索"),
-                                                   QStringLiteral("快速回看近期检索关键词"),
+                                                   QStringLiteral("快：关键词直达"),
+                                                   QStringLiteral("输入关键词后快速收敛，减少盲目翻找。"),
                                                    &recentQuickActionDescription_,
                                                    false);
 
     favoritesQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                      QStringLiteral("我的收藏"),
-                                                      QStringLiteral("继续阅读已收藏的高频结论"),
+                                                      QStringLiteral("准：筛选更聚焦"),
+                                                      QStringLiteral("支持按模块和分类聚焦常见题型。"),
                                                       &favoritesQuickActionDescription_,
                                                       false);
 
     settingsQuickActionCard_ = createQuickActionCard(quickActionsWidget_,
-                                                     QStringLiteral("设置"),
-                                                     QStringLiteral("调整本地参数与使用偏好"),
+                                                     QStringLiteral("稳：本地离线可控"),
+                                                     QStringLiteral("数据与授权都在本地，长期使用更安心。"),
                                                      &settingsQuickActionDescription_,
                                                      true);
 
@@ -242,6 +303,7 @@ void HomePage::setupQuickActionsSection()
     gridLayout->setColumnStretch(1, 1);
     gridLayout->setColumnStretch(2, 1);
 
+    sectionLayout->addLayout(gridLayout);
     contentLayout_->addWidget(quickActionsWidget_);
 }
 
@@ -263,7 +325,7 @@ void HomePage::setupPreviewSections()
     recentHeaderRow->setContentsMargins(0, 0, 0, 0);
     recentHeaderRow->setSpacing(8);
 
-    auto* recentTitle = new QLabel(QStringLiteral("最近搜索预览"), recentPreviewSection_);
+    auto* recentTitle = new QLabel(QStringLiteral("最近检索记录"), recentPreviewSection_);
     recentTitle->setObjectName(QStringLiteral("homeSectionTitle"));
     viewAllRecentButton_ = new QPushButton(QStringLiteral("查看全部"), recentPreviewSection_);
     viewAllRecentButton_->setObjectName(QStringLiteral("homeSectionActionButton"));
@@ -290,7 +352,7 @@ void HomePage::setupPreviewSections()
     favoritesHeaderRow->setContentsMargins(0, 0, 0, 0);
     favoritesHeaderRow->setSpacing(8);
 
-    auto* favoritesTitle = new QLabel(QStringLiteral("收藏预览"), favoritesPreviewSection_);
+    auto* favoritesTitle = new QLabel(QStringLiteral("收藏结论回看"), favoritesPreviewSection_);
     favoritesTitle->setObjectName(QStringLiteral("homeSectionTitle"));
     viewAllFavoritesButton_ = new QPushButton(QStringLiteral("查看全部"), favoritesPreviewSection_);
     viewAllFavoritesButton_->setObjectName(QStringLiteral("homeSectionActionButton"));
@@ -396,10 +458,9 @@ void HomePage::rebuildRecentPreview()
     clearLayoutItems(recentPreviewLayout_);
 
     if (recentItems_.isEmpty()) {
-        recentPreviewLayout_->addWidget(
-            createPreviewEmptyItem(recentPreviewSection_,
-                                   QStringLiteral("暂无最近搜索"),
-                                   QStringLiteral("先进行一次搜索，这里会展示最近 3 条关键词。")));
+        recentPreviewLayout_->addWidget(createPreviewEmptyItem(recentPreviewSection_,
+                                                               QStringLiteral("暂无最近搜索"),
+                                                               QStringLiteral("先执行一次搜索，这里会展示最近 3 条关键词。")));
         return;
     }
 
@@ -422,10 +483,9 @@ void HomePage::rebuildRecentPreview()
     }
 
     if (!hasRenderableItems) {
-        recentPreviewLayout_->addWidget(
-            createPreviewEmptyItem(recentPreviewSection_,
-                                   QStringLiteral("暂无最近搜索"),
-                                   QStringLiteral("搜索记录为空，请先执行一次搜索。")));
+        recentPreviewLayout_->addWidget(createPreviewEmptyItem(recentPreviewSection_,
+                                                               QStringLiteral("暂无最近搜索"),
+                                                               QStringLiteral("搜索记录为空，请先执行一次搜索。")));
     }
 }
 
@@ -434,10 +494,9 @@ void HomePage::rebuildFavoritesPreview()
     clearLayoutItems(favoritesPreviewLayout_);
 
     if (favoriteItems_.isEmpty()) {
-        favoritesPreviewLayout_->addWidget(
-            createPreviewEmptyItem(favoritesPreviewSection_,
-                                   QStringLiteral("暂无收藏"),
-                                   QStringLiteral("收藏高频结论后，这里会展示最近 3 条。")));
+        favoritesPreviewLayout_->addWidget(createPreviewEmptyItem(favoritesPreviewSection_,
+                                                                  QStringLiteral("暂无收藏"),
+                                                                  QStringLiteral("收藏高频结论后，这里会展示最近 3 条。")));
         return;
     }
 
@@ -451,7 +510,7 @@ void HomePage::rebuildFavoritesPreview()
         const QString title = normalizedText(item.title, 40);
         const QString module = item.module.trimmed();
         const QString meta = module.isEmpty() ? QStringLiteral("结论 ID: %1").arg(conclusionId)
-                                              : QStringLiteral("%1 · %2").arg(module, conclusionId);
+                                              : QStringLiteral("%1 / %2").arg(module, conclusionId);
 
         auto* previewButton = createPreviewButton(favoritesPreviewSection_, title, normalizedText(meta, 56));
         connect(previewButton, &QPushButton::clicked, this, [this, conclusionId]() {
@@ -462,30 +521,30 @@ void HomePage::rebuildFavoritesPreview()
     }
 
     if (!hasRenderableItems) {
-        favoritesPreviewLayout_->addWidget(
-            createPreviewEmptyItem(favoritesPreviewSection_,
-                                   QStringLiteral("暂无收藏"),
-                                   QStringLiteral("当前没有可展示的收藏条目。")));
+        favoritesPreviewLayout_->addWidget(createPreviewEmptyItem(favoritesPreviewSection_,
+                                                                  QStringLiteral("暂无收藏"),
+                                                                  QStringLiteral("当前没有可展示的收藏条目。")));
     }
 }
 
 void HomePage::updateQuickActionSummary()
 {
     if (recentQuickActionDescription_ != nullptr) {
-        recentQuickActionDescription_->setText(QStringLiteral("共 %1 条记录，快速回访最近检索。").arg(recentItemCount_));
+        recentQuickActionDescription_->setText(
+            QStringLiteral("最近检索 %1 条，支持一键回看高频问题。").arg(recentItemCount_));
     }
 
     if (favoritesQuickActionDescription_ != nullptr) {
-        favoritesQuickActionDescription_->setText(QStringLiteral("共 %1 条收藏，继续阅读已标记结论。")
-                                                      .arg(favoriteItemCount_));
+        favoritesQuickActionDescription_->setText(
+            QStringLiteral("已收藏 %1 条结论，复习时更快定位重点。").arg(favoriteItemCount_));
     }
 
     if (settingsQuickActionDescription_ != nullptr) {
-        settingsQuickActionDescription_->setText(QStringLiteral("弱入口：调整显示与本地存储偏好。"));
+        settingsQuickActionDescription_->setText(QStringLiteral("离线授权与本地数据可控，长期使用更稳定。"));
     }
 
     if (recentShortcutButton_ != nullptr) {
-        recentShortcutButton_->setText(QStringLiteral("最近搜索（%1）").arg(recentItemCount_));
+        recentShortcutButton_->setText(QStringLiteral("查看最近搜索（%1）").arg(recentItemCount_));
     }
 
     if (favoritesShortcutButton_ != nullptr) {
@@ -499,11 +558,10 @@ void HomePage::updateActivationSummaryIfNeeded()
         return;
     }
 
-    footerMetaLabel_->setText(
-        QStringLiteral("本地离线模式 · 最近搜索 %1 条 · 收藏 %2 条 · %3")
-            .arg(recentItemCount_)
-            .arg(favoriteItemCount_)
-            .arg(UiConstants::kStatusVersion));
+    footerMetaLabel_->setText(QStringLiteral("本地离线模式 / 最近检索 %1 条 / 收藏 %2 条 / %3")
+                                  .arg(recentItemCount_)
+                                  .arg(favoriteItemCount_)
+                                  .arg(UiConstants::kStatusVersion));
 }
 
 void HomePage::clearLayoutItems(QVBoxLayout* layout)
@@ -535,5 +593,5 @@ QString HomePage::normalizedText(const QString& text, int maxLength)
     if (maxLength <= 0 || simplified.size() <= maxLength) {
         return simplified;
     }
-    return simplified.left(std::max(1, maxLength - 1)) + QStringLiteral("…");
+    return simplified.left(std::max(1, maxLength - 3)) + QStringLiteral("...");
 }

@@ -959,7 +959,7 @@ void SearchPage::buildUi()
     pageTitleLabel->setObjectName(QStringLiteral("searchPageTitle"));
 
     auto* pageSubtitleLabel =
-        new QLabel(QStringLiteral("输入关键词后快速筛选，在右侧即时预览结论详情。"), titleBlock);
+        new QLabel(QStringLiteral("输入关键词，快速定位结论；全程本地离线，家长更省心。"), titleBlock);
     pageSubtitleLabel->setObjectName(QStringLiteral("searchPageSubtitle"));
     pageSubtitleLabel->setWordWrap(true);
 

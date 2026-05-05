@@ -10,6 +10,7 @@
 - 创建 `MainWindow`：在构造函数内先做授权状态初始化，再加载数据（index/content + 可选 `domain_topic_map`），再装配页面。
 - `main()` 调用 `window.showMaximized()`，应用启动默认最大化（非独占全屏）。
 - `MainWindow::switchPageWithTrigger(kPageHome, "startup_default")` 设置首页。
+- 首页首屏结构（`HomePage`）：信任头部（离线/快速/覆盖标签）+ 主搜索入口按钮 + 价值证明卡片 + 最近/收藏预览。
 
 ```mermaid
 sequenceDiagram
