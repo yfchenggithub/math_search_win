@@ -30,7 +30,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QFormLayout>
+#include <QGridLayout>
 #include <QHideEvent>
 #include <QHBoxLayout>
 #include <QJsonObject>
@@ -92,6 +92,84 @@ struct DetailZoomSnapshot {
 int clampDetailFontScaleLevel(int level)
 {
     return std::clamp(level, kDetailFontScaleMinLevel, kDetailFontScaleMaxLevel);
+}
+
+QString normalizeModuleCode(const QString& rawModule)
+{
+    QString normalized = rawModule.trimmed().toLower();
+    int start = 0;
+    while (start < normalized.size() && normalized.at(start).isDigit()) {
+        ++start;
+    }
+    while (start < normalized.size()) {
+        const QChar ch = normalized.at(start);
+        if (ch == QChar('_') || ch == QChar('-') || ch.isSpace()) {
+            ++start;
+            continue;
+        }
+        break;
+    }
+    if (start > 0 && start < normalized.size()) {
+        normalized = normalized.mid(start);
+    }
+    return normalized;
+}
+
+QString moduleDisplayName(const QString& rawModule)
+{
+    const QString trimmed = rawModule.trimmed();
+    if (trimmed.isEmpty()) {
+        return QString();
+    }
+
+    const QString code = normalizeModuleCode(trimmed);
+    if (code == QStringLiteral("set")) {
+        return QStringLiteral("集合");
+    }
+    if (code == QStringLiteral("algebra")) {
+        return QStringLiteral("代数");
+    }
+    if (code == QStringLiteral("function")) {
+        return QStringLiteral("函数");
+    }
+    if (code == QStringLiteral("sequence")) {
+        return QStringLiteral("数列");
+    }
+    if (code == QStringLiteral("conic")) {
+        return QStringLiteral("圆锥曲线");
+    }
+    if (code == QStringLiteral("vector")) {
+        return QStringLiteral("向量");
+    }
+    if (code == QStringLiteral("geometry")) {
+        return QStringLiteral("几何");
+    }
+    if (code == QStringLiteral("geometry-plane")) {
+        return QStringLiteral("平面几何");
+    }
+    if (code == QStringLiteral("plane-geometry")) {
+        return QStringLiteral("平面几何");
+    }
+    if (code == QStringLiteral("geometry-solid")) {
+        return QStringLiteral("立体几何");
+    }
+    if (code == QStringLiteral("solid-geometry")) {
+        return QStringLiteral("立体几何");
+    }
+    if (code == QStringLiteral("inequality")) {
+        return QStringLiteral("不等式");
+    }
+    if (code == QStringLiteral("probability-stat")) {
+        return QStringLiteral("概率统计");
+    }
+    if (code == QStringLiteral("trigonometry")) {
+        return QStringLiteral("三角函数");
+    }
+    if (code == QStringLiteral("final")) {
+        return QStringLiteral("综合");
+    }
+
+    return trimmed;
 }
 
 QString detailFontScaleKey()
@@ -534,13 +612,9 @@ void SearchPage::openConclusionById(const QString& conclusionId)
         return;
     }
 
-    if (moduleFilterCombo_ != nullptr && categoryFilterCombo_ != nullptr && tagFilterCombo_ != nullptr) {
+    if (moduleFilterCombo_ != nullptr) {
         QSignalBlocker moduleBlocker(moduleFilterCombo_);
-        QSignalBlocker categoryBlocker(categoryFilterCombo_);
-        QSignalBlocker tagBlocker(tagFilterCombo_);
         moduleFilterCombo_->setCurrentIndex(0);
-        categoryFilterCombo_->setCurrentIndex(0);
-        tagFilterCombo_->setCurrentIndex(0);
     }
 
     lastSuggestSignature_.clear();
@@ -723,17 +797,13 @@ void SearchPage::onClearFiltersClicked()
         return;
     }
 
-    if (moduleFilterCombo_ == nullptr || categoryFilterCombo_ == nullptr || tagFilterCombo_ == nullptr) {
+    if (moduleFilterCombo_ == nullptr) {
         return;
     }
 
     {
         QSignalBlocker moduleBlocker(moduleFilterCombo_);
-        QSignalBlocker categoryBlocker(categoryFilterCombo_);
-        QSignalBlocker tagBlocker(tagFilterCombo_);
         moduleFilterCombo_->setCurrentIndex(0);
-        categoryFilterCombo_->setCurrentIndex(0);
-        tagFilterCombo_->setCurrentIndex(0);
     }
 
     LOG_INFO(LogCategory::SearchEngine, QStringLiteral("filters cleared trigger=manual"));
@@ -1245,39 +1315,66 @@ void SearchPage::buildUi()
     filterPanel->setAttribute(Qt::WA_StyledBackground, true);
     auto* filterPanelLayout = new QVBoxLayout(filterPanel);
     filterPanelLayout->setContentsMargins(14, 12, 14, 12);
-    filterPanelLayout->setSpacing(10);
+    filterPanelLayout->setSpacing(8);
 
-    auto* filterTitle = new QLabel(QStringLiteral("筛选与排序"), filterPanel);
+    auto* filterHeaderRow = new QHBoxLayout();
+    filterHeaderRow->setContentsMargins(0, 0, 0, 0);
+    filterHeaderRow->setSpacing(8);
+
+    auto* filterTitle = new QLabel(QStringLiteral("快速筛选"), filterPanel);
     filterTitle->setObjectName(QStringLiteral("searchFilterTitle"));
-    filterPanelLayout->addWidget(filterTitle);
+    filterHeaderRow->addWidget(filterTitle);
+    filterHeaderRow->addStretch(1);
 
-    auto* filterLayout = new QFormLayout();
-    filterLayout->setContentsMargins(0, 0, 0, 0);
-    filterLayout->setHorizontalSpacing(10);
-    filterLayout->setVerticalSpacing(8);
+    clearFiltersButton_ = new QPushButton(QStringLiteral("重置"), filterPanel);
+    clearFiltersButton_->setObjectName(QStringLiteral("searchFilterResetButton"));
+    clearFiltersButton_->setCursor(Qt::PointingHandCursor);
+    filterHeaderRow->addWidget(clearFiltersButton_, 0, Qt::AlignRight);
+    filterPanelLayout->addLayout(filterHeaderRow);
+
+    auto* filterHint = new QLabel(QStringLiteral("先选范围，再按排序浏览结果。"), filterPanel);
+    filterHint->setObjectName(QStringLiteral("searchFilterHint"));
+    filterHint->setWordWrap(true);
+    filterPanelLayout->addWidget(filterHint);
+
     moduleFilterCombo_ = new QComboBox(filterPanel);
-    categoryFilterCombo_ = new QComboBox(filterPanel);
-    tagFilterCombo_ = new QComboBox(filterPanel);
     sortCombo_ = new QComboBox(filterPanel);
     moduleFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
-    categoryFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
-    tagFilterCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
     sortCombo_->setObjectName(QStringLiteral("searchFilterCombo"));
-    clearFiltersButton_ = new QPushButton(QStringLiteral("清空筛选"), filterPanel);
-    clearFiltersButton_->setObjectName(QStringLiteral("searchClearFiltersButton"));
-    clearFiltersButton_->setCursor(Qt::PointingHandCursor);
+    sortCombo_->setProperty("comboRole", QStringLiteral("sort"));
 
     sortCombo_->addItem(QStringLiteral("按相关度"), static_cast<int>(SortMode::ScoreDesc));
     sortCombo_->addItem(QStringLiteral("按标题 A-Z"), static_cast<int>(SortMode::TitleAsc));
     sortCombo_->addItem(QStringLiteral("按难度 低到高"), static_cast<int>(SortMode::DifficultyAsc));
     sortCombo_->addItem(QStringLiteral("按难度 高到低"), static_cast<int>(SortMode::DifficultyDesc));
 
-    filterLayout->addRow(QStringLiteral("模块"), moduleFilterCombo_);
-    filterLayout->addRow(QStringLiteral("分类"), categoryFilterCombo_);
-    filterLayout->addRow(QStringLiteral("标签"), tagFilterCombo_);
-    filterLayout->addRow(QStringLiteral("排序"), sortCombo_);
-    filterLayout->addRow(clearFiltersButton_);
-    filterPanelLayout->addLayout(filterLayout);
+    auto* filterGrid = new QGridLayout();
+    filterGrid->setContentsMargins(0, 0, 0, 0);
+    filterGrid->setHorizontalSpacing(8);
+    filterGrid->setVerticalSpacing(8);
+
+    auto createFilterCell = [filterPanel](const QString& labelText, QComboBox* combo) {
+        auto* cell = new QWidget(filterPanel);
+        cell->setObjectName(QStringLiteral("searchFilterCell"));
+        cell->setAttribute(Qt::WA_StyledBackground, true);
+
+        auto* cellLayout = new QVBoxLayout(cell);
+        cellLayout->setContentsMargins(8, 7, 8, 7);
+        cellLayout->setSpacing(4);
+
+        auto* label = new QLabel(labelText, cell);
+        label->setObjectName(QStringLiteral("searchFilterFieldLabel"));
+        cellLayout->addWidget(label);
+        cellLayout->addWidget(combo);
+        return cell;
+    };
+
+    filterGrid->addWidget(createFilterCell(QStringLiteral("模块"), moduleFilterCombo_), 0, 0);
+    filterGrid->addWidget(createFilterCell(QStringLiteral("排序"), sortCombo_), 0, 1);
+    filterGrid->setColumnStretch(0, 1);
+    filterGrid->setColumnStretch(1, 1);
+
+    filterPanelLayout->addLayout(filterGrid);
     leftLayout->addWidget(filterPanel);
 
     auto* resultPanel = new QWidget(leftPanel);
@@ -1531,8 +1628,6 @@ void SearchPage::connectSignals()
     }
 
     connect(moduleFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
-    connect(categoryFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
-    connect(tagFilterCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onFilterChanged);
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
     connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
@@ -1584,13 +1679,11 @@ void SearchPage::connectSignals()
 
 void SearchPage::rebuildFilterOptions()
 {
-    if (moduleFilterCombo_ == nullptr || categoryFilterCombo_ == nullptr || tagFilterCombo_ == nullptr) {
+    if (moduleFilterCombo_ == nullptr) {
         return;
     }
 
     const QString currentModule = selectedModuleFilter();
-    const QString currentCategory = selectedCategoryFilter();
-    const QString currentTag = selectedTagFilter();
 
     {
         QSignalBlocker blocker(moduleFilterCombo_);
@@ -1599,47 +1692,19 @@ void SearchPage::rebuildFilterOptions()
         if (indexRepository_ != nullptr) {
             const QStringList modules = uniqueSortedCaseInsensitive(indexRepository_->modules());
             for (const QString& module : modules) {
-                moduleFilterCombo_->addItem(module, module);
+                moduleFilterCombo_->addItem(moduleDisplayName(module), module);
             }
         }
 
         const int restoreIndex = findComboDataIndex(moduleFilterCombo_, currentModule);
         moduleFilterCombo_->setCurrentIndex(restoreIndex >= 0 ? restoreIndex : 0);
     }
-
-    {
-        QSignalBlocker blocker(categoryFilterCombo_);
-        categoryFilterCombo_->clear();
-        categoryFilterCombo_->addItem(QStringLiteral("全部分类"), QString());
-        const QStringList categories = collectCategoryOptions();
-        for (const QString& category : categories) {
-            categoryFilterCombo_->addItem(category, category);
-        }
-
-        const int restoreIndex = findComboDataIndex(categoryFilterCombo_, currentCategory);
-        categoryFilterCombo_->setCurrentIndex(restoreIndex >= 0 ? restoreIndex : 0);
-    }
-
-    {
-        QSignalBlocker blocker(tagFilterCombo_);
-        tagFilterCombo_->clear();
-        tagFilterCombo_->addItem(QStringLiteral("全部标签"), QString());
-        if (contentRepository_ != nullptr) {
-            const QStringList tags = uniqueSortedCaseInsensitive(contentRepository_->tags());
-            for (const QString& tag : tags) {
-                tagFilterCombo_->addItem(tag, tag);
-            }
-        }
-
-        const int restoreIndex = findComboDataIndex(tagFilterCombo_, currentTag);
-        tagFilterCombo_->setCurrentIndex(restoreIndex >= 0 ? restoreIndex : 0);
-    }
 }
 
 void SearchPage::resetToEmptyState()
 {
     updateStatusLine(QStringLiteral("请输入关键词开始搜索。"),
-                     QStringLiteral("支持实时建议、模块/分类/标签筛选、结果详情联动。"));
+                     QStringLiteral("支持实时建议、模块筛选、结果详情联动。"));
     updateResultEmptyState(QStringLiteral("开始搜索"), QStringLiteral("输入关键词后在这里查看匹配结果。"));
     resetDetailTimingSessions(true);
     showDetailPlaceholder(QStringLiteral("左侧输入关键词后可查看搜索结果和详情。"));
@@ -1724,16 +1789,8 @@ void SearchPage::runSuggest(const QString& query)
     domain::models::SuggestOptions options;
     options.maxResults = 8;
     const QString moduleFilter = selectedModuleFilter();
-    const QString categoryFilter = selectedCategoryFilter();
-    const QString tagFilter = selectedTagFilter();
     if (!moduleFilter.isEmpty()) {
         options.moduleFilter.push_back(moduleFilter);
-    }
-    if (!categoryFilter.isEmpty()) {
-        options.categoryFilter.push_back(categoryFilter);
-    }
-    if (!tagFilter.isEmpty()) {
-        options.tagFilter.push_back(tagFilter);
     }
 
     QElapsedTimer timer;
@@ -1823,16 +1880,8 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     options.maxResults = fullSearchEnabled ? 120 : kTrialPreviewLimit;
 
     const QString moduleFilter = selectedModuleFilter();
-    const QString categoryFilter = selectedCategoryFilter();
-    const QString tagFilter = selectedTagFilter();
     if (advancedFilterEnabled && !moduleFilter.isEmpty()) {
         options.moduleFilter.push_back(moduleFilter);
-    }
-    if (advancedFilterEnabled && !categoryFilter.isEmpty()) {
-        options.categoryFilter.push_back(categoryFilter);
-    }
-    if (advancedFilterEnabled && !tagFilter.isEmpty()) {
-        options.tagFilter.push_back(tagFilter);
     }
 
     QElapsedTimer timer;
@@ -1854,14 +1903,10 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     clearSuggestions();
     lastSearchSignature_ = signature;
 
-    const QString filterSummary =
-        QStringLiteral("module=%1 | category=%2 | tag=%3")
-            .arg(advancedFilterEnabled ? (moduleFilter.isEmpty() ? QStringLiteral("all") : moduleFilter)
-                                       : QStringLiteral("locked"))
-            .arg(advancedFilterEnabled ? (categoryFilter.isEmpty() ? QStringLiteral("all") : categoryFilter)
-                                       : QStringLiteral("locked"))
-            .arg(advancedFilterEnabled ? (tagFilter.isEmpty() ? QStringLiteral("all") : tagFilter)
-                                       : QStringLiteral("locked"));
+    const QString moduleSummary = moduleFilter.isEmpty() ? QStringLiteral("全部模块")
+                                                         : moduleDisplayName(moduleFilter);
+    const QString filterSummary = QStringLiteral("module=%1")
+                                      .arg(advancedFilterEnabled ? moduleSummary : QStringLiteral("locked"));
 
     if (currentHits_.isEmpty()) {
         updateStatusLine(QStringLiteral("没有找到相关结论。"),
@@ -1932,7 +1977,8 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
 
     for (const domain::models::SearchHit& hit : hits) {
         const QString titleText = hit.title.trimmed().isEmpty() ? hit.docId : hit.title;
-        const QString moduleText = hit.module.trimmed().isEmpty() ? QStringLiteral("未标注模块") : hit.module.trimmed();
+        const QString moduleText =
+            hit.module.trimmed().isEmpty() ? QStringLiteral("未标注模块") : moduleDisplayName(hit.module);
         const QString categoryText = hit.category.trimmed().isEmpty() ? QStringLiteral("未标注分类") : hit.category.trimmed();
         const QString difficultyText = QStringLiteral("难度 %1").arg(QString::number(hit.difficulty, 'f', 1));
         const QString tagsText = hit.tags.isEmpty() ? QStringLiteral("-") : hit.tags.mid(0, 6).join(QStringLiteral(" / "));
@@ -3100,25 +3146,15 @@ QString SearchPage::featureDisabledReason(license::Feature feature) const
 void SearchPage::applyFeatureGate()
 {
     const bool advancedFilterEnabled = isFeatureEnabled(license::Feature::AdvancedFilter);
-    if (!advancedFilterEnabled && moduleFilterCombo_ != nullptr && categoryFilterCombo_ != nullptr && tagFilterCombo_ != nullptr) {
+    if (!advancedFilterEnabled && moduleFilterCombo_ != nullptr) {
         QSignalBlocker moduleBlocker(moduleFilterCombo_);
-        QSignalBlocker categoryBlocker(categoryFilterCombo_);
-        QSignalBlocker tagBlocker(tagFilterCombo_);
         moduleFilterCombo_->setCurrentIndex(0);
-        categoryFilterCombo_->setCurrentIndex(0);
-        tagFilterCombo_->setCurrentIndex(0);
         lastSuggestSignature_.clear();
         lastSearchSignature_.clear();
     }
 
     if (moduleFilterCombo_ != nullptr) {
         moduleFilterCombo_->setEnabled(advancedFilterEnabled);
-    }
-    if (categoryFilterCombo_ != nullptr) {
-        categoryFilterCombo_->setEnabled(advancedFilterEnabled);
-    }
-    if (tagFilterCombo_ != nullptr) {
-        tagFilterCombo_->setEnabled(advancedFilterEnabled);
     }
     if (clearFiltersButton_ != nullptr) {
         clearFiltersButton_->setEnabled(advancedFilterEnabled);
@@ -3264,20 +3300,9 @@ QString SearchPage::selectedModuleFilter() const
     return moduleFilterCombo_ == nullptr ? QString() : moduleFilterCombo_->currentData().toString().trimmed();
 }
 
-QString SearchPage::selectedCategoryFilter() const
-{
-    return categoryFilterCombo_ == nullptr ? QString() : categoryFilterCombo_->currentData().toString().trimmed();
-}
-
-QString SearchPage::selectedTagFilter() const
-{
-    return tagFilterCombo_ == nullptr ? QString() : tagFilterCombo_->currentData().toString().trimmed();
-}
-
 QString SearchPage::filtersSignature() const
 {
-    return QStringLiteral("module=%1|category=%2|tag=%3")
-        .arg(selectedModuleFilter(), selectedCategoryFilter(), selectedTagFilter());
+    return QStringLiteral("module=%1").arg(selectedModuleFilter());
 }
 
 QString SearchPage::buildSuggestSignature(const QString& query) const
@@ -3290,23 +3315,6 @@ QString SearchPage::buildSearchSignature(const QString& query) const
 {
     return QStringLiteral("search|q=%1|%2")
         .arg(domain::models::normalizeQueryText(query), filtersSignature());
-}
-
-QStringList SearchPage::collectCategoryOptions() const
-{
-    QStringList categories;
-    if (contentRepository_ == nullptr) {
-        return categories;
-    }
-
-    contentRepository_->forEachRecord([&categories](const QString&, const domain::models::ConclusionRecord& record) {
-        const QString category = record.meta.category.trimmed();
-        if (!category.isEmpty()) {
-            categories.push_back(category);
-        }
-    });
-
-    return uniqueSortedCaseInsensitive(categories);
 }
 
 QStringList SearchPage::uniqueSortedCaseInsensitive(const QStringList& values)

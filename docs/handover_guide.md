@@ -29,6 +29,7 @@ powershell .\run-debug.ps1
 - 确认主窗口启动即最大化（非独占全屏，标题栏仍可见）。
 - 首页检查：确认首屏存在“信任标签 + 立即开始搜索 + 价值证明卡片”。
 - 搜索关键词，确认结果列表变化。
+- 检查左侧“快速筛选”区域是否仅保留“模块 + 排序”两项，且顶部“重置”按钮可点击。
 - 搜索框右侧清空按钮可用（非空时显示，点击后清空）。
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
 - 当使用 PDF 渲染时，确认详情区可滚动跨页，且“上一页/下一页”按钮可用（多页 PDF）。
@@ -58,11 +59,12 @@ powershell .\run-debug.ps1
 - UI 入口在 `SearchPage`：
   - 输入变化：`onQueryTextChanged()` -> `runSuggest()`
   - 执行搜索：`onQueryReturnPressed/onSearchButtonClicked/onSuggestionClicked` -> `runSearch()`
+  - 快速筛选：仅 `module` 筛选 + `sort` 排序在左栏快速筛选卡，`clearFiltersButton_` 负责一键重置筛选条件
 - 算法在 `SearchService::search()`：
   - `termIndex + prefixIndex` 合并评分
   - `fieldMaskWeight` 已包含 `intent/usage/knowledge_node`（对应 bit 存在时生效）
   - `enableIntentCrossBoost` 默认开启：同文档命中 `intent` 且命中 `title/alias/keyword` 时追加交叉加分
-  - module/category/tag 过滤
+  - module 过滤
   - score 排序
 - Suggest 在 `SuggestService::suggest()`：
   - 优先使用索引顶层 `suggestions` seed（`optionalSuggestions()`）

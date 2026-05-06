@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QComboBox>
 #include <QPdfView>
 #include <QPushButton>
 #include <QRandomGenerator>
@@ -278,6 +279,7 @@ private slots:
     void detailFullscreenButton_togglesDetailPaneFocusMode();
     void detailFontButton_cyclesLevels();
     void detailCtrlWheel_adjustsContinuousZoom();
+    void filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels();
     void detailPdfExportHelper_reportsStatuses();
 };
 
@@ -720,6 +722,39 @@ void SearchPageRound5UiTest::detailCtrlWheel_adjustsContinuousZoom()
     QCOMPARE(page.detailFontScaleLevel_, 0);
     QCOMPARE(page.detailFontWheelTicks_, 0);
     QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - initialZoom) < 1e-6);
+}
+
+void SearchPageRound5UiTest::filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.moduleFilterCombo_ != nullptr);
+    QVERIFY(page.sortCombo_ != nullptr);
+
+    const QList<QComboBox*> filterCombos = page.findChildren<QComboBox*>(QStringLiteral("searchFilterCombo"));
+    QCOMPARE(filterCombos.size(), 2);
+
+    const QRegularExpression chinesePattern(QStringLiteral("[\\x{4e00}-\\x{9fff}]"));
+    bool foundLocalizedModuleItem = false;
+    for (int i = 1; i < page.moduleFilterCombo_->count(); ++i) {
+        const QString displayText = page.moduleFilterCombo_->itemText(i).trimmed();
+        const QString rawValue = page.moduleFilterCombo_->itemData(i).toString().trimmed();
+        if (!displayText.isEmpty() && !rawValue.isEmpty() && displayText != rawValue
+            && chinesePattern.match(displayText).hasMatch()) {
+            foundLocalizedModuleItem = true;
+            break;
+        }
+    }
+    QVERIFY(foundLocalizedModuleItem);
 }
 
 void SearchPageRound5UiTest::detailPdfExportHelper_reportsStatuses()

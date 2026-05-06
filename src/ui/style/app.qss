@@ -796,14 +796,37 @@ QWidget#detailShell {
     background-color: #ffffff;
 }
 
-QWidget#searchFilterPanel QLabel {
-    color: #65707c;
+QWidget#searchFilterPanel {
+    border-color: #dfe7f0;
+    background-color: #fbfdff;
+}
+
+QLabel#searchFilterTitle {
+    color: #213246;
+    font-size: 16px;
+    font-weight: 620;
+}
+
+QLabel#searchFilterHint {
+    color: #7a8694;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 400;
     background: transparent;
 }
 
-QLabel#searchFilterTitle,
+QWidget#searchFilterCell {
+    border: 1px solid #e6ecf3;
+    border-radius: 12px;
+    background-color: #ffffff;
+}
+
+QLabel#searchFilterFieldLabel {
+    color: #647384;
+    font-size: 12px;
+    font-weight: 520;
+    background: transparent;
+}
+
 QLabel#searchResultsTitle,
 QLabel#detailShellTitle {
     color: #232a32;
@@ -812,18 +835,18 @@ QLabel#detailShellTitle {
 }
 
 QComboBox#searchFilterCombo {
-    min-height: 34px;
+    min-height: 32px;
     padding: 0 34px 0 12px;
-    border: 1px solid #d9e1e9;
+    border: 1px solid #d8e1eb;
     border-radius: 10px;
-    background-color: #ffffff;
+    background-color: #fbfdff;
     color: #2f353c;
     font-size: 13px;
 }
 
 QComboBox#searchFilterCombo:hover {
-    border-color: #c8d2dd;
-    background-color: #fcfdff;
+    border-color: #c5d4e4;
+    background-color: #ffffff;
 }
 
 QComboBox#searchFilterCombo:focus {
@@ -831,8 +854,43 @@ QComboBox#searchFilterCombo:focus {
 }
 
 QComboBox#searchFilterCombo::drop-down {
-    width: 24px;
+    width: 22px;
     border: none;
+}
+
+QComboBox#searchFilterCombo[comboRole="sort"] {
+    border-color: #d2dfef;
+    background-color: #f6f9fd;
+    color: #34506c;
+}
+
+QPushButton#searchFilterResetButton {
+    min-height: 28px;
+    min-width: 56px;
+    padding: 0 8px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #7a8898;
+    font-size: 12px;
+    font-weight: 540;
+}
+
+QPushButton#searchFilterResetButton:hover {
+    border-color: #d7e2ef;
+    background-color: #f3f7fc;
+    color: #4f657d;
+}
+
+QPushButton#searchFilterResetButton:pressed {
+    border-color: #c8d7e8;
+    background-color: #e9f1fa;
+    color: #435a74;
+}
+
+QPushButton#searchFilterResetButton:disabled {
+    color: #aab4bf;
+    background: transparent;
 }
 
 QPushButton#searchClearFiltersButton {

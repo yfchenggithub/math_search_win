@@ -11,6 +11,7 @@
 #### 已实现
 - 应用启动、主窗口装配、页面切换与跨页信号联动。
 - 搜索链路：关键词搜索、基础筛选、排序、结果展示；已支持 `intent + (title/alias/keyword)` 交叉加权。
+- 搜索页筛选区：左侧已采用“紧凑双列快速筛选卡”（仅模块 + 排序 + 顶部重置），减少冗余表单感并保留核心筛选语义。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
 - PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），并在详情头部提供“上一页/下一页/页码”导航控件，以及“导出PDF”按钮（当前展示 PDF 另存为；导出成功后弹窗提示并可直接打开导出目录）。
@@ -264,6 +265,7 @@ flowchart TD
 
 ### 5.4 页面实现状态
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
+- `SearchPage`：筛选区 UI 已收敛为双列快速筛选布局（仅模块 + 排序），`clearFiltersButton_` 以顶部“重置”弱操作呈现，业务逻辑不变。
 - `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮可循环切换三档；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
 - `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。
@@ -292,7 +294,7 @@ flowchart TD
 - 当前状态：已实现。
 - 机制细节：
   - 支持 term + prefix。
-  - 支持 module/category/tag 过滤（受 `AdvancedFilter` 功能门控）。
+  - 支持 module 过滤（受 `AdvancedFilter` 功能门控）。
   - `fieldMaskWeight` 已覆盖 `intent/usage/knowledge_node`（对应 bit 存在时生效；旧索引自动兼容）。
   - `SearchOptions` 新增 `enableIntentCrossBoost`（默认 `true`），当同一文档同时命中 `intent` 与 `title/alias/keyword` 时追加交叉加分。
   - 结果排序支持相关度/标题/难度（在 UI 层再次排序）。
@@ -315,7 +317,7 @@ flowchart TD
 - 当前状态补充：`SuggestService` 在 map 可用时会先执行 domain/topic 扩展（`source=domain_topic`，允许“域命中 -> topic 非前缀候选”），再合并原有 `indexed/prefix/term` 候选链路。
 - 质量控制补充：在 prefix/term 候选合并前会过滤未闭合括号半截词，并过滤“可被更长同义候选覆盖”的语义截断前缀（例如 `柯西不等`、`柯西不等式推`），降低脏候选进入 UI 的概率。
 - 风险/待确认：
-  - `optionalSuggestions()` 里的 `docId` 允许为空，当前实现会在有 module/category/tag 过滤时跳过此类 seed（见 `collectSuggestionSeedSignal`）。
+  - `optionalSuggestions()` 里的 `docId` 允许为空，当前实现会在有 module 过滤时跳过此类 seed（见 `collectSuggestionSeedSignal`）。
 
 ### 6.3 详情渲染链路
 

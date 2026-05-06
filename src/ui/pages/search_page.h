@@ -226,13 +226,10 @@ private:
     SortMode currentSortMode() const;
 
     QString selectedModuleFilter() const;
-    QString selectedCategoryFilter() const;
-    QString selectedTagFilter() const;
     QString filtersSignature() const;
     QString buildSuggestSignature(const QString& query) const;
     QString buildSearchSignature(const QString& query) const;
 
-    QStringList collectCategoryOptions() const;
     static QStringList uniqueSortedCaseInsensitive(const QStringList& values);
     static QString joinNonEmpty(const QStringList& values, const QString& separator);
     bool isFeatureEnabled(license::Feature feature) const;
@@ -306,8 +303,6 @@ private:
     QPushButton* favoriteButton_ = nullptr;
     QListWidget* suggestionList_ = nullptr;
     QComboBox* moduleFilterCombo_ = nullptr;
-    QComboBox* categoryFilterCombo_ = nullptr;
-    QComboBox* tagFilterCombo_ = nullptr;
     QComboBox* sortCombo_ = nullptr;
     QPushButton* clearFiltersButton_ = nullptr;
     QListWidget* resultList_ = nullptr;

@@ -48,7 +48,7 @@ sequenceDiagram
 - 输入框 `QLineEdit::textChanged` 绑定到 `SearchPage::onQueryTextChanged()`。
 - 搜索输入框启用 `QLineEdit::setClearButtonEnabled(true)`，右侧可一键清空当前关键词。
 - 非空输入触发 `SearchPage::runSuggest()`。
-- `runSuggest()` 组装 `SuggestOptions`（含 module/category/tag 过滤），调用 `SuggestService::suggest()`。
+- `runSuggest()` 组装 `SuggestOptions`（当前仅模块过滤），调用 `SuggestService::suggest()`。
 - Suggest 数据优先来自索引顶层 `suggestions`（`optionalSuggestions()`），不足时再回退 `prefixIndex` + `termIndex`。
 - `domain_topic_map.json` 在启动阶段由 `ConclusionIndexRepository` 尝试加载；Suggest 在 map 可用时会先做 domain/topic 扩展候选，再并入 `suggestions/prefix/term`（缺失/损坏时自动降级到扁平候选）。
 - Suggest 在 prefix/term 候选并入前会执行文本质量门，过滤未闭合括号半截词（如 `...(`、`...(分`）以及可被更长同义候选覆盖的语义截断前缀（如 `柯西不等`、`柯西不等式推`）。
@@ -83,6 +83,7 @@ sequenceDiagram
   - `onQueryReturnPressed()` -> `runSearch(..., "return")`
   - `onSuggestionClicked()` -> `runSearch(..., "suggest_click")`
   - `onFilterChanged()` 在高级筛选可用时触发 `runSearch(..., "filter_change")`
+- 筛选区结构（`buildUi()`）：左侧为“快速筛选”双列卡，仅保留 `模块` 与 `排序` 两个组合框；顶部 `clearFiltersButton_` 为“重置”弱操作按钮。
 - `runSearch()` 先做门控检查：
   - 必须至少启用 `BasicSearchPreview` 或 `FullSearch`。
 - `SearchService::search()` 评分补充：
