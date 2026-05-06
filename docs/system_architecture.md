@@ -12,7 +12,7 @@
 - 应用启动、主窗口装配、页面切换与跨页信号联动。
 - 搜索链路：关键词搜索、基础筛选、排序、结果展示；已支持 `intent + (title/alias/keyword)` 交叉加权。
 - 搜索页筛选区：左侧已采用“紧凑双列快速筛选卡”（仅模块 + 排序 + 顶部重置），减少冗余表单感并保留核心筛选语义。
-- 搜索结果展示：左侧结果区已改为多行卡片（标题 / 摘要 / 模块分类难度 / 标签 / 适用场景），标题后追加 `(当前条目/当前列表总条数)`，并支持关键词高亮。
+- 搜索结果展示：左侧结果区已改为紧凑多行卡片（标题 / 模块分类难度 / 标签 / 适用场景），标题后追加 `(当前条目/当前列表总条数)`，标签与适用默认最多展示 3 项（超出显示 `+N`），并支持关键词高亮。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
 - PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），详情头部提供“上一页/下一页/页码/适合宽度/导出PDF”等控件；PDF 成功加载后默认执行一次 `FitToWidth`。
@@ -269,7 +269,7 @@ flowchart TD
 - `SearchPage`：已接入真实搜索、建议、详情、收藏、历史、授权门控。
 - `SearchPage`：筛选区 UI 已收敛为双列快速筛选布局（仅模块 + 排序），`clearFiltersButton_` 以顶部“重置”弱操作呈现，业务逻辑不变。
 - `SearchPage`：结果区摘要在普通模式显示“已显示 X / 共 Y 条相关结论 / 关键词 / 筛选 / 排序”；开发模式（`APP_ENV=dev/debug/development`）保留 `query/shown/total/elapsed` 调试字段。
-- `SearchPage`：结果列表由纯文本切换为卡片化渲染（`buildResultCard()`），并通过 `highlightKeyword()` 在标题/摘要/标签中做高亮展示。
+- `SearchPage`：结果列表由纯文本切换为卡片化渲染（`buildResultCard()`），并通过 `highlightKeyword()` 在标题/标签/适用中做高亮展示。
 - `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮可循环切换三档；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码/适合宽度）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
 - `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。

@@ -2296,8 +2296,8 @@ QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
     const QString difficultyText = QStringLiteral("难度 %1").arg(QString::number(hit.difficulty, 'f', 1));
 
     const QStringList effectiveTags = cardViewPtr == nullptr || cardViewPtr->tags.isEmpty() ? hit.tags : cardViewPtr->tags;
-    const QString tagsText = limitTagText(effectiveTags, 4, QStringLiteral(" / "));
-    const QString usageText = limitTagText(buildUsageTerms(hit, cardViewPtr), 4, QStringLiteral(" / "));
+    const QString tagsText = limitTagText(effectiveTags, 3, QStringLiteral(" · "));
+    const QString usageText = limitTagText(buildUsageTerms(hit, cardViewPtr), 3, QStringLiteral(" · "));
 
     auto* card = new QWidget(parent);
     card->setObjectName(QStringLiteral("searchResultCard"));
@@ -2319,14 +2319,11 @@ QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
                                          .arg(safeIndex)
                                          .arg(safeTotal)
                                    : QString();
-    titleLabel->setText(QStringLiteral("%1  %2%3")
-                            .arg(cardId.toHtmlEscaped(), highlightKeyword(titleText, highlightTerms), rankSuffix));
-
-    auto* summaryLabel = new QLabel(card);
-    summaryLabel->setObjectName(QStringLiteral("searchResultCardFormula"));
-    summaryLabel->setWordWrap(true);
-    summaryLabel->setTextFormat(Qt::RichText);
-    summaryLabel->setText(highlightKeyword(summaryText, highlightTerms));
+    const QString styledIdToken =
+        QStringLiteral("<span style=\"display:inline-block;background:#e8f1ff;color:#1f4f86;"
+                       "border-radius:6px;padding:1px 7px;font-size:12px;font-weight:620;\">%1</span>")
+            .arg(cardId.toHtmlEscaped());
+    titleLabel->setText(QStringLiteral("%1&nbsp;&nbsp;%2%3").arg(styledIdToken, highlightKeyword(titleText, highlightTerms), rankSuffix));
 
     auto* metaLabel = new QLabel(card);
     metaLabel->setObjectName(QStringLiteral("searchResultCardMeta"));
@@ -2346,7 +2343,6 @@ QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
     usageLabel->setText(QStringLiteral("适用：%1").arg(highlightKeyword(usageText, highlightTerms)));
 
     cardLayout->addWidget(titleLabel);
-    cardLayout->addWidget(summaryLabel);
     cardLayout->addWidget(metaLabel);
     cardLayout->addWidget(tagsLabel);
     cardLayout->addWidget(usageLabel);
@@ -2361,6 +2357,49 @@ QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
     }
 
     return card;
+}
+
+int SearchPage::resultCardPreferredWidth() const
+{
+    if (resultList_ == nullptr || resultList_->viewport() == nullptr) {
+        return 360;
+    }
+
+    const int viewportWidth = resultList_->viewport()->contentsRect().width();
+    const int cardOuterPadding = 24;
+    int preferredWidth = viewportWidth - cardOuterPadding;
+
+    QScrollBar* verticalBar = resultList_->verticalScrollBar();
+    if (verticalBar != nullptr && !verticalBar->isVisible()) {
+        preferredWidth -= style()->pixelMetric(QStyle::PM_ScrollBarExtent, nullptr, resultList_);
+    }
+
+    return std::max(320, preferredWidth);
+}
+
+void SearchPage::relayoutResultCardsToViewport()
+{
+    if (resultList_ == nullptr || resultList_->count() <= 0) {
+        return;
+    }
+
+    const int preferredWidth = resultCardPreferredWidth();
+    for (int i = 0; i < resultList_->count(); ++i) {
+        QListWidgetItem* item = resultList_->item(i);
+        if (item == nullptr) {
+            continue;
+        }
+
+        QWidget* cardWidget = resultList_->itemWidget(item);
+        if (cardWidget == nullptr) {
+            continue;
+        }
+
+        cardWidget->setMinimumWidth(preferredWidth);
+        cardWidget->setMaximumWidth(preferredWidth);
+        cardWidget->adjustSize();
+        item->setSizeHint(QSize(preferredWidth, std::max(96, cardWidget->sizeHint().height() + 10)));
+    }
 }
 
 void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)

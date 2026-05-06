@@ -169,6 +169,8 @@ private:
                              int totalCount,
                              qint64 elapsedMs,
                              bool hasResults);
+    int resultCardPreferredWidth() const;
+    void relayoutResultCardsToViewport();
     void renderResults(const QVector<domain::models::SearchHit>& hits);
     QWidget* buildResultCard(const domain::models::SearchHit& hit,
                              const QStringList& highlightTerms,
