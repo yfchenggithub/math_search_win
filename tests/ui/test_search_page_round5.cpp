@@ -4,6 +4,7 @@
 #include "domain/repositories/history_repository.h"
 #include "domain/services/search_service.h"
 #include "domain/services/suggest_service.h"
+#include "infrastructure/data/conclusion_content_repository.h"
 #include "infrastructure/data/conclusion_index_repository.h"
 #include "ui/detail/detail_html_renderer.h"
 #include "ui/detail/detail_pane.h"
@@ -577,11 +578,19 @@ void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabl
 
     QVERIFY(page.detailPdfPrevButton_ != nullptr);
     QVERIFY(page.detailPdfNextButton_ != nullptr);
+    QVERIFY(page.detailPdfFitWidthButton_ != nullptr);
     QVERIFY(page.detailPdfExportButton_ != nullptr);
+    QVERIFY(page.detailFontButton_ != nullptr);
+    QVERIFY(page.detailFullscreenButton_ != nullptr);
+    QVERIFY(page.favoriteButton_ != nullptr);
     QVERIFY(page.detailPdfPageLabel_ != nullptr);
     QVERIFY(!page.detailPdfPrevButton_->isEnabled());
     QVERIFY(!page.detailPdfNextButton_->isEnabled());
+    QVERIFY(!page.detailPdfFitWidthButton_->isEnabled());
     QVERIFY(!page.detailPdfExportButton_->isEnabled());
+    QVERIFY(!page.detailFontButton_->isEnabled());
+    QVERIFY(!page.detailFullscreenButton_->isEnabled());
+    QVERIFY(!page.favoriteButton_->isEnabled());
     QCOMPARE(page.detailPdfPageLabel_->text(), QStringLiteral("PDF --/--"));
 }
 
@@ -593,18 +602,24 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
 
     infrastructure::data::ConclusionIndexRepository indexRepository;
+    infrastructure::data::ConclusionContentRepository contentRepository;
     QVERIFY(indexRepository.loadFromFile());
+    QVERIFY(contentRepository.loadFromFile());
     domain::services::SearchService searchService(&indexRepository);
     domain::services::SuggestService suggestService(&indexRepository);
-    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+    SearchPage page(&searchService, &suggestService, &contentRepository, &indexRepository, nullptr, nullptr, nullptr);
 
     QVERIFY(page.detailFullscreenButton_ != nullptr);
     QVERIFY(page.searchTopBar_ != nullptr);
     QVERIFY(page.searchLeftColumn_ != nullptr);
     QVERIFY(page.detailShell_ != nullptr);
     QVERIFY(page.searchWorkbenchSplitter_ != nullptr);
+    QVERIFY(page.queryInput_ != nullptr);
+    QVERIFY(page.searchButton_ != nullptr);
+    QVERIFY(page.resultList_ != nullptr);
     QCOMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
     QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(!page.detailFullscreenButton_->isEnabled());
 
     page.show();
     QTRY_VERIFY(page.isVisible());
@@ -612,6 +627,12 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QVERIFY(page.searchTopBar_->isVisible());
     QVERIFY(page.searchLeftColumn_->isVisible());
     QVERIFY(page.detailShell_->isVisible());
+
+    page.queryInput_->setText(QStringLiteral("exact term"));
+    QTest::mouseClick(page.searchButton_, Qt::LeftButton);
+    QTRY_VERIFY(page.resultList_->count() > 0);
+    QTRY_COMPARE(page.resultList_->currentRow(), 0);
+    QTRY_VERIFY(page.detailFullscreenButton_->isEnabled());
 
     QTest::mouseClick(page.detailFullscreenButton_, Qt::LeftButton);
     QTRY_VERIFY(page.detailPaneFullscreen_);
@@ -640,13 +661,25 @@ void SearchPageRound5UiTest::detailFontButton_cyclesLevels()
     QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
 
     infrastructure::data::ConclusionIndexRepository indexRepository;
+    infrastructure::data::ConclusionContentRepository contentRepository;
     QVERIFY(indexRepository.loadFromFile());
+    QVERIFY(contentRepository.loadFromFile());
     domain::services::SearchService searchService(&indexRepository);
     domain::services::SuggestService suggestService(&indexRepository);
-    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+    SearchPage page(&searchService, &suggestService, &contentRepository, &indexRepository, nullptr, nullptr, nullptr);
 
     QVERIFY(page.detailFontButton_ != nullptr);
+    QVERIFY(page.queryInput_ != nullptr);
+    QVERIFY(page.searchButton_ != nullptr);
+    QVERIFY(page.resultList_ != nullptr);
     QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(!page.detailFontButton_->isEnabled());
+
+    page.queryInput_->setText(QStringLiteral("exact term"));
+    QTest::mouseClick(page.searchButton_, Qt::LeftButton);
+    QTRY_VERIFY(page.resultList_->count() > 0);
+    QTRY_COMPARE(page.resultList_->currentRow(), 0);
+    QTRY_VERIFY(page.detailFontButton_->isEnabled());
 
     QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
     QCOMPARE(page.detailFontScaleLevel_, 2);

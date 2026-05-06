@@ -29,6 +29,13 @@ TopBar::TopBar(QWidget* parent) : QWidget(parent)
 void TopBar::setPageTitle(const QString& title, const QString& subtitle)
 {
     titleLabel_->setText(title);
-    subtitleLabel_->setText(subtitle.isEmpty() ? UiConstants::kDefaultTopSubtitle : subtitle);
+    const QString normalizedSubtitle = subtitle.trimmed();
+    if (normalizedSubtitle.isEmpty()) {
+        subtitleLabel_->clear();
+        subtitleLabel_->setVisible(false);
+    } else {
+        subtitleLabel_->setText(normalizedSubtitle);
+        subtitleLabel_->setVisible(true);
+    }
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("setPageTitle title=%1").arg(title));
 }

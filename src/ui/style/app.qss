@@ -932,28 +932,58 @@ QListWidget#resultList {
     border: 1px solid #e7edf3;
     border-radius: 12px;
     background-color: #fbfcfd;
-    padding: 6px;
+    padding: 8px;
     outline: none;
 }
 
 QListWidget#resultList::item {
-    margin: 3px 0;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid transparent;
+    margin: 6px 0;
+    padding: 12px 12px;
+    border-radius: 12px;
+    border: 1px solid #e7edf4;
     color: #25303a;
-    background: transparent;
+    background: #ffffff;
 }
 
 QListWidget#resultList::item:hover {
-    border-color: #d7e1eb;
-    background-color: #f3f7fc;
+    border-color: #d0dcea;
+    background-color: #f6f9fe;
 }
 
 QListWidget#resultList::item:selected {
-    border-color: #bfd2ea;
-    background-color: #e9f1fc;
+    border-color: #77a4dd;
+    background-color: #eaf3ff;
     color: #1e2832;
+}
+
+QWidget#searchResultCard {
+    background: transparent;
+}
+
+QLabel#searchResultCardTitle {
+    color: #1f2b37;
+    font-size: 15px;
+    font-weight: 630;
+}
+
+QLabel#searchResultCardFormula {
+    color: #3a4755;
+    font-size: 13px;
+    font-weight: 450;
+    max-height: 34px;
+}
+
+QLabel#searchResultCardMeta {
+    color: #7a8592;
+    font-size: 12px;
+    font-weight: 450;
+}
+
+QLabel#searchResultCardTags,
+QLabel#searchResultCardUsage {
+    color: #55616f;
+    font-size: 12px;
+    font-weight: 420;
 }
 
 QWidget#searchResultsPanel QWidget#emptyState {

@@ -10,6 +10,7 @@ class BottomStatusBar : public QWidget {
 
 public:
     explicit BottomStatusBar(QWidget* parent = nullptr);
+    void setModeStatusText(const QString& text);
     void setDataStatusText(const QString& text);
     void setVersionStatusText(const QString& text);
 

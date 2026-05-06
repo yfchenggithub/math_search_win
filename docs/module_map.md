@@ -26,13 +26,13 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `MainWindow` | `src/ui/main_window.h/.cpp` | 装配服务与页面、管理页面切换、跨页信号编排 | `main()` | `SearchService`/`SuggestService`/`LicenseService`/各 Page | `setupPages`、`loadSearchData`、`switchPageWithTrigger` |
+| `MainWindow` | `src/ui/main_window.h/.cpp` | 装配服务与页面、管理页面切换、跨页信号编排、底部状态栏普通/开发双模式文案切换（`APP_ENV`） | `main()` | `SearchService`/`SuggestService`/`LicenseService`/各 Page | `setupPages`、`loadSearchData`、`updateBottomStatusBar`、`switchPageWithTrigger` |
 
 ### 2.2 页面类
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、左侧快速筛选双列卡（仅模块/排序 + 重置）、详情字体（默认全屏大档/非全屏小档，`Aa` 三档循环 + `Ctrl+滚轮` 连续缩放）与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`exportPdfToPath`、`onPdfExportButtonClicked`、`onDetailFontButtonClicked`、`eventFilter`、`tryAdjustDetailFontScaleByWheelDelta`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、左侧快速筛选双列卡（仅模块/排序 + 重置）、结果卡片化渲染与关键词高亮、详情工具栏状态一致性（未选中禁用）、详情字体（默认全屏大档/非全屏小档，`Aa` 三档循环 + `Ctrl+滚轮` 连续缩放）与渲染模式持久化、PDF 页码导航/适合宽度/导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`updateResultSummary`、`buildResultCard`、`highlightKeyword`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`applyPdfFitToWidth`、`updatePdfPageNavigationUi`、`updateDetailToolbarState`、`exportPdfToPath`、`onPdfExportButtonClicked`、`onDetailFontButtonClicked`、`eventFilter`、`tryAdjustDetailFontScaleByWheelDelta`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页信任信息展示、主搜索入口、价值证明卡片、最近/收藏预览与导航分发 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `setupHeroSection`、`setupQuickActionsSection`、`reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、一键清空、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId`、`handleClearAll` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |

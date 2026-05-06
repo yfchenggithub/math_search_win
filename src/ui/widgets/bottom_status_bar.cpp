@@ -29,6 +29,14 @@ BottomStatusBar::BottomStatusBar(QWidget* parent) : QWidget(parent)
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("BottomStatusBar constructor complete"));
 }
 
+void BottomStatusBar::setModeStatusText(const QString& text)
+{
+    if (modeLabel_ == nullptr) {
+        return;
+    }
+    modeLabel_->setText(text.trimmed().isEmpty() ? QStringLiteral("本地离线模式") : text.trimmed());
+}
+
 void BottomStatusBar::setDataStatusText(const QString& text)
 {
     if (dataStatusLabel_ == nullptr) {

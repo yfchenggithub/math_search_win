@@ -11,6 +11,9 @@
 - `main()` 调用 `window.showMaximized()`，应用启动默认最大化（非独占全屏）。
 - `MainWindow::switchPageWithTrigger(kPageHome, "startup_default")` 设置首页。
 - 首页首屏结构（`HomePage`）：信任头部（离线/快速/覆盖标签）+ 主搜索入口按钮 + 价值证明卡片 + 最近/收藏预览。
+- 底部状态栏展示分两档：
+  - 普通模式（默认）：`本地离线可用 · 已加载 N 条结论 · 数据就绪`
+  - 开发模式（`APP_ENV=dev/debug/development`）：保留原始调试串（如 `content/index/modules/domain_topic`）
 
 ```mermaid
 sequenceDiagram
@@ -86,6 +89,10 @@ sequenceDiagram
 - 筛选区结构（`buildUi()`）：左侧为“快速筛选”双列卡，仅保留 `模块` 与 `排序` 两个组合框；顶部 `clearFiltersButton_` 为“重置”弱操作按钮。
 - `runSearch()` 先做门控检查：
   - 必须至少启用 `BasicSearchPreview` 或 `FullSearch`。
+- 结果摘要 UI：
+  - 普通模式显示“找到 X 条相关结论 / 关键词 / 筛选 / 排序”
+  - 开发模式保留 `query/total/elapsed` 等调试字段
+- 结果列表 UI：`renderResults()` 以多行卡片呈现（标题、摘要、模块/分类/难度、标签、适用场景），并在标题/摘要/标签做关键词高亮（仅展示层，不改原始数据）。
 - `SearchService::search()` 评分补充：
   - `fieldMaskWeight` 支持 `intent/usage/knowledge_node`（bit 存在时才生效）
   - `enableIntentCrossBoost=true` 时，`intent` 与 `title/alias/keyword` 共命中文档会追加交叉加分
@@ -120,6 +127,11 @@ flowchart TD
 - PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
+- PDF 适合宽度：新增 `onPdfFitWidthClicked()` -> `applyPdfFitToWidth()`；在 `renderDetailInPdfView()` 成功后默认执行一次 `FitToWidth`。
+- 详情工具栏状态一致性：
+  - 未选中结果：`Aa- / 全屏 / 上一页 / 下一页 / 适合宽度 / 导出PDF / 收藏当前结论` 均禁用，页码固定 `PDF --/--`。
+  - 选中结果但当前非 PDF：页码显示 `PDF 暂不可用`。
+  - 选中结果且 PDF 可用：页码显示 `PDF 当前页/总页数`。
 - PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），内部通过 `exportPdfToPath()` 统一处理“缺源文件 / 同路径 / 覆盖失败 / 复制失败 / 成功”分支；成功后更新状态栏并弹出成功提示框，弹框提供“打开导出目录”按钮。
 - 详情字体调节：
   - `Aa` 按钮通过 `onDetailFontButtonClicked()` 做三档循环（`2 -> 1 -> 0 -> 2`），同时清零滚轮连续缩放偏移。

@@ -45,6 +45,7 @@ private:
     void updateBottomStatusBar() const;
     QString titleForPage(int pageIndex) const;
     QString subtitleForPage(int pageIndex) const;
+    bool isDevMode() const;
 
     infrastructure::data::ConclusionIndexRepository indexRepository_;
     infrastructure::data::ConclusionContentRepository contentRepository_;
@@ -59,6 +60,7 @@ private:
     bool contentLoaded_ = false;
     bool webReady_ = false;
     bool runtimeLayoutHealthy_ = true;
+    bool isDevMode_ = false;
     int currentPageIndex_ = -1;
     QString startupStatusLine_;
     QString runtimeStatusLine_;

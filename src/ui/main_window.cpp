@@ -21,6 +21,18 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+namespace {
+
+bool isDevModeEnvEnabled()
+{
+    const QString appEnv = qEnvironmentVariable("APP_ENV").trimmed().toLower();
+    return appEnv == QStringLiteral("dev")
+        || appEnv == QStringLiteral("debug")
+        || appEnv == QStringLiteral("development");
+}
+
+}  // namespace
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
       searchService_(&indexRepository_),
@@ -28,6 +40,7 @@ MainWindow::MainWindow(QWidget* parent)
       licenseService_(&deviceFingerprintService_)
 {
     LOG_DEBUG(LogCategory::UiMainWindow, QStringLiteral("main_window ctor_begin"));
+    isDevMode_ = isDevModeEnvEnabled();
 
     resize(UiConstants::kDefaultWindowWidth, UiConstants::kDefaultWindowHeight);
     setWindowTitle(UiConstants::kAppTitle);
@@ -387,13 +400,31 @@ void MainWindow::updateBottomStatusBar() const
         return;
     }
 
-    bottomStatusBar_->setDataStatusText(startupStatusLine_);
+    if (isDevMode()) {
+        bottomStatusBar_->setModeStatusText(QStringLiteral("本地离线模式"));
+        bottomStatusBar_->setDataStatusText(startupStatusLine_);
+        if (indexLoaded_ && contentLoaded_ && runtimeLayoutHealthy_) {
+            bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据就绪"));
+        } else if (!runtimeLayoutHealthy_) {
+            bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 运行目录异常"));
+        } else {
+            bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据异常"));
+        }
+        return;
+    }
+
+    bottomStatusBar_->setModeStatusText(QStringLiteral("本地离线可用"));
     if (indexLoaded_ && contentLoaded_ && runtimeLayoutHealthy_) {
-        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据就绪"));
+        bottomStatusBar_->setDataStatusText(QStringLiteral("· 已加载 %1 条结论").arg(contentRepository_.size()));
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("· 数据就绪"));
     } else if (!runtimeLayoutHealthy_) {
-        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 运行目录异常"));
+        bottomStatusBar_->setDataStatusText(runtimeStatusLine_.trimmed().isEmpty()
+                                                ? QStringLiteral("· 运行目录异常")
+                                                : QStringLiteral("· %1").arg(runtimeStatusLine_.trimmed()));
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("· 请检查运行目录"));
     } else {
-        bottomStatusBar_->setVersionStatusText(QStringLiteral("MVP v0.1 · 数据异常"));
+        bottomStatusBar_->setDataStatusText(QStringLiteral("· 离线数据加载异常"));
+        bottomStatusBar_->setVersionStatusText(QStringLiteral("· 请检查索引与内容文件"));
     }
 }
 
@@ -498,7 +529,7 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     case UiConstants::kPageHome:
         return QStringLiteral("主路径入口：先搜索，再回访最近和收藏");
     case UiConstants::kPageSearch:
-        return QStringLiteral("本页已接入本地检索与 WebEngine 详情渲染");
+        return isDevMode() ? QStringLiteral("本页已接入本地检索与 WebEngine 详情渲染") : QString();
     case UiConstants::kPageFavorites:
         return QStringLiteral("收藏的二级结论，便于回看与复习");
     case UiConstants::kPageRecentSearches:
@@ -510,4 +541,9 @@ QString MainWindow::subtitleForPage(int pageIndex) const
     default:
         return UiConstants::kDefaultTopSubtitle;
     }
+}
+
+bool MainWindow::isDevMode() const
+{
+    return isDevMode_;
 }

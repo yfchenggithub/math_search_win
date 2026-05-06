@@ -32,7 +32,10 @@ powershell .\run-debug.ps1
 - 检查左侧“快速筛选”区域是否仅保留“模块 + 排序”两项，且顶部“重置”按钮可点击。
 - 搜索框右侧清空按钮可用（非空时显示，点击后清空）。
 - 点击结果，确认右侧详情显示（Web 或 fallback）。
+- 未选中结果时，确认详情工具栏（`Aa-/全屏/上一页/下一页/适合宽度/导出PDF/收藏`）均禁用，页码显示 `PDF --/--`。
+- 选中结果后，确认详情工具栏恢复可用；若当前非 PDF 分支，页码显示 `PDF 暂不可用`。
 - 当使用 PDF 渲染时，确认详情区可滚动跨页，且“上一页/下一页”按钮可用（多页 PDF）。
+- 当使用 PDF 渲染时，确认默认先执行一次“适合宽度”，并可点击“适合宽度”按钮再次贴合容器宽度。
 - 当使用 PDF 渲染时，点击“导出PDF”并保存到临时路径，确认可生成副本文件；导出成功后弹出提示框，且可通过“打开导出目录”按钮直接定位文件目录。
 - 点击详情区“全屏”，确认字体自动切换为大档；退出全屏后自动切回小档。
 - 点击 `Aa` 按钮，确认可循环切换三档（`2 -> 1 -> 0 -> 2`）。
@@ -59,6 +62,8 @@ powershell .\run-debug.ps1
 - UI 入口在 `SearchPage`：
   - 输入变化：`onQueryTextChanged()` -> `runSuggest()`
   - 执行搜索：`onQueryReturnPressed/onSearchButtonClicked/onSuggestionClicked` -> `runSearch()`
+  - 结果摘要：`updateResultSummary()`（普通模式显示“找到 X 条 / 关键词 / 筛选 / 排序”，开发模式保留 `query/elapsed`）
+  - 结果卡片：`buildResultCard()` + `highlightKeyword()`
   - 快速筛选：仅 `module` 筛选 + `sort` 排序在左栏快速筛选卡，`clearFiltersButton_` 负责一键重置筛选条件
 - 算法在 `SearchService::search()`：
   - `termIndex + prefixIndex` 合并评分
@@ -86,8 +91,9 @@ powershell .\run-debug.ps1
 - 渲染模式：
   - PDF 模式（默认）：`QPdfView` + `QPdfDocument`，路径由 `resolveDetailPdfPath()` 解析
     - 视图模式：`QPdfView::PageMode::MultiPage`
+    - 宽度贴合：`applyPdfFitToWidth()`（加载成功后默认执行；也可通过 `onPdfFitWidthClicked()` 手动触发）
     - 翻页入口：`onPdfPrevPageClicked` / `onPdfNextPageClicked` -> `jumpToPdfPage`
-    - 状态刷新：`updatePdfPageNavigationUi`（页码文本与按钮可用性）
+    - 状态刷新：`updatePdfPageNavigationUi`（`PDF --/--` / `PDF 暂不可用` / `PDF x/y` 与按钮可用性）
     - 导出入口：`onPdfExportButtonClicked`（读取 `currentDetailPdfPath_` 后执行“另存为”复制；成功后弹窗提示并提供“打开导出目录”）
     - 字体滚轮入口：`eventFilter` -> `tryAdjustDetailFontScaleByWheelDelta`（详情区 `Ctrl + 鼠标滚轮`）
     - 全屏入口：`onDetailFullscreenButtonClicked`；快捷键 `F11` 切换，`Esc` 退出（`leaveDetailFullscreen`）
@@ -184,6 +190,10 @@ powershell .\run-debug.ps1
 ### 设置不持久化怎么办
 - 当前并非“完全不持久化”：`SearchPage` 会写入 `detail_font_scale_level` 与 `detail_font_wheel_ticks`；运行时默认按详情全屏状态切换大/小档，`Aa` 支持三档循环，详情区 `Ctrl + 鼠标滚轮` 支持连续缩放。
 - 若要把“设置/关于”扩展成完整可编辑设置页，仍需在 `SettingsPage` 增加交互并调用 `SettingsRepository::setValue/save`。
+
+### 底部状态栏文案不一致怎么办
+- 默认普通模式：`本地离线可用 · 已加载 N 条结论 · 数据就绪`。
+- 若需显示详细调试串，设置环境变量：`APP_ENV=dev`（也支持 `debug/development`）。
 
 ### 设置页日志目录打不开怎么办
 - 断点 `SettingsPage::buildDataInfoSection` 中 `openLogDirButton_` 的 clicked lambda。

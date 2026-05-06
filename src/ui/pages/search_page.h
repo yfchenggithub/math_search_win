@@ -106,6 +106,7 @@ private slots:
     void onDetailFullscreenButtonClicked();
     void onPdfPrevPageClicked();
     void onPdfNextPageClicked();
+    void onPdfFitWidthClicked();
     void onPdfExportButtonClicked();
     void flushPendingDetailRequest();
 
@@ -163,7 +164,12 @@ private:
     void runSuggest(const QString& query);
     void runSearch(const QString& query, const QString& triggerSource);
     void clearSuggestions();
+    void updateResultSummary(const QString& query, int total, qint64 elapsedMs, bool hasResults);
     void renderResults(const QVector<domain::models::SearchHit>& hits);
+    QWidget* buildResultCard(const domain::models::SearchHit& hit,
+                             const QStringList& highlightTerms,
+                             QWidget* parent) const;
+    QString highlightKeyword(const QString& text, const QStringList& terms) const;
     void enqueueDetailRenderRequest(const QString& docId);
     void renderDetailForRequest(const QString& docId, quint64 requestId, qint64 selectionTimestampMs);
     bool renderDetailInPdfView(const QString& docId,
@@ -175,6 +181,10 @@ private:
     QString resolveDetailPdfPath(const QString& docId, const domain::adapters::ConclusionDetailViewData& detailView) const;
     void jumpToPdfPage(int pageIndex);
     void updatePdfPageNavigationUi();
+    void updateDetailToolbarState();
+    void setDetailEmptyState(const QString& message);
+    void setDetailReadyState();
+    void applyPdfFitToWidth(bool silentStatus = false);
     void resetWebDetailViewportToTop();
     void resetPdfDetailViewportToTop();
     void resetFallbackDetailViewportToTop();
@@ -246,6 +256,7 @@ private:
     void enterDetailFullscreen();
     void syncDetailFullscreenButtonState();
     void leaveDetailFullscreen();
+    bool isDevMode() const;
 
 private:
     domain::services::SearchService* searchService_ = nullptr;
@@ -264,6 +275,7 @@ private:
     bool webDetailEnabled_ = false;
     bool pdfDetailEnabled_ = false;
     bool hasPendingDetailRequest_ = false;
+    bool isDevMode_ = false;
     ui::detail::DetailRenderMode detailRenderMode_ = ui::detail::DetailRenderMode::Pdf;
     QString detailPdfDirectory_;
 
@@ -282,6 +294,7 @@ private:
 
     QString lastSuggestSignature_;
     QString lastSearchSignature_;
+    QString lastSearchQuery_;
     QVector<domain::models::SearchHit> currentHits_;
 
     QLineEdit* queryInput_ = nullptr;
@@ -294,6 +307,7 @@ private:
     QPushButton* detailFullscreenButton_ = nullptr;
     QPushButton* detailPdfPrevButton_ = nullptr;
     QPushButton* detailPdfNextButton_ = nullptr;
+    QPushButton* detailPdfFitWidthButton_ = nullptr;
     QPushButton* detailPdfExportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
@@ -328,6 +342,7 @@ private:
     int detailFontScaleLevel_ = 1;
     int detailFontWheelTicks_ = 0;
     int detailBrowserAppliedWheelTicks_ = 0;
+    qreal detailPdfFitWidthBaseZoom_ = 1.0;
     bool detailPaneFullscreen_ = false;
     QList<int> detailPaneNormalSplitterSizes_;
 };

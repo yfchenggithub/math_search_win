@@ -42,6 +42,7 @@
 #include <QPdfDocument>
 #include <QPdfPageNavigator>
 #include <QPdfView>
+#include <QRegularExpression>
 #include <QShortcut>
 #include <QSet>
 #include <QSignalBlocker>
@@ -369,6 +370,115 @@ QString webFallbackUserMessage(const QString& reason)
     return QStringLiteral("详情 Web 渲染不可用，已切换到兼容详情模式。");
 }
 
+bool isDevModeEnvEnabled()
+{
+    const QString appEnv = qEnvironmentVariable("APP_ENV").trimmed().toLower();
+    return appEnv == QStringLiteral("dev")
+        || appEnv == QStringLiteral("debug")
+        || appEnv == QStringLiteral("development");
+}
+
+QStringList extractHighlightTerms(const QString& query)
+{
+    const QString trimmedQuery = query.trimmed();
+    if (trimmedQuery.isEmpty()) {
+        return {};
+    }
+
+    QStringList terms = trimmedQuery.split(QRegularExpression(QStringLiteral("[\\s,，;；、]+")), Qt::SkipEmptyParts);
+    QSet<QString> dedupe;
+    QStringList uniqueTerms;
+    uniqueTerms.reserve(terms.size());
+    for (const QString& term : terms) {
+        const QString normalized = term.trimmed();
+        if (normalized.isEmpty() || dedupe.contains(normalized)) {
+            continue;
+        }
+        dedupe.insert(normalized);
+        uniqueTerms.push_back(normalized);
+    }
+    terms = uniqueTerms;
+    std::sort(terms.begin(), terms.end(), [](const QString& lhs, const QString& rhs) {
+        if (lhs.size() != rhs.size()) {
+            return lhs.size() > rhs.size();
+        }
+        return lhs < rhs;
+    });
+    return terms;
+}
+
+QString limitTagText(const QStringList& tags, int maxVisible, const QString& separator)
+{
+    if (tags.isEmpty() || maxVisible <= 0) {
+        return QStringLiteral("—");
+    }
+
+    QStringList normalizedTags;
+    normalizedTags.reserve(tags.size());
+    for (const QString& raw : tags) {
+        const QString trimmed = raw.trimmed();
+        if (!trimmed.isEmpty()) {
+            normalizedTags.push_back(trimmed);
+        }
+    }
+    if (normalizedTags.isEmpty()) {
+        return QStringLiteral("—");
+    }
+
+    const int shownCount = std::min(maxVisible, static_cast<int>(normalizedTags.size()));
+    QString text = normalizedTags.mid(0, shownCount).join(separator);
+    const int hiddenCount = normalizedTags.size() - shownCount;
+    if (hiddenCount > 0) {
+        text.append(QStringLiteral(" +%1").arg(hiddenCount));
+    }
+    return text;
+}
+
+QStringList buildUsageTerms(const domain::models::SearchHit& hit,
+                            const domain::adapters::ConclusionCardViewData* cardView)
+{
+    QStringList terms;
+    QSet<QString> dedupe;
+
+    const auto addTerm = [&terms, &dedupe](const QString& value) {
+        const QString normalized = value.trimmed();
+        if (normalized.isEmpty() || dedupe.contains(normalized)) {
+            return;
+        }
+        dedupe.insert(normalized);
+        terms.push_back(normalized);
+    };
+
+    if (cardView != nullptr) {
+        for (const QString& keyword : cardView->searchKeywords) {
+            addTerm(keyword);
+        }
+        for (const QString& alias : cardView->aliases) {
+            addTerm(alias);
+        }
+        for (const QString& tag : cardView->tags) {
+            addTerm(tag);
+        }
+    }
+
+    for (const QString& tag : hit.tags) {
+        addTerm(tag);
+    }
+
+    if (!hit.category.trimmed().isEmpty()) {
+        addTerm(hit.category);
+    }
+
+    if (!hit.module.trimmed().isEmpty()) {
+        addTerm(moduleDisplayName(hit.module));
+    }
+
+    while (terms.size() > 4) {
+        terms.removeLast();
+    }
+    return terms;
+}
+
 }  // namespace
 
 SearchPage::SearchPage(domain::services::SearchService* searchService,
@@ -389,6 +499,7 @@ SearchPage::SearchPage(domain::services::SearchService* searchService,
     ui::style::ensureAppStyleSheetLoaded();
     setObjectName(QStringLiteral("searchPage"));
     setProperty("pageRole", QStringLiteral("search"));
+    isDevMode_ = isDevModeEnvEnabled();
     detailPdfDirectory_ = detailPdfDirectoryFromEnvOrDefault();
     loadDetailFontScaleSetting();
     loadDetailRenderModeSetting();
@@ -639,6 +750,7 @@ void SearchPage::openConclusionById(const QString& conclusionId)
 
     currentHits_.clear();
     currentHits_.push_back(std::move(hit));
+    lastSearchQuery_ = queryInput_ == nullptr ? QString() : queryInput_->text().trimmed();
     renderResults(currentHits_);
 
     if (resultList_ != nullptr && resultList_->count() > 0) {
@@ -647,9 +759,15 @@ void SearchPage::openConclusionById(const QString& conclusionId)
         enqueueDetailRenderRequest(normalizedId);
     }
 
-    const QString moduleText = doc->module.trimmed().isEmpty() ? QStringLiteral("-") : doc->module.trimmed();
-    updateStatusLine(QStringLiteral("已打开收藏结论。"),
-                     QStringLiteral("conclusionId=%1 | module=%2").arg(normalizedId, moduleText));
+    const QString moduleText = doc->module.trimmed().isEmpty() ? QStringLiteral("未标注模块")
+                                                                : moduleDisplayName(doc->module);
+    if (isDevMode()) {
+        updateStatusLine(QStringLiteral("已打开收藏结论。"),
+                         QStringLiteral("conclusionId=%1 | module=%2").arg(normalizedId, moduleText));
+    } else {
+        updateStatusLine(QStringLiteral("已打开收藏结论。"),
+                         QStringLiteral("模块：%1").arg(moduleText));
+    }
 
     LOG_INFO(LogCategory::SearchEngine,
              QStringLiteral("open conclusion from favorites doc_id=%1 title=%2")
@@ -715,6 +833,9 @@ void SearchPage::onSuggestionClicked(QListWidgetItem* item)
 void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
 {
     if (currentItem == nullptr) {
+        if (detailPaneFullscreen_) {
+            leaveDetailFullscreen();
+        }
         hasPendingDetailRequest_ = false;
         pendingDetailDocId_.clear();
         pendingDetailRequestId_ = 0;
@@ -725,7 +846,8 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
             detailRenderCoordinator_->clearRenderedDetail();
         }
         resetDetailTimingSessions(true);
-        showDetailPlaceholder(QStringLiteral("请选择左侧结果查看详情。"));
+        setDetailEmptyState(QStringLiteral("请先在左侧搜索并选择一个结论。\n"
+                                           "选中后这里会显示结论详情、公式说明和高清 PDF。"));
         return;
     }
 
@@ -736,6 +858,8 @@ void SearchPage::onResultSelectionChanged(QListWidgetItem* currentItem)
         return;
     }
 
+    currentDetailDocId_ = docId;
+    updateDetailToolbarState();
     enqueueDetailRenderRequest(docId);
 }
 
@@ -752,7 +876,7 @@ void SearchPage::onFilterChanged()
 
     const QString query = queryInput_ == nullptr ? QString() : queryInput_->text().trimmed();
     if (query.isEmpty()) {
-        updateStatusLine(QStringLiteral("筛选条件已更新。"), QStringLiteral("请输入关键词开始搜索。"));
+        updateStatusLine(QStringLiteral("筛选条件已更新。"), QStringLiteral("输入关键词后开始搜索。"));
         return;
     }
 
@@ -882,6 +1006,10 @@ void SearchPage::resetDetailWheelZoom()
 
 void SearchPage::onDetailFullscreenButtonClicked()
 {
+    if (currentDetailDocId_.trimmed().isEmpty()) {
+        return;
+    }
+
     if (detailPaneFullscreen_) {
         leaveDetailFullscreen();
         return;
@@ -981,6 +1109,11 @@ void SearchPage::onPdfNextPageClicked()
     }
 
     jumpToPdfPage(detailPdfView_->pageNavigator()->currentPage() + 1);
+}
+
+void SearchPage::onPdfFitWidthClicked()
+{
+    applyPdfFitToWidth(false);
 }
 
 SearchPage::PdfExportCopyStatus SearchPage::exportPdfToPath(const QString& rawTargetPath, QString* normalizedTargetPath)
@@ -1191,13 +1324,52 @@ static QString detailPageIndicatorText(int currentPage, int pageCount)
     return QStringLiteral("PDF %1/%2").arg(currentPage + 1).arg(pageCount);
 }
 
+qreal computePdfFitWidthZoomFactor(const QPdfDocument* document, const QPdfView* view)
+{
+    if (document == nullptr || view == nullptr || document->pageCount() <= 0 || view->viewport() == nullptr) {
+        return 1.0;
+    }
+
+    int pageIndex = 0;
+    if (view->pageNavigator() != nullptr) {
+        pageIndex = std::clamp(view->pageNavigator()->currentPage(), 0, document->pageCount() - 1);
+    }
+
+    const QSizeF pageSizePt = document->pagePointSize(pageIndex);
+    const qreal pageWidthPt = pageSizePt.width();
+    if (pageWidthPt <= 0.0) {
+        return 1.0;
+    }
+
+    const QMargins margins = view->documentMargins();
+    const int viewportWidth = view->viewport()->width();
+    const int availableWidth = viewportWidth - margins.left() - margins.right();
+    if (availableWidth <= 0) {
+        return 1.0;
+    }
+
+    return static_cast<qreal>(availableWidth) / pageWidthPt;
+}
+
 void SearchPage::applyDetailFontScale()
 {
     detailFontScaleLevel_ = clampDetailFontScaleLevel(detailFontScaleLevel_);
     const DetailZoomSnapshot zoomSnapshot = computeDetailZoomSnapshot(detailFontScaleLevel_, detailFontWheelTicks_);
 
     if (detailPdfView_ != nullptr) {
-        detailPdfView_->setZoomFactor(zoomSnapshot.pdfZoomFactor);
+        qreal targetPdfZoom = zoomSnapshot.pdfZoomFactor;
+        const bool canScalePdf = detailPdfDocument_ != nullptr && detailPdfDocument_->pageCount() > 0
+                                 && detailPdfView_->isVisible();
+        if (canScalePdf) {
+            const qreal fitZoom = computePdfFitWidthZoomFactor(detailPdfDocument_, detailPdfView_);
+            if (fitZoom > 0.0) {
+                detailPdfFitWidthBaseZoom_ = fitZoom;
+            }
+            const qreal fitBase = std::clamp(detailPdfFitWidthBaseZoom_, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+            targetPdfZoom = std::clamp(fitBase * zoomSnapshot.pdfZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+        }
+        detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+        detailPdfView_->setZoomFactor(targetPdfZoom);
     }
 
     if (detailWebView_ != nullptr) {
@@ -1403,6 +1575,7 @@ void SearchPage::buildUi()
     resultList_->setSelectionBehavior(QAbstractItemView::SelectRows);
     resultList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     resultList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    resultList_->setUniformItemSizes(false);
     resultList_->setWordWrap(true);
     resultLayout->addWidget(resultList_, 1);
 
@@ -1489,6 +1662,12 @@ void SearchPage::buildUi()
     detailPdfNextButton_->setEnabled(false);
     detailPdfNextButton_->setToolTip(QStringLiteral("跳转到下一页 PDF"));
 
+    detailPdfFitWidthButton_ = new QPushButton(QStringLiteral("适合宽度"), detailHeader);
+    detailPdfFitWidthButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
+    detailPdfFitWidthButton_->setCursor(Qt::PointingHandCursor);
+    detailPdfFitWidthButton_->setEnabled(false);
+    detailPdfFitWidthButton_->setToolTip(QStringLiteral("将 PDF 调整为适合当前详情宽度"));
+
     detailPdfExportButton_ = new QPushButton(QStringLiteral("导出PDF"), detailHeader);
     detailPdfExportButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
     detailPdfExportButton_->setCursor(Qt::PointingHandCursor);
@@ -1513,6 +1692,7 @@ void SearchPage::buildUi()
     detailActionRow->addWidget(detailPdfPrevButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPageLabel_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfNextButton_, 0, Qt::AlignVCenter);
+    detailActionRow->addWidget(detailPdfFitWidthButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfExportButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(favoriteButton_, 0, Qt::AlignVCenter);
     detailHeaderRightLayout->addLayout(detailActionRow);
@@ -1607,6 +1787,7 @@ void SearchPage::buildUi()
 
     updatePdfPageNavigationUi();
     syncDetailFullscreenButtonState();
+    updateDetailToolbarState();
 }
 
 void SearchPage::connectSignals()
@@ -1635,6 +1816,7 @@ void SearchPage::connectSignals()
     connect(detailFullscreenButton_, &QPushButton::clicked, this, &SearchPage::onDetailFullscreenButtonClicked);
     connect(detailPdfPrevButton_, &QPushButton::clicked, this, &SearchPage::onPdfPrevPageClicked);
     connect(detailPdfNextButton_, &QPushButton::clicked, this, &SearchPage::onPdfNextPageClicked);
+    connect(detailPdfFitWidthButton_, &QPushButton::clicked, this, &SearchPage::onPdfFitWidthClicked);
     connect(detailPdfExportButton_, &QPushButton::clicked, this, &SearchPage::onPdfExportButtonClicked);
     connect(detailFullscreenShortcut_, &QShortcut::activated, this, &SearchPage::onDetailFullscreenButtonClicked);
     connect(detailExitFullscreenShortcut_, &QShortcut::activated, this, [this]() {
@@ -1703,23 +1885,26 @@ void SearchPage::rebuildFilterOptions()
 
 void SearchPage::resetToEmptyState()
 {
-    updateStatusLine(QStringLiteral("请输入关键词开始搜索。"),
-                     QStringLiteral("支持实时建议、模块筛选、结果详情联动。"));
-    updateResultEmptyState(QStringLiteral("开始搜索"), QStringLiteral("输入关键词后在这里查看匹配结果。"));
+    lastSearchQuery_.clear();
+    updateStatusLine(QStringLiteral("输入关键词或点击常用词开始搜索。"),
+                     isDevMode() ? QStringLiteral("idle=true | suggest=ready | filters=module+sort")
+                                 : QStringLiteral("支持模块筛选与排序，结果会自动联动详情。"));
+    updateResultEmptyState(QStringLiteral("输入关键词或点击常用词开始搜索。"),
+                           QStringLiteral("常用词示例：不等式、导数、椭圆、数列求和、柯西、均值。"));
     resetDetailTimingSessions(true);
-    showDetailPlaceholder(QStringLiteral("左侧输入关键词后可查看搜索结果和详情。"));
+    setDetailEmptyState(QStringLiteral("请先在左侧搜索并选择一个结论。\n"
+                                       "选中后这里会显示结论详情、公式说明和高清 PDF。"));
 
     if (!webDetailEnabled_) {
         const QString reason = detailHtmlRenderer_ == nullptr ? QStringLiteral("detail renderer is null")
                                                               : detailHtmlRenderer_->lastError().trimmed();
         updateStatusLine(QStringLiteral("详情页已切换兼容模式。"),
-                         QStringLiteral("请检查 app_resources/detail 与 app_resources/katex。"));
+                         isDevMode() ? QStringLiteral("fallback=text | check app_resources/detail + katex")
+                                     : QStringLiteral("请检查 app_resources/detail 与 app_resources/katex。"));
         updateDetailShellMeta(QStringLiteral("兼容模式：Web 资源不可用"), QStringLiteral("warning"));
         LOG_WARN(LogCategory::WebViewKatex,
                  QStringLiteral("detail empty_state fallback reason=%1")
                      .arg(reason.isEmpty() ? QStringLiteral("unknown") : reason));
-    } else {
-        updateDetailShellMeta(QStringLiteral("等待选择结果"), QStringLiteral("neutral"));
     }
 }
 
@@ -1774,7 +1959,9 @@ void SearchPage::runSuggest(const QString& query)
 
     if (!indexReady_ || suggestService_ == nullptr) {
         clearSuggestions();
-        updateStatusLine(QStringLiteral("索引未就绪，无法生成建议。"));
+        updateStatusLine(QStringLiteral("索引未就绪，无法生成建议。"),
+                         isDevMode() ? QStringLiteral("suggest=disabled | reason=backend_unavailable")
+                                     : QStringLiteral("请检查离线索引是否加载完成。"));
         LOG_WARN(LogCategory::SearchEngine,
                  QStringLiteral("suggest skipped reason=backend_unavailable index_ready=%1")
                      .arg(indexReady_ ? QStringLiteral("true") : QStringLiteral("false")));
@@ -1815,11 +2002,16 @@ void SearchPage::runSuggest(const QString& query)
         suggestionList_->scrollToItem(suggestionList_->item(0), QAbstractItemView::PositionAtTop);
     }
 
-    updateStatusLine(QStringLiteral("建议已更新。"),
-                     QStringLiteral("query=%1 | suggest=%2 | elapsed=%3ms")
-                         .arg(normalizedQuery)
-                         .arg(result.items.size())
-                         .arg(elapsedMs));
+    if (isDevMode()) {
+        updateStatusLine(QStringLiteral("建议已更新。"),
+                         QStringLiteral("query=%1 | suggest=%2 | elapsed=%3ms")
+                             .arg(normalizedQuery)
+                             .arg(result.items.size())
+                             .arg(elapsedMs));
+    } else {
+        updateStatusLine(QStringLiteral("建议已更新。"),
+                         QStringLiteral("可继续输入，或点击建议直接搜索。"));
+    }
 
     LOG_DEBUG(LogCategory::PerfSearch,
               QStringLiteral("event=suggest_done query=%1 total=%2 elapsed_ms=%3")
@@ -1834,6 +2026,7 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
 {
     const QString normalizedQuery = query.trimmed();
     if (normalizedQuery.isEmpty()) {
+        lastSearchQuery_.clear();
         currentHits_.clear();
         renderResults(currentHits_);
         clearSuggestions();
@@ -1843,7 +2036,8 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
 
     if (!indexReady_ || searchService_ == nullptr) {
         updateStatusLine(QStringLiteral("索引未就绪，无法执行搜索。"),
-                         QStringLiteral("请检查索引加载日志。"));
+                         isDevMode() ? QStringLiteral("search=blocked | reason=backend_unavailable")
+                                     : QStringLiteral("请检查离线索引是否加载完成。"));
         showDetailError(QStringLiteral("索引未就绪，当前无法展示结果详情。"));
         LOG_ERROR(LogCategory::SearchEngine,
                   QStringLiteral("search failed reason=backend_unavailable query=%1").arg(normalizedQuery));
@@ -1852,9 +2046,11 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
 
     if (!isFeatureEnabled(license::Feature::BasicSearchPreview)
         && !isFeatureEnabled(license::Feature::FullSearch)) {
-        updateStatusLine(QStringLiteral("当前授权不支持搜索。"), QStringLiteral("请先激活正式版。"));
+        updateStatusLine(QStringLiteral("当前授权不支持搜索。"),
+                         isDevMode() ? QStringLiteral("search=blocked | reason=license_gate")
+                                     : QStringLiteral("请先激活正式版。"));
         updateResultEmptyState(QStringLiteral("搜索未开放"), QStringLiteral("请先在激活页完成授权。"));
-        showDetailPlaceholder(QStringLiteral("当前授权不支持详情查看。"));
+        setDetailEmptyState(QStringLiteral("当前授权不支持详情查看。"));
         return;
     }
 
@@ -1899,24 +2095,18 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
         }
     }
     applySort(&currentHits_);
+    lastSearchQuery_ = normalizedQuery;
     renderResults(currentHits_);
     clearSuggestions();
     lastSearchSignature_ = signature;
-
-    const QString moduleSummary = moduleFilter.isEmpty() ? QStringLiteral("全部模块")
-                                                         : moduleDisplayName(moduleFilter);
-    const QString filterSummary = QStringLiteral("module=%1")
-                                      .arg(advancedFilterEnabled ? moduleSummary : QStringLiteral("locked"));
+    const int displayedCount = resultList_ == nullptr ? currentHits_.size() : resultList_->count();
 
     if (currentHits_.isEmpty()) {
-        updateStatusLine(QStringLiteral("没有找到相关结论。"),
-                         QStringLiteral("query=%1 | total=0 | elapsed=%2ms | %3")
-                             .arg(normalizedQuery)
-                             .arg(elapsedMs)
-                             .arg(filterSummary));
-        updateResultEmptyState(QStringLiteral("没有匹配结果"),
-                               QStringLiteral("建议尝试更短关键词，或清空筛选后重试。"));
-        showDetailPlaceholder(QStringLiteral("没有找到相关结论。建议尝试更短关键词或清空筛选。"));
+        updateResultSummary(normalizedQuery, 0, elapsedMs, false);
+        updateResultEmptyState(QStringLiteral("没有找到相关结论"),
+                               QStringLiteral("可以尝试搜索：不等式、导数、椭圆、数列求和、柯西、均值。"));
+        setDetailEmptyState(QStringLiteral("请先在左侧搜索并选择一个结论。\n"
+                                           "选中后这里会显示结论详情、公式说明和高清 PDF。"));
 
         LOG_INFO(LogCategory::PerfSearch,
                  QStringLiteral("event=search_done query=%1 total=0 elapsed_ms=%2 trigger=%3")
@@ -1926,18 +2116,20 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
         return;
     }
 
-    updateStatusLine(QStringLiteral("搜索完成。"),
-                     QStringLiteral("query=%1 | total=%2 | elapsed=%3ms | %4")
-                         .arg(normalizedQuery)
-                         .arg(currentHits_.size())
-                         .arg(elapsedMs)
-                         .arg(filterSummary));
+    updateResultSummary(normalizedQuery, displayedCount, elapsedMs, true);
 
     if (!fullSearchEnabled) {
         const QString reason = featureDisabledReason(license::Feature::FullSearch);
-        updateStatusLine(
-            QStringLiteral("体验版仅展示前 %1 条结果（命中 %2 条）。").arg(kTrialPreviewLimit).arg(rawHitCount),
-            reason.isEmpty() ? QStringLiteral("正式版解锁完整搜索。") : reason);
+        if (isDevMode()) {
+            updateStatusLine(
+                QStringLiteral("体验版仅展示前 %1 条结果（命中 %2 条）。").arg(kTrialPreviewLimit).arg(rawHitCount),
+                reason.isEmpty() ? QStringLiteral("正式版解锁完整搜索。") : reason);
+        } else {
+            updateStatusLine(QStringLiteral("找到 %1 条相关结论（体验版最多显示 %2 条）。")
+                                 .arg(displayedCount)
+                                 .arg(kTrialPreviewLimit),
+                             reason.isEmpty() ? QStringLiteral("正式版可查看全部命中结果。") : reason);
+        }
     }
     updateResultEmptyState(QString(), QString());
 
@@ -1962,6 +2154,202 @@ void SearchPage::clearSuggestions()
     suggestionList_->setVisible(false);
 }
 
+void SearchPage::updateResultSummary(const QString& query, int total, qint64 elapsedMs, bool hasResults)
+{
+    const QString normalizedQuery = query.trimmed();
+    const QString moduleFilter = selectedModuleFilter();
+    const QString moduleText = moduleFilter.isEmpty() ? QStringLiteral("全部模块") : moduleDisplayName(moduleFilter);
+    const QString sortText =
+        sortCombo_ == nullptr ? QStringLiteral("按相关度") : sortCombo_->currentText().trimmed();
+
+    if (isDevMode()) {
+        updateStatusLine(hasResults ? QStringLiteral("搜索完成。") : QStringLiteral("没有找到相关结论。"),
+                         QStringLiteral("query=%1 | total=%2 | elapsed=%3ms | module=%4 | sort=%5")
+                             .arg(normalizedQuery.isEmpty() ? QStringLiteral("<empty>") : normalizedQuery)
+                             .arg(total)
+                             .arg(elapsedMs)
+                             .arg(moduleText)
+                             .arg(sortText.isEmpty() ? QStringLiteral("按相关度") : sortText));
+        return;
+    }
+
+    if (normalizedQuery.isEmpty()) {
+        updateStatusLine(QStringLiteral("输入关键词或点击常用词开始搜索。"),
+                         QStringLiteral("支持模块筛选与排序，结果会自动联动详情。"));
+        return;
+    }
+
+    if (!hasResults || total <= 0) {
+        updateStatusLine(QStringLiteral("没有找到相关结论"),
+                         QStringLiteral("可以尝试搜索：不等式、导数、椭圆、数列求和、柯西、均值。"));
+        return;
+    }
+
+    updateStatusLine(QStringLiteral("找到 %1 条相关结论").arg(total),
+                     QStringLiteral("关键词：%1\n筛选：%2\n排序：%3")
+                         .arg(normalizedQuery)
+                         .arg(moduleText)
+                         .arg(sortText.isEmpty() ? QStringLiteral("按相关度") : sortText));
+}
+
+QString SearchPage::highlightKeyword(const QString& text, const QStringList& terms) const
+{
+    if (text.isEmpty()) {
+        return QString();
+    }
+
+    if (terms.isEmpty()) {
+        return text.toHtmlEscaped();
+    }
+
+    QVector<QPair<int, int>> ranges;
+    ranges.reserve(16);
+    for (const QString& term : terms) {
+        const QString needle = term.trimmed();
+        if (needle.isEmpty()) {
+            continue;
+        }
+        int from = 0;
+        while (from < text.size()) {
+            const int index = text.indexOf(needle, from, Qt::CaseInsensitive);
+            if (index < 0) {
+                break;
+            }
+            ranges.push_back({index, index + needle.size()});
+            from = index + needle.size();
+        }
+    }
+
+    if (ranges.isEmpty()) {
+        return text.toHtmlEscaped();
+    }
+
+    std::sort(ranges.begin(), ranges.end(), [](const QPair<int, int>& lhs, const QPair<int, int>& rhs) {
+        if (lhs.first != rhs.first) {
+            return lhs.first < rhs.first;
+        }
+        return lhs.second > rhs.second;
+    });
+
+    QVector<QPair<int, int>> merged;
+    merged.reserve(ranges.size());
+    for (const QPair<int, int>& range : ranges) {
+        if (merged.isEmpty() || range.first > merged.back().second) {
+            merged.push_back(range);
+        } else {
+            merged.back().second = std::max(merged.back().second, range.second);
+        }
+    }
+
+    QString highlighted;
+    highlighted.reserve(text.size() + merged.size() * 48);
+    int cursor = 0;
+    for (const QPair<int, int>& range : merged) {
+        if (range.first > cursor) {
+            highlighted.append(text.mid(cursor, range.first - cursor).toHtmlEscaped());
+        }
+        const QString matched = text.mid(range.first, range.second - range.first).toHtmlEscaped();
+        highlighted.append(
+            QStringLiteral("<span style=\"background:#fff2a8;color:#1d3557;font-weight:600;\">%1</span>").arg(matched));
+        cursor = range.second;
+    }
+    if (cursor < text.size()) {
+        highlighted.append(text.mid(cursor).toHtmlEscaped());
+    }
+    return highlighted;
+}
+
+QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
+                                     const QStringList& highlightTerms,
+                                     QWidget* parent) const
+{
+    domain::adapters::ConclusionCardViewData cardView;
+    const domain::adapters::ConclusionCardViewData* cardViewPtr = nullptr;
+
+    if (contentReady_ && contentRepository_ != nullptr) {
+        if (const auto* record = contentRepository_->getById(hit.docId); record != nullptr) {
+            cardView = domain::adapters::ConclusionCardAdapter::toViewData(*record);
+            cardViewPtr = &cardView;
+        }
+    }
+
+    const QString cardId = hit.docId.trimmed().isEmpty() ? QStringLiteral("—") : hit.docId.trimmed();
+    const QString titleText = !cardView.title.trimmed().isEmpty() ? cardView.title.trimmed()
+                              : !hit.title.trimmed().isEmpty()    ? hit.title.trimmed()
+                                                                   : cardId;
+
+    QString summaryText = !cardView.summaryPlain.trimmed().isEmpty() ? cardView.summaryPlain.trimmed()
+                         : !hit.summary.trimmed().isEmpty()          ? hit.summary.trimmed()
+                                                                      : QStringLiteral("点击右侧查看完整详情。");
+    if (summaryText.isEmpty()) {
+        summaryText = QStringLiteral("点击右侧查看完整详情。");
+    }
+
+    const QString moduleText =
+        !hit.module.trimmed().isEmpty() ? moduleDisplayName(hit.module) : QStringLiteral("未标注模块");
+    const QString categoryText = !hit.category.trimmed().isEmpty() ? hit.category.trimmed() : QStringLiteral("未标注分类");
+    const QString difficultyText = QStringLiteral("难度 %1").arg(QString::number(hit.difficulty, 'f', 1));
+
+    const QStringList effectiveTags = cardViewPtr == nullptr || cardViewPtr->tags.isEmpty() ? hit.tags : cardViewPtr->tags;
+    const QString tagsText = limitTagText(effectiveTags, 4, QStringLiteral(" / "));
+    const QString usageText = limitTagText(buildUsageTerms(hit, cardViewPtr), 4, QStringLiteral(" / "));
+
+    auto* card = new QWidget(parent);
+    card->setObjectName(QStringLiteral("searchResultCard"));
+    card->setAttribute(Qt::WA_StyledBackground, true);
+    card->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+    auto* cardLayout = new QVBoxLayout(card);
+    cardLayout->setContentsMargins(0, 0, 0, 0);
+    cardLayout->setSpacing(5);
+
+    auto* titleLabel = new QLabel(card);
+    titleLabel->setObjectName(QStringLiteral("searchResultCardTitle"));
+    titleLabel->setWordWrap(true);
+    titleLabel->setTextFormat(Qt::RichText);
+    titleLabel->setText(QStringLiteral("%1  %2").arg(cardId.toHtmlEscaped(), highlightKeyword(titleText, highlightTerms)));
+
+    auto* summaryLabel = new QLabel(card);
+    summaryLabel->setObjectName(QStringLiteral("searchResultCardFormula"));
+    summaryLabel->setWordWrap(true);
+    summaryLabel->setTextFormat(Qt::RichText);
+    summaryLabel->setText(highlightKeyword(summaryText, highlightTerms));
+
+    auto* metaLabel = new QLabel(card);
+    metaLabel->setObjectName(QStringLiteral("searchResultCardMeta"));
+    metaLabel->setWordWrap(true);
+    metaLabel->setText(QStringLiteral("%1 · %2 · %3").arg(moduleText, categoryText, difficultyText));
+
+    auto* tagsLabel = new QLabel(card);
+    tagsLabel->setObjectName(QStringLiteral("searchResultCardTags"));
+    tagsLabel->setWordWrap(true);
+    tagsLabel->setTextFormat(Qt::RichText);
+    tagsLabel->setText(QStringLiteral("标签：%1").arg(highlightKeyword(tagsText, highlightTerms)));
+
+    auto* usageLabel = new QLabel(card);
+    usageLabel->setObjectName(QStringLiteral("searchResultCardUsage"));
+    usageLabel->setWordWrap(true);
+    usageLabel->setTextFormat(Qt::RichText);
+    usageLabel->setText(QStringLiteral("适用：%1").arg(highlightKeyword(usageText, highlightTerms)));
+
+    cardLayout->addWidget(titleLabel);
+    cardLayout->addWidget(summaryLabel);
+    cardLayout->addWidget(metaLabel);
+    cardLayout->addWidget(tagsLabel);
+    cardLayout->addWidget(usageLabel);
+
+    const QString tooltip = joinNonEmpty(
+        {titleText,
+         summaryText,
+         QStringLiteral("%1 · %2 · %3").arg(moduleText, categoryText, difficultyText)},
+        QStringLiteral("\n"));
+    if (!tooltip.isEmpty()) {
+        card->setToolTip(tooltip);
+    }
+
+    return card;
+}
+
 void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
 {
     if (resultList_ == nullptr) {
@@ -1975,40 +2363,18 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
         return;
     }
 
+    const QStringList highlightTerms = extractHighlightTerms(lastSearchQuery_);
     for (const domain::models::SearchHit& hit : hits) {
-        const QString titleText = hit.title.trimmed().isEmpty() ? hit.docId : hit.title;
-        const QString moduleText =
-            hit.module.trimmed().isEmpty() ? QStringLiteral("未标注模块") : moduleDisplayName(hit.module);
-        const QString categoryText = hit.category.trimmed().isEmpty() ? QStringLiteral("未标注分类") : hit.category.trimmed();
-        const QString difficultyText = QStringLiteral("难度 %1").arg(QString::number(hit.difficulty, 'f', 1));
-        const QString tagsText = hit.tags.isEmpty() ? QStringLiteral("-") : hit.tags.mid(0, 6).join(QStringLiteral(" / "));
-        const QString lineText = QStringLiteral("%1\n%2 | %3 | %4\n标签: %5 | 相关度: %6")
-                                     .arg(titleText,
-                                          moduleText,
-                                          categoryText,
-                                          difficultyText,
-                                          tagsText,
-                                          QString::number(hit.score, 'f', 2));
-
-        auto* item = new QListWidgetItem(lineText, resultList_);
+        auto* item = new QListWidgetItem();
         item->setData(kResultItemDocIdRole, hit.docId);
-        item->setSizeHint(QSize(item->sizeHint().width(), 76));
-
-        if (contentReady_ && contentRepository_ != nullptr) {
-            const auto* record = contentRepository_->getById(hit.docId);
-            if (record != nullptr) {
-                const domain::adapters::ConclusionCardViewData cardView =
-                    domain::adapters::ConclusionCardAdapter::toViewData(*record);
-                const QString tooltip =
-                    joinNonEmpty(
-                        {cardView.summaryPlain,
-                         cardView.formulaFallbackText.isEmpty() ? QString() : QStringLiteral("公式: %1").arg(cardView.formulaFallbackText)},
-                        QStringLiteral("\n"));
-                if (!tooltip.isEmpty()) {
-                    item->setToolTip(tooltip);
-                }
-            }
-        }
+        QWidget* cardWidget = buildResultCard(hit, highlightTerms, resultList_);
+        const int preferredWidth = std::max(360, resultList_->viewport()->width() - 24);
+        cardWidget->setMinimumWidth(preferredWidth);
+        cardWidget->adjustSize();
+        item->setSizeHint(QSize(preferredWidth, std::max(96, cardWidget->sizeHint().height() + 10)));
+        item->setToolTip(cardWidget->toolTip());
+        resultList_->addItem(item);
+        resultList_->setItemWidget(item, cardWidget);
     }
 
     updateResultEmptyState(QString(), QString());
@@ -2386,6 +2752,7 @@ bool SearchPage::renderDetailInPdfView(const QString& docId,
 
     currentDetailPdfPath_ = pdfInfo.absoluteFilePath();
     jumpToPdfPage(0);
+    applyPdfFitToWidth(true);
     resetPdfDetailViewportToTop();
     updatePdfPageNavigationUi();
     updateDetailShellMeta(QStringLiteral("PDF 详情预览"), QStringLiteral("neutral"));
@@ -2437,11 +2804,91 @@ void SearchPage::jumpToPdfPage(int pageIndex)
     updatePdfPageNavigationUi();
 }
 
+void SearchPage::applyPdfFitToWidth(bool silentStatus)
+{
+    const bool viewReady =
+        (detailPdfDocument_ != nullptr && detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr);
+    const bool hasPdf = viewReady && detailPdfView_->isVisible() && detailPdfDocument_->pageCount() > 0;
+    if (!hasPdf) {
+        if (!silentStatus) {
+            updateStatusLine(QStringLiteral("当前 PDF 暂不可用。"), QStringLiteral("请先选择可预览 PDF 的结论。"));
+        }
+        return;
+    }
+
+    if (detailPdfView_->viewport() != nullptr && detailPdfView_->viewport()->width() <= 0) {
+        QTimer::singleShot(0, this, [this]() { applyPdfFitToWidth(true); });
+    }
+
+    const qreal fitZoom = computePdfFitWidthZoomFactor(detailPdfDocument_, detailPdfView_);
+    detailPdfFitWidthBaseZoom_ =
+        std::clamp(fitZoom > 0.0 ? fitZoom : 1.0, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+    detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+    detailPdfView_->setZoomFactor(detailPdfFitWidthBaseZoom_);
+    if (!silentStatus) {
+        updateStatusLine(QStringLiteral("PDF 已切换为适合宽度。"),
+                         isDevMode() ? QStringLiteral("zoom_mode=custom_from_fit_width")
+                                     : QStringLiteral("预览宽度已匹配详情区域。"));
+    }
+}
+
+void SearchPage::updateDetailToolbarState()
+{
+    const bool hasSelection = !currentDetailDocId_.trimmed().isEmpty();
+
+    if (detailFontButton_ != nullptr) {
+        detailFontButton_->setEnabled(hasSelection);
+    }
+    if (detailFullscreenButton_ != nullptr) {
+        detailFullscreenButton_->setEnabled(hasSelection);
+    }
+    if (!hasSelection) {
+        if (detailPdfPrevButton_ != nullptr) {
+            detailPdfPrevButton_->setEnabled(false);
+        }
+        if (detailPdfNextButton_ != nullptr) {
+            detailPdfNextButton_->setEnabled(false);
+        }
+        if (detailPdfFitWidthButton_ != nullptr) {
+            detailPdfFitWidthButton_->setEnabled(false);
+        }
+        if (detailPdfExportButton_ != nullptr) {
+            detailPdfExportButton_->setEnabled(false);
+        }
+    }
+
+    if (detailFullscreenShortcut_ != nullptr) {
+        detailFullscreenShortcut_->setEnabled(hasSelection);
+    }
+    if (detailExitFullscreenShortcut_ != nullptr) {
+        detailExitFullscreenShortcut_->setEnabled(hasSelection || detailPaneFullscreen_);
+    }
+
+    if (detailTimingLabel_ != nullptr) {
+        detailTimingLabel_->setVisible(isDevMode());
+    }
+
+    refreshFavoriteButtonState(hasSelection ? currentDetailDocId_ : QString());
+}
+
+void SearchPage::setDetailEmptyState(const QString& message)
+{
+    showDetailPlaceholder(message);
+    updateDetailToolbarState();
+}
+
+void SearchPage::setDetailReadyState()
+{
+    updateDetailShellMeta(QStringLiteral("详情已就绪"), QStringLiteral("success"));
+    updateDetailToolbarState();
+}
+
 void SearchPage::updatePdfPageNavigationUi()
 {
     const bool viewReady =
         (detailPdfDocument_ != nullptr && detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr);
     const bool pdfVisible = viewReady && detailPdfView_->isVisible();
+    const bool hasSelection = !currentDetailDocId_.trimmed().isEmpty();
     const int pageCount = viewReady ? detailPdfDocument_->pageCount() : 0;
     const QString exportSourcePath = currentDetailPdfPath_.trimmed();
     const bool canExport = pdfVisible && !exportSourcePath.isEmpty() && QFileInfo::exists(exportSourcePath);
@@ -2452,22 +2899,36 @@ void SearchPage::updatePdfPageNavigationUi()
     }
 
     if (detailPdfPageLabel_ != nullptr) {
-        detailPdfPageLabel_->setText(detailPageIndicatorText(currentPage, pageCount));
+        if (!hasSelection) {
+            detailPdfPageLabel_->setText(QStringLiteral("PDF --/--"));
+        } else if (!pdfVisible || pageCount <= 0) {
+            detailPdfPageLabel_->setText(QStringLiteral("PDF 暂不可用"));
+        } else {
+            detailPdfPageLabel_->setText(detailPageIndicatorText(currentPage, pageCount));
+        }
     }
 
-    const bool canGoPrev = (pdfVisible && pageCount > 0 && currentPage > 0);
-    const bool canGoNext = (pdfVisible && pageCount > 0 && currentPage < (pageCount - 1));
+    const bool canGoPrev = (hasSelection && pdfVisible && pageCount > 0 && currentPage > 0);
+    const bool canGoNext = (hasSelection && pdfVisible && pageCount > 0 && currentPage < (pageCount - 1));
+    const bool canFitWidth = (hasSelection && pdfVisible && pageCount > 0);
+    const bool canUseExport = (hasSelection && canExport);
     if (detailPdfPrevButton_ != nullptr) {
         detailPdfPrevButton_->setEnabled(canGoPrev);
     }
     if (detailPdfNextButton_ != nullptr) {
         detailPdfNextButton_->setEnabled(canGoNext);
     }
+    if (detailPdfFitWidthButton_ != nullptr) {
+        detailPdfFitWidthButton_->setEnabled(canFitWidth);
+        detailPdfFitWidthButton_->setToolTip(canFitWidth ? QStringLiteral("将 PDF 调整为适合当前详情宽度")
+                                                         : QStringLiteral("请先加载可用的 PDF 详情"));
+    }
     if (detailPdfExportButton_ != nullptr) {
-        detailPdfExportButton_->setEnabled(canExport);
-        detailPdfExportButton_->setToolTip(canExport ? QStringLiteral("将当前 PDF 另存为文件")
+        detailPdfExportButton_->setEnabled(canUseExport);
+        detailPdfExportButton_->setToolTip(canUseExport ? QStringLiteral("将当前 PDF 另存为文件")
                                                      : QStringLiteral("请先加载可用的 PDF 详情"));
     }
+    updateDetailToolbarState();
 }
 
 #if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
@@ -2481,7 +2942,7 @@ QString SearchPage::resolveDetailPdfPathForTest(const QString& docId,
 void SearchPage::showDetailPlaceholder(const QString& message)
 {
     const QString fallbackMessage = message.trimmed().isEmpty()
-                                        ? QStringLiteral("请选择一条结果查看详情。")
+                                        ? QStringLiteral("请先在左侧搜索并选择一个结论。")
                                         : message.trimmed();
     resetDetailTimingSessions(true);
     updateDetailShellMeta(detailMetaTextForPlaceholder(fallbackMessage), QStringLiteral("neutral"));
@@ -2490,11 +2951,12 @@ void SearchPage::showDetailPlaceholder(const QString& message)
     }
     currentDetailDocId_.clear();
     currentDetailPdfPath_.clear();
-    refreshFavoriteButtonState();
+    updateDetailToolbarState();
 
     if (shouldDispatchStateToWeb()) {
         const QJsonObject payload = detailViewDataMapper_->buildEmptyPayload(fallbackMessage);
         dispatchPayloadToWeb(payload);
+        updatePdfPageNavigationUi();
         return;
     }
 
@@ -2502,7 +2964,8 @@ void SearchPage::showDetailPlaceholder(const QString& message)
         return;
     }
 
-    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#666;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    const QString htmlMessage = fallbackMessage.toHtmlEscaped().replace(QStringLiteral("\n"), QStringLiteral("<br/>"));
+    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#666;line-height:1.7;\">%1</p>").arg(htmlMessage));
     resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
     if (detailPdfView_ != nullptr) {
@@ -2512,6 +2975,7 @@ void SearchPage::showDetailPlaceholder(const QString& message)
         detailWebView_->setVisible(false);
     }
     updatePdfPageNavigationUi();
+    updateDetailToolbarState();
 }
 
 void SearchPage::showDetailError(const QString& message)
@@ -2525,11 +2989,12 @@ void SearchPage::showDetailError(const QString& message)
     }
     currentDetailDocId_.clear();
     currentDetailPdfPath_.clear();
-    refreshFavoriteButtonState();
+    updateDetailToolbarState();
 
     if (shouldDispatchStateToWeb()) {
         const QJsonObject payload = detailViewDataMapper_->buildErrorPayload(fallbackMessage);
         dispatchPayloadToWeb(payload);
+        updatePdfPageNavigationUi();
         return;
     }
 
@@ -2537,7 +3002,8 @@ void SearchPage::showDetailError(const QString& message)
         return;
     }
 
-    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#9a3412;\">%1</p>").arg(fallbackMessage.toHtmlEscaped()));
+    const QString htmlMessage = fallbackMessage.toHtmlEscaped().replace(QStringLiteral("\n"), QStringLiteral("<br/>"));
+    detailBrowser_->setHtml(QStringLiteral("<p style=\"color:#9a3412;line-height:1.7;\">%1</p>").arg(htmlMessage));
     resetFallbackDetailViewportToTop();
     detailBrowser_->setVisible(true);
     if (detailPdfView_ != nullptr) {
@@ -2547,6 +3013,7 @@ void SearchPage::showDetailError(const QString& message)
         detailWebView_->setVisible(false);
     }
     updatePdfPageNavigationUi();
+    updateDetailToolbarState();
 }
 
 void SearchPage::resetWebDetailViewportToTop()
@@ -2676,6 +3143,7 @@ void SearchPage::startDetailTimingSession(const QString& docId, quint64 requestI
     activeDetailTimingRequestId_ = requestId;
     updateDetailTimingLabel(kDetailTimingLoadingText, kDetailTimingColorLoading);
     updateDetailShellMeta(QStringLiteral("正在加载详情..."), QStringLiteral("loading"));
+    updateDetailToolbarState();
 
     logDetailPerf(normalizedDocId, requestId, selectionTimestampMs, QStringLiteral("request_start"));
 
@@ -2803,7 +3271,7 @@ void SearchPage::markDetailTimingSuccess(const QString& docId, quint64 requestId
     }
 #endif
     updateDetailTimingLabel(statusText, kDetailTimingColorSuccess);
-    updateDetailShellMeta(QStringLiteral("详情已就绪"), QStringLiteral("success"));
+    setDetailReadyState();
 
     logDetailPerf(it->detailId,
                   requestId,
@@ -3133,6 +3601,11 @@ void SearchPage::activateTextFallbackMode(const QString& reason)
     showDetailError(userMessage);
 }
 
+bool SearchPage::isDevMode() const
+{
+    return isDevMode_;
+}
+
 bool SearchPage::isFeatureEnabled(license::Feature feature) const
 {
     return featureGate_ == nullptr ? true : featureGate_->isEnabled(feature);
@@ -3166,6 +3639,7 @@ void SearchPage::applyFeatureGate()
     }
 
     refreshFavoriteButtonState();
+    updateDetailToolbarState();
 }
 
 void SearchPage::refreshFavoriteButtonState(const QString& docId)
@@ -3219,6 +3693,7 @@ void SearchPage::showTrialDetailPreview(const domain::adapters::ConclusionDetail
     }
     currentDetailPdfPath_.clear();
     updatePdfPageNavigationUi();
+    updateDetailToolbarState();
 }
 
 void SearchPage::applySort(QVector<domain::models::SearchHit>* hits) const
