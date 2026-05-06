@@ -172,6 +172,8 @@ void FavoritesPage::setupUi()
     filterButton_ = new QPushButton(QStringLiteral("筛选（即将支持）"), toolbarWidget_);
     filterButton_->setObjectName(QStringLiteral("toolbarButton"));
     filterButton_->setCursor(Qt::PointingHandCursor);
+    filterButton_->setEnabled(false);
+    filterButton_->setToolTip(QStringLiteral("筛选功能即将支持"));
 
     toolbarLayout->addWidget(summaryLabel_);
     toolbarLayout->addStretch(1);
@@ -252,7 +254,6 @@ void FavoritesPage::setupConnections()
         updateEmptyState();
     });
 
-    connect(filterButton_, &QPushButton::clicked, this, []() {});
     connect(clearAllButton_, &QPushButton::clicked, this, &FavoritesPage::handleClearAll);
     connect(emptyActionButton_, &QPushButton::clicked, this, &FavoritesPage::navigateToSearchRequested);
 }
@@ -388,6 +389,7 @@ void FavoritesPage::updateEmptyState()
         sortComboBox_->setEnabled(false);
         clearAllButton_->setEnabled(false);
         filterButton_->setEnabled(false);
+        filterButton_->setToolTip(QStringLiteral("筛选功能即将支持"));
         summaryLabel_->setText(QStringLiteral("收藏功能未开放"));
 
         const QString reason = featureGate_ == nullptr ? QStringLiteral("正式版可启用收藏功能。")
@@ -403,7 +405,8 @@ void FavoritesPage::updateEmptyState()
     emptyStateWidget_->setVisible(!hasItems);
     sortComboBox_->setEnabled(hasItems);
     clearAllButton_->setEnabled(hasItems);
-    filterButton_->setEnabled(true);
+    filterButton_->setEnabled(false);
+    filterButton_->setToolTip(QStringLiteral("筛选功能即将支持"));
     emptyActionButton_->setText(QStringLiteral("去搜索"));
 
     if (!hasItems) {

@@ -76,6 +76,7 @@ private slots:
     void favorites_missingFile_loadCreatesDefaultJson();
     void favorites_addToggleRemove_persistsAcrossReload();
     void favorites_emptyOrCorruptFile_fallbackToEmpty();
+    void favorites_legacySchema_migratesToUnifiedItemsSchema();
 
     void history_missingFile_loadCreatesDefaultJson();
     void history_addDedupLimit_persistsAcrossReload();
@@ -219,6 +220,71 @@ void LocalStorageRepositoriesTest::favorites_emptyOrCorruptFile_fallbackToEmpty(
     doc = storage.readJsonFile(path, &ok);
     QVERIFY(ok);
     QVERIFY(doc.isObject());
+}
+
+void LocalStorageRepositoriesTest::favorites_legacySchema_migratesToUnifiedItemsSchema()
+{
+    SandboxDir sandbox(QStringLiteral("favorites_schema_migrate"));
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be valid");
+
+    infrastructure::storage::LocalStorageService storage(sandbox.path());
+    QVERIFY(storage.ensureCacheDirExists());
+
+    QJsonObject legacyRoot;
+    legacyRoot.insert(QStringLiteral("version"), 1);
+    legacyRoot.insert(QStringLiteral("ids"), QJsonArray({QStringLiteral("A001"), QStringLiteral("B002")}));
+    legacyRoot.insert(QStringLiteral("items"),
+                      QJsonArray({
+                          QJsonObject{
+                              {QStringLiteral("id"), QStringLiteral("A001")},
+                              {QStringLiteral("favoritedAt"), QStringLiteral("2025-01-02T03:04:05.000Z")},
+                          },
+                          QJsonObject{
+                              {QStringLiteral("id"), QStringLiteral("C003")},
+                              {QStringLiteral("updatedAt"), QStringLiteral("2025-01-02T03:04:07.000Z")},
+                          },
+                      }));
+    QVERIFY(storage.writeJsonFileAtomically(storage.favoritesFilePath(), QJsonDocument(legacyRoot)));
+
+    domain::repositories::FavoritesRepository repository(&storage, true);
+    QVERIFY(repository.load());
+    QCOMPARE(repository.allIds(),
+             QStringList({QStringLiteral("A001"), QStringLiteral("B002"), QStringLiteral("C003")}));
+
+    QVERIFY(repository.save());
+
+    bool ok = false;
+    const QJsonDocument savedDoc = storage.readJsonFile(storage.favoritesFilePath(), &ok);
+    QVERIFY(ok);
+    QVERIFY(savedDoc.isObject());
+
+    const QJsonObject savedRoot = savedDoc.object();
+    QCOMPARE(savedRoot.value(QStringLiteral("ids")).toArray().size(), 3);
+    const QJsonArray itemsArray = savedRoot.value(QStringLiteral("items")).toArray();
+    QCOMPARE(itemsArray.size(), 3);
+
+    auto findItemById = [&itemsArray](const QString& id) -> QJsonObject {
+        for (const QJsonValue& value : itemsArray) {
+            if (!value.isObject()) {
+                continue;
+            }
+            const QJsonObject object = value.toObject();
+            if (object.value(QStringLiteral("id")).toString() == id) {
+                return object;
+            }
+        }
+        return {};
+    };
+
+    const QJsonObject itemA = findItemById(QStringLiteral("A001"));
+    QVERIFY(itemA.value(QStringLiteral("favoritedAt")).toString().startsWith(QStringLiteral("2025-01-02T03:04:05")));
+
+    const QJsonObject itemB = findItemById(QStringLiteral("B002"));
+    QVERIFY(itemB.contains(QStringLiteral("id")));
+    QVERIFY(!itemB.contains(QStringLiteral("favoritedAt")));
+
+    const QJsonObject itemC = findItemById(QStringLiteral("C003"));
+    QVERIFY(itemC.value(QStringLiteral("favoritedAt")).toString().startsWith(QStringLiteral("2025-01-02T03:04:07")));
 }
 
 void LocalStorageRepositoriesTest::history_missingFile_loadCreatesDefaultJson()

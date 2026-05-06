@@ -278,6 +278,7 @@ private slots:
     void detailFullscreenButton_togglesDetailPaneFocusMode();
     void detailFontButton_cyclesLevels();
     void detailCtrlWheel_adjustsContinuousZoom();
+    void detailPdfExportHelper_reportsStatuses();
 };
 
 void SearchPageRound5UiTest::cleanupTestCase()
@@ -719,6 +720,51 @@ void SearchPageRound5UiTest::detailCtrlWheel_adjustsContinuousZoom()
     QCOMPARE(page.detailFontScaleLevel_, 0);
     QCOMPARE(page.detailFontWheelTicks_, 0);
     QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - initialZoom) < 1e-6);
+}
+
+void SearchPageRound5UiTest::detailPdfExportHelper_reportsStatuses()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QString normalizedTarget;
+
+    page.currentDetailPdfPath_ = sandbox.path(QStringLiteral("data/conclusion_pdfs/not_found.pdf"));
+    QCOMPARE(page.exportPdfToPathForTest(sandbox.path(QStringLiteral("exports/out.pdf")), &normalizedTarget),
+             SearchPage::PdfExportCopyStatus::MissingSource);
+
+    const QString sourcePdfPath = sandbox.path(QStringLiteral("data/conclusion_pdfs/source.pdf"));
+    QVERIFY(QDir().mkpath(QFileInfo(sourcePdfPath).absolutePath()));
+    QFile sourceFile(sourcePdfPath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QVERIFY(sourceFile.write(QByteArrayLiteral("pdf-binary-content")) > 0);
+    sourceFile.close();
+    page.currentDetailPdfPath_ = sourcePdfPath;
+
+    QCOMPARE(page.exportPdfToPathForTest(sourcePdfPath, &normalizedTarget),
+             SearchPage::PdfExportCopyStatus::SourceTargetSame);
+
+    const QString blockedTargetPath = sandbox.path(QStringLiteral("exports/blocked.pdf"));
+    QVERIFY(QDir().mkpath(blockedTargetPath));
+    QCOMPARE(page.exportPdfToPathForTest(blockedTargetPath, &normalizedTarget),
+             SearchPage::PdfExportCopyStatus::RemoveTargetFailed);
+
+    const QString missingDirTargetPath = sandbox.path(QStringLiteral("exports_missing/subdir/out.pdf"));
+    QCOMPARE(page.exportPdfToPathForTest(missingDirTargetPath, &normalizedTarget),
+             SearchPage::PdfExportCopyStatus::CopyFailed);
+
+    const QString successTargetPath = sandbox.path(QStringLiteral("exports/success.pdf"));
+    QCOMPARE(page.exportPdfToPathForTest(successTargetPath, &normalizedTarget),
+             SearchPage::PdfExportCopyStatus::Success);
+    QVERIFY(QFileInfo::exists(successTargetPath));
 }
 
 QTEST_MAIN(SearchPageRound5UiTest)

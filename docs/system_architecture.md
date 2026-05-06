@@ -30,7 +30,7 @@
 - `domain_topic_map.json`：已接入启动加载、诊断和降级；`SuggestService` 已消费该映射做 domain/topic 层级候选扩展。
 
 #### 仅骨架 / 预留
-- 收藏页筛选按钮（文案“筛选（即将支持）”）当前无实际逻辑。
+- 收藏页筛选按钮（文案“筛选（即将支持）”）当前为禁用态占位（`setEnabled(false)` + tooltip），未接入筛选业务逻辑。
 - 激活页“查看升级方案”仅弹窗提示“暂未接入在线升级流程”。
 - 设置页“扩展预留”区块是说明性预留。
 - `src/app` 目录当前为空占位。
@@ -267,7 +267,7 @@ flowchart TD
 - `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮可循环切换三档；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
 - `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。
-- `FavoritesPage`：已接线到真实收藏数据；筛选按钮未实现。
+- `FavoritesPage`：已接线到真实收藏数据；筛选按钮当前为禁用占位态（未实现筛选能力）。
 - `RecentSearchesPage`：已接线到真实历史数据。
 - `SettingsPage`：主要是只读状态展示，不是“真实设置编辑页”；已实现数据目录/日志目录打开，README 打开链路增加失败兜底（记事本/打开 docs）。
 - `ActivationPage`：激活码离线流程已通；在线升级入口未接入。
@@ -363,9 +363,10 @@ flowchart TD
 - 收藏页：`FavoritesPage::reloadData()` 从 repo 读取并渲染 `FavoriteItemCard`。
 - 当前状态：已实现（收藏增删查、一键清空、回看详情）。
 - 部分实现：
-  - `FavoritesPage` 过滤按钮无业务逻辑（空 lambda）。
-- 待确认：
-  - 收藏时间排序依赖 `favorites.json` 的 `items[].favoritedAt/...`，但 `FavoritesRepository` 默认只写 `ids`。
+  - `FavoritesPage` 过滤按钮未实现业务筛选，当前固定禁用并展示“即将支持”提示。
+- 已实现补充（存储 schema）：
+  - `FavoritesRepository::load()` 兼容读取 `ids` 与 `items`，并合并 `favoritedAt/updatedAt/createdAt` 时间字段。
+  - `FavoritesRepository::save()` 统一写回 `ids + items`，其中 `items[].id` 必写，时间字段在有值时写 `favoritedAt/updatedAt`。
 
 ### 6.5 历史记录链路
 
@@ -532,14 +533,13 @@ flowchart TD
 
 ### 10.1 已识别技术债
 - `SearchPage` 职责过重（搜索、suggest、详情渲染、缓存、性能埋点、收藏、历史写入、功能门控都在同类）。
-- 收藏时间 schema 不统一：仓库写 `ids`，页面又读 `items` 时间字段。
 - 设置持久化链路未接线，容易造成“有仓库无业务”。
 - 授权安全关键校验是 TODO stub。
 - Web 详情模板与 C++ payload 字段强耦合，缺少契约层校验。
 
 ### 10.2 建议治理顺序
 1. 先补齐授权签名/解密真实校验。
-2. 统一收藏文件 schema（明确是否需要 `items` + 时间）。
+2. 落地收藏页筛选能力（当前按钮为禁用占位态）。
 3. 将 `SearchPage` 拆分为查询编排、详情编排、状态管理子组件。
 4. 明确 Settings 页定位：要么做真实可编辑设置，要么改名为“状态/关于”。
 5. 为 detail payload 建立字段契约测试（C++ mapper 与 JS runtime 同步校验）。

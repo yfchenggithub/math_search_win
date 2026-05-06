@@ -32,7 +32,7 @@
 
 | 类 | 文件 | 主要职责 | 上游调用方 | 下游依赖 | 重要函数 |
 |---|---|---|---|---|---|
-| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体（默认全屏大档/非全屏小档，`Aa` 三档循环 + `Ctrl+滚轮` 连续缩放）与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`onPdfExportButtonClicked`、`onDetailFontButtonClicked`、`eventFilter`、`tryAdjustDetailFontScaleByWheelDelta`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
+| `SearchPage` | `src/ui/pages/search_page.h/.cpp` | 搜索、建议、结果、详情（PDF/Web/文本回退）、收藏、历史写入、功能门控、详情字体（默认全屏大档/非全屏小档，`Aa` 三档循环 + `Ctrl+滚轮` 连续缩放）与渲染模式持久化、PDF 页码导航与导出、详情区全屏切换 | `MainWindow` | `SearchService`、`SuggestService`、`Conclusion*Repository`、`Detail*`、`FeatureGate`、`SettingsRepository` | `runSearch`、`runSuggest`、`renderDetailForRequest`、`renderDetailInPdfView`、`resolveDetailPdfPath`、`jumpToPdfPage`、`updatePdfPageNavigationUi`、`exportPdfToPath`、`onPdfExportButtonClicked`、`onDetailFontButtonClicked`、`eventFilter`、`tryAdjustDetailFontScaleByWheelDelta`、`onDetailFullscreenButtonClicked`、`enterDetailFullscreen`、`leaveDetailFullscreen` |
 | `HomePage` | `src/ui/pages/home_page.h/.cpp` | 首页信任信息展示、主搜索入口、价值证明卡片、最近/收藏预览与导航分发 | `MainWindow` | `HistoryRepository`、`FavoritesRepository`、`ConclusionIndexRepository` | `setupHeroSection`、`setupQuickActionsSection`、`reloadData`、`rebuildRecentPreview`、`rebuildFavoritesPreview` |
 | `FavoritesPage` | `src/ui/pages/favorites_page.h/.cpp` | 收藏列表展示、取消收藏、一键清空、打开详情 | `MainWindow` | `FavoritesRepository`、`ConclusionContentRepository`、`ConclusionIndexRepository` | `reloadData`、`rebuildCards`、`buildItemFromId`、`handleClearAll` |
 | `RecentSearchesPage` | `src/ui/pages/recent_searches_page.h/.cpp` | 历史展示、重搜、删除、清空 | `MainWindow` | `HistoryRepository` | `reloadData`、`handleSearchAgain`、`handleClearAll` |
@@ -60,7 +60,7 @@
 | `ConclusionContentRepository` | `src/infrastructure/data/conclusion_content_repository.h/.cpp` | 内容加载与按 ID 读取 | `MainWindow`、`SearchPage`、`FavoritesPage`、`SettingsPage` | `CanonicalContentLoader` | `loadFromFile`、`getById` |
 | `BackendSearchIndexLoader` | `src/infrastructure/data/backend_search_index_loader.h/.cpp` | 解析索引 JSON，提供 diagnostics | `ConclusionIndexRepository` | `AppPaths` | `loadFromFile` |
 | `CanonicalContentLoader` | `src/infrastructure/data/canonical_content_loader.h/.cpp` | 解析内容 JSON，提供 diagnostics | `ConclusionContentRepository` | 路径探测逻辑 | `loadFromFile` |
-| `FavoritesRepository` | `src/domain/repositories/favorites_repository.h/.cpp` | 收藏 ID 读写与自动保存 | `SearchPage`、`FavoritesPage`、`HomePage` | `LocalStorageService` | `load`、`add`、`remove`、`allIds` |
+| `FavoritesRepository` | `src/domain/repositories/favorites_repository.h/.cpp` | 收藏读写与自动保存（统一写 `ids + items`；兼容读取历史 schema） | `SearchPage`、`FavoritesPage`、`HomePage` | `LocalStorageService` | `load`、`save`、`add`、`remove`、`allIds` |
 | `HistoryRepository` | `src/domain/repositories/history_repository.h/.cpp` | 历史记录读写、去重、容量限制 | `SearchPage`、`RecentSearchesPage`、`HomePage` | `LocalStorageService` | `load`、`addQuery`、`removeQuery`、`recentItems` |
 | `SettingsRepository` | `src/domain/repositories/settings_repository.h/.cpp` | 设置键值持久化 | 主要在 tests | `LocalStorageService`、`AppSettings` | `load`、`setValue`、`resetToDefaults` |
 | `LocalStorageService` | `src/infrastructure/storage/local_storage_service.h/.cpp` | `cache` 路径管理 + JSON 原子写入 | 各业务仓库 + `FavoritesPage` | `AppPaths`、`QSaveFile` | `favoritesFilePath`、`historyFilePath`、`settingsFilePath`、`writeJsonFileAtomically` |
@@ -154,6 +154,7 @@
 - 业务仓库：`FavoritesRepository`
 - 持久化底层：`LocalStorageService`
 - 页面联动：`SearchPage`、`FavoritesPage`、`HomePage`
+- 当前 schema：`favorites.json` 同时维护 `ids` 与 `items`；`items` 至少含 `id`，有时间戳时写 `favoritedAt/updatedAt`。
 
 ### 改历史记录
 - 写入触发：`SearchPage::runSearch`（triggerSource 条件）

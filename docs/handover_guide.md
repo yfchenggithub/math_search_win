@@ -108,6 +108,10 @@ powershell .\run-debug.ps1
   - 收藏：`FavoritesRepository` -> `cache/favorites.json`
   - 历史：`HistoryRepository` -> `cache/history.json`
   - 设置：`SettingsRepository` -> `cache/settings.json`
+- 收藏 schema 现状：
+  - 写入：统一输出 `ids + items`。
+  - 兼容：`load()` 兼容历史文件（仅 `ids`、仅 `items` 或混合）。
+  - 时间：`items` 可包含 `favoritedAt/updatedAt/createdAt`，用于排序信息保留。
 - 重要现状：`SettingsRepository` 已被 `SearchPage` 用于详情渲染模式持久化（`detail_render_mode`）与详情字体状态缓存（`detail_font_scale_level` 三档 + `detail_font_wheel_ticks` 连续缩放偏移）；`SettingsPage` 仍是只读状态页（含日志目录、README 打开入口）。
 
 ## 7. 如何理解激活/授权系统
@@ -203,7 +207,7 @@ powershell .\run-debug.ps1
 - 误解 1：设置页已经是“设置中心”。
   - 现实：当前仍以状态展示为主；仅 `SearchPage` 的详情字体档位接线到了 `SettingsRepository`。
 - 误解 2：收藏文件一定有完整 `items` 元数据。
-  - 现实：`FavoritesRepository` 默认只写 `ids`，`FavoritesPage` 读取 `items` 只是兼容。
+  - 现实：仓库会统一写 `ids + items`，但历史文件可能缺失 `items` 或时间字段，读取时已做兼容与合并。
 - 误解 3：激活链路已经是完整安全方案。
   - 现实：签名/解密校验是 TODO stub。
 - 误解 4：输入时会自动实时搜索。
@@ -212,7 +216,7 @@ powershell .\run-debug.ps1
 ## 10. 建议后续整理顺序
 
 1. 先补授权安全链路（签名/解密/到期策略）。
-2. 统一收藏文件 schema（`ids` vs `items`）。
+2. 落地收藏页筛选能力（当前按钮为禁用占位态）。
 3. 拆分 `SearchPage`（搜索编排、详情编排、状态同步分层）。
 4. 明确 `SettingsPage` 定位并接线真实持久化。
 5. 为 `DetailViewDataMapper` 和 `detail.js` 增加契约测试，降低跨语言改动风险。

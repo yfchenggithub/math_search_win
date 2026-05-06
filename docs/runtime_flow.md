@@ -119,7 +119,7 @@ flowchart TD
 - PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
-- PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），通过保存对话框选择目标路径后执行文件复制（另存为）；成功后同时更新状态栏并弹出成功提示框，弹框提供“打开导出目录”按钮。
+- PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），内部通过 `exportPdfToPath()` 统一处理“缺源文件 / 同路径 / 覆盖失败 / 复制失败 / 成功”分支；成功后更新状态栏并弹出成功提示框，弹框提供“打开导出目录”按钮。
 - 详情字体调节：
   - `Aa` 按钮通过 `onDetailFontButtonClicked()` 做三档循环（`2 -> 1 -> 0 -> 2`），同时清零滚轮连续缩放偏移。
   - 详情区视图（`QPdfView/QWebEngineView/QTextBrowser`）通过 `eventFilter()` 捕获 `Ctrl + 鼠标滚轮`，调用 `tryAdjustDetailFontScaleByWheelDelta()` 做连续缩放并持久化偏移。
@@ -196,7 +196,9 @@ sequenceDiagram
 - 收藏页补充入口：`FavoritesPage::handleClearAll()`（一键清空全部收藏）。
 - 仓库：`FavoritesRepository`（底层 `LocalStorageService`）。
 - 保存文件：`cache/favorites.json`。
+- schema：统一写 `ids + items`；兼容读取旧文件（仅 `ids` 或仅 `items`），并在可用时保留 `items[].favoritedAt/updatedAt/createdAt` 时间信息。
 - 页面同步：`SearchPage` 发 `favoritesChanged`，`MainWindow` 刷新 `FavoritesPage` 与 `HomePage`。
+- 收藏页筛选按钮现状：`FavoritesPage` 中保持禁用态，tooltip 为“筛选功能即将支持”。
 
 ```mermaid
 sequenceDiagram

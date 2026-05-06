@@ -83,6 +83,12 @@ constexpr qreal kDetailWebZoomMaxFactor = 5.0;
 const QString kDetailFullscreenEnterText = QStringLiteral("全屏");
 const QString kDetailFullscreenExitText = QStringLiteral("退出全屏");
 
+struct DetailZoomSnapshot {
+    QString fontScaleToken;
+    qreal pdfZoomFactor = 1.0;
+    qreal webZoomFactor = 1.0;
+};
+
 int clampDetailFontScaleLevel(int level)
 {
     return std::clamp(level, kDetailFontScaleMinLevel, kDetailFontScaleMaxLevel);
@@ -188,6 +194,22 @@ QString detailFontButtonTextForLevel(int level)
     default:
         return QStringLiteral("Aa");
     }
+}
+
+DetailZoomSnapshot computeDetailZoomSnapshot(int detailFontScaleLevel, int detailFontWheelTicks)
+{
+    DetailZoomSnapshot snapshot;
+    snapshot.fontScaleToken = detailFontScaleTokenForLevel(detailFontScaleLevel);
+
+    const qreal baseZoomFactor = detailZoomFactorForLevel(detailFontScaleLevel);
+    const qreal wheelZoomFactor = std::pow(kDetailWheelZoomStepRatio, static_cast<qreal>(detailFontWheelTicks));
+    const qreal combinedZoomFactor = (std::isfinite(wheelZoomFactor) && wheelZoomFactor > 0.0)
+                                         ? (baseZoomFactor * wheelZoomFactor)
+                                         : (detailFontWheelTicks >= 0 ? std::numeric_limits<qreal>::max()
+                                                                      : std::numeric_limits<qreal>::min());
+    snapshot.pdfZoomFactor = std::clamp(combinedZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+    snapshot.webZoomFactor = std::clamp(combinedZoomFactor, kDetailWebZoomMinFactor, kDetailWebZoomMaxFactor);
+    return snapshot;
 }
 
 QString detailFontButtonTipForLevel(int level)
@@ -891,6 +913,52 @@ void SearchPage::onPdfNextPageClicked()
     jumpToPdfPage(detailPdfView_->pageNavigator()->currentPage() + 1);
 }
 
+SearchPage::PdfExportCopyStatus SearchPage::exportPdfToPath(const QString& rawTargetPath, QString* normalizedTargetPath)
+{
+    const QString sourcePath = currentDetailPdfPath_.trimmed();
+    const QFileInfo sourceInfo(sourcePath);
+    if (sourcePath.isEmpty() || !sourceInfo.exists() || !sourceInfo.isFile()) {
+        return PdfExportCopyStatus::MissingSource;
+    }
+
+    QString targetPath = rawTargetPath.trimmed();
+    if (targetPath.isEmpty()) {
+        return PdfExportCopyStatus::CopyFailed;
+    }
+
+    if (QFileInfo(targetPath).suffix().trimmed().isEmpty()) {
+        targetPath.append(QStringLiteral(".pdf"));
+    }
+
+    const QString normalizedSource = sourceInfo.absoluteFilePath();
+    const QString normalizedTarget = QFileInfo(targetPath).absoluteFilePath();
+    if (normalizedTargetPath != nullptr) {
+        *normalizedTargetPath = normalizedTarget;
+    }
+
+    if (QDir::cleanPath(normalizedSource) == QDir::cleanPath(normalizedTarget)) {
+        return PdfExportCopyStatus::SourceTargetSame;
+    }
+
+    if (QFileInfo::exists(normalizedTarget) && !QFile::remove(normalizedTarget)) {
+        return PdfExportCopyStatus::RemoveTargetFailed;
+    }
+
+    if (!QFile::copy(normalizedSource, normalizedTarget)) {
+        return PdfExportCopyStatus::CopyFailed;
+    }
+
+    return PdfExportCopyStatus::Success;
+}
+
+#if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
+SearchPage::PdfExportCopyStatus SearchPage::exportPdfToPathForTest(const QString& rawTargetPath,
+                                                                   QString* normalizedTargetPath)
+{
+    return exportPdfToPath(rawTargetPath, normalizedTargetPath);
+}
+#endif
+
 void SearchPage::onPdfExportButtonClicked()
 {
     const QString sourcePath = currentDetailPdfPath_.trimmed();
@@ -915,30 +983,64 @@ void SearchPage::onPdfExportButtonClicked()
                                                       QDir::home().filePath(defaultName),
                                                       QStringLiteral("PDF 文件 (*.pdf);;所有文件 (*.*)"));
     if (targetPath.trimmed().isEmpty()) {
+        LOG_INFO(LogCategory::DetailRender,
+                 QStringLiteral("pdf export canceled doc_id=%1").arg(docId.isEmpty() ? QStringLiteral("-") : docId));
         return;
     }
 
-    if (QFileInfo(targetPath).suffix().trimmed().isEmpty()) {
-        targetPath.append(QStringLiteral(".pdf"));
-    }
+    QString normalizedTarget;
+    const PdfExportCopyStatus exportStatus = exportPdfToPath(targetPath, &normalizedTarget);
+    const auto statusToken = [exportStatus]() {
+        switch (exportStatus) {
+        case PdfExportCopyStatus::Success:
+            return QStringLiteral("success");
+        case PdfExportCopyStatus::MissingSource:
+            return QStringLiteral("missing_source");
+        case PdfExportCopyStatus::SourceTargetSame:
+            return QStringLiteral("source_target_same");
+        case PdfExportCopyStatus::RemoveTargetFailed:
+            return QStringLiteral("remove_target_failed");
+        case PdfExportCopyStatus::CopyFailed:
+            return QStringLiteral("copy_failed");
+        default:
+            return QStringLiteral("unknown");
+        }
+    };
 
-    const QString normalizedSource = sourceInfo.absoluteFilePath();
-    const QString normalizedTarget = QFileInfo(targetPath).absoluteFilePath();
-    if (QDir::cleanPath(normalizedSource) == QDir::cleanPath(normalizedTarget)) {
+    if (exportStatus == PdfExportCopyStatus::MissingSource) {
+        updateStatusLine(QStringLiteral("导出失败：源 PDF 不存在。"), sourceInfo.absoluteFilePath());
+        currentDetailPdfPath_.clear();
+        updatePdfPageNavigationUi();
+        LOG_WARN(LogCategory::DetailRender,
+                 QStringLiteral("pdf export failed status=%1 source=%2 target=%3")
+                     .arg(statusToken(), sourceInfo.absoluteFilePath(), normalizedTarget));
+        return;
+    }
+    if (exportStatus == PdfExportCopyStatus::SourceTargetSame) {
         updateStatusLine(QStringLiteral("PDF 已位于目标位置。"), normalizedTarget);
+        LOG_INFO(LogCategory::DetailRender,
+                 QStringLiteral("pdf export skipped status=%1 source=%2 target=%3")
+                     .arg(statusToken(), sourceInfo.absoluteFilePath(), normalizedTarget));
         return;
     }
-
-    if (QFileInfo::exists(normalizedTarget) && !QFile::remove(normalizedTarget)) {
+    if (exportStatus == PdfExportCopyStatus::RemoveTargetFailed) {
         updateStatusLine(QStringLiteral("导出失败：无法覆盖目标文件。"), normalizedTarget);
+        LOG_WARN(LogCategory::DetailRender,
+                 QStringLiteral("pdf export failed status=%1 source=%2 target=%3")
+                     .arg(statusToken(), sourceInfo.absoluteFilePath(), normalizedTarget));
         return;
     }
-
-    if (!QFile::copy(normalizedSource, normalizedTarget)) {
+    if (exportStatus == PdfExportCopyStatus::CopyFailed) {
         updateStatusLine(QStringLiteral("导出失败：文件复制失败。"), normalizedTarget);
+        LOG_WARN(LogCategory::DetailRender,
+                 QStringLiteral("pdf export failed status=%1 source=%2 target=%3")
+                     .arg(statusToken(), sourceInfo.absoluteFilePath(), normalizedTarget));
         return;
     }
 
+    LOG_INFO(LogCategory::DetailRender,
+             QStringLiteral("pdf export finished status=%1 source=%2 target=%3")
+                 .arg(statusToken(), sourceInfo.absoluteFilePath(), normalizedTarget));
     updateStatusLine(QStringLiteral("PDF 导出完成。"), normalizedTarget);
     QMessageBox messageBox(this);
     messageBox.setIcon(QMessageBox::Information);
@@ -1022,26 +1124,18 @@ static QString detailPageIndicatorText(int currentPage, int pageCount)
 void SearchPage::applyDetailFontScale()
 {
     detailFontScaleLevel_ = clampDetailFontScaleLevel(detailFontScaleLevel_);
-    const QString fontScaleToken = detailFontScaleTokenForLevel(detailFontScaleLevel_);
-    const qreal baseZoomFactor = detailZoomFactorForLevel(detailFontScaleLevel_);
-    const qreal wheelZoomFactor = std::pow(kDetailWheelZoomStepRatio, static_cast<qreal>(detailFontWheelTicks_));
-    const qreal combinedZoomFactor = (std::isfinite(wheelZoomFactor) && wheelZoomFactor > 0.0)
-                                         ? (baseZoomFactor * wheelZoomFactor)
-                                         : (detailFontWheelTicks_ >= 0 ? std::numeric_limits<qreal>::max()
-                                                                       : std::numeric_limits<qreal>::min());
-    const qreal pdfZoomFactor = std::clamp(combinedZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
-    const qreal webZoomFactor = std::clamp(combinedZoomFactor, kDetailWebZoomMinFactor, kDetailWebZoomMaxFactor);
+    const DetailZoomSnapshot zoomSnapshot = computeDetailZoomSnapshot(detailFontScaleLevel_, detailFontWheelTicks_);
 
     if (detailPdfView_ != nullptr) {
-        detailPdfView_->setZoomFactor(pdfZoomFactor);
+        detailPdfView_->setZoomFactor(zoomSnapshot.pdfZoomFactor);
     }
 
     if (detailWebView_ != nullptr) {
-        detailWebView_->setZoomFactor(webZoomFactor);
+        detailWebView_->setZoomFactor(zoomSnapshot.webZoomFactor);
     }
 
     if (detailBrowser_ != nullptr) {
-        detailBrowser_->setProperty("fontScale", fontScaleToken);
+        detailBrowser_->setProperty("fontScale", zoomSnapshot.fontScaleToken);
         repolishWidget(detailBrowser_);
 
         const int browserTickDelta = detailFontWheelTicks_ - detailBrowserAppliedWheelTicks_;
@@ -1055,7 +1149,7 @@ void SearchPage::applyDetailFontScale()
     }
 
     if (detailFontButton_ != nullptr) {
-        detailFontButton_->setProperty("fontScale", fontScaleToken);
+        detailFontButton_->setProperty("fontScale", zoomSnapshot.fontScaleToken);
         detailFontButton_->setText(detailFontButtonTextForLevel(detailFontScaleLevel_));
         detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
         repolishWidget(detailFontButton_);

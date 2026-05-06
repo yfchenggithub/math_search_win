@@ -2,6 +2,8 @@
 
 #include "infrastructure/storage/local_storage_service.h"
 
+#include <QDateTime>
+#include <QHash>
 #include <QStringList>
 
 namespace domain::repositories {
@@ -34,8 +36,8 @@ private:
     infrastructure::storage::LocalStorageService ownedStorageService_;
     infrastructure::storage::LocalStorageService* storageService_ = nullptr;
     QStringList favoriteIds_;
+    QHash<QString, QDateTime> favoriteTimestampsById_;
     bool autoSave_ = true;
 };
 
 }  // namespace domain::repositories
-

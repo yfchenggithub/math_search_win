@@ -109,7 +109,21 @@ private slots:
     void onPdfExportButtonClicked();
     void flushPendingDetailRequest();
 
+public:
+    enum class PdfExportCopyStatus {
+        Success = 0,
+        MissingSource,
+        SourceTargetSame,
+        RemoveTargetFailed,
+        CopyFailed,
+    };
+
+#if defined(MATH_SEARCH_TESTS_SOURCE_DIR)
+    PdfExportCopyStatus exportPdfToPathForTest(const QString& rawTargetPath, QString* normalizedTargetPath = nullptr);
+#endif
+
 private:
+
     enum class SortMode {
         ScoreDesc = 0,
         TitleAsc,
@@ -229,6 +243,7 @@ private:
     void loadDetailFontScaleSetting();
     void applyDetailFontScale();
     void persistDetailFontScaleSetting();
+    PdfExportCopyStatus exportPdfToPath(const QString& rawTargetPath, QString* normalizedTargetPath = nullptr);
     bool tryAdjustDetailFontScaleByWheelDelta(int deltaY, Qt::KeyboardModifiers modifiers);
     void resetDetailWheelZoom();
     void enterDetailFullscreen();

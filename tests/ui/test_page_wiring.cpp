@@ -97,6 +97,7 @@ private slots:
     void recentSearchesPage_researchDeleteClear_emitSignalsAndRefresh();
     void favoritesPage_openAndUnfavorite_emitSignalsAndRefresh();
     void favoritesPage_clearAllButton_clearsRepositoryAndRefreshes();
+    void favoritesPage_filterButton_isDisabledWithHint();
 };
 
 void PageWiringTest::cleanupTestCase()
@@ -254,6 +255,18 @@ void PageWiringTest::favoritesPage_clearAllButton_clearsRepositoryAndRefreshes()
 
     QVERIFY(favoritesRepository.load());
     QCOMPARE(favoritesRepository.count(), 0);
+}
+
+void PageWiringTest::favoritesPage_filterButton_isDisabledWithHint()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+
+    FavoritesPage page(nullptr, nullptr, nullptr, nullptr);
+    auto* filterButton = page.findChild<QPushButton*>(QStringLiteral("toolbarButton"));
+    QVERIFY(filterButton != nullptr);
+    QVERIFY(!filterButton->isEnabled());
+    QVERIFY(filterButton->toolTip().contains(QStringLiteral("即将支持")));
 }
 
 QTEST_MAIN(PageWiringTest)

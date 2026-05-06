@@ -4,6 +4,7 @@
 #include "core/logging/logger.h"
 
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSet>
@@ -12,6 +13,53 @@ namespace domain::repositories {
 namespace {
 
 constexpr int kFavoritesSchemaVersion = 1;
+
+QDateTime parseFavoriteTimestamp(const QJsonObject& object)
+{
+    const auto parseValue = [](const QJsonValue& value) -> QDateTime {
+        const QString text = value.toString().trimmed();
+        if (text.isEmpty()) {
+            return {};
+        }
+
+        bool epochOk = false;
+        const qint64 epoch = text.toLongLong(&epochOk);
+        if (epochOk) {
+            if (epoch > 1000000000000LL) {
+                return QDateTime::fromMSecsSinceEpoch(epoch, Qt::UTC);
+            }
+            if (epoch > 1000000000LL) {
+                return QDateTime::fromSecsSinceEpoch(epoch, Qt::UTC);
+            }
+        }
+
+        QDateTime parsed = QDateTime::fromString(text, Qt::ISODateWithMs);
+        if (parsed.isValid()) {
+            return parsed.toUTC();
+        }
+
+        parsed = QDateTime::fromString(text, Qt::ISODate);
+        if (parsed.isValid()) {
+            return parsed.toUTC();
+        }
+
+        return {};
+    };
+
+    QDateTime timestamp = parseValue(object.value(QStringLiteral("favoritedAt")));
+    if (!timestamp.isValid()) {
+        timestamp = parseValue(object.value(QStringLiteral("updatedAt")));
+    }
+    if (!timestamp.isValid()) {
+        timestamp = parseValue(object.value(QStringLiteral("createdAt")));
+    }
+    return timestamp;
+}
+
+QString toStorageTimestamp(const QDateTime& timestamp)
+{
+    return timestamp.isValid() ? timestamp.toUTC().toString(Qt::ISODateWithMs) : QString();
+}
 
 }  // namespace
 
@@ -24,6 +72,7 @@ FavoritesRepository::FavoritesRepository(infrastructure::storage::LocalStorageSe
 bool FavoritesRepository::load()
 {
     favoriteIds_.clear();
+    favoriteTimestampsById_.clear();
 
     if (!storageService_->ensureCacheDirExists()) {
         return false;
@@ -66,9 +115,18 @@ bool FavoritesRepository::load()
         dedupeSet.insert(id);
         favoriteIds_.push_back(id);
     };
+    auto mergeTimestampIfNeeded = [this](const QString& id, const QDateTime& candidate) {
+        if (id.isEmpty() || !candidate.isValid()) {
+            return;
+        }
+        const auto existing = favoriteTimestampsById_.constFind(id);
+        if (existing == favoriteTimestampsById_.constEnd() || !existing.value().isValid() || candidate > existing.value()) {
+            favoriteTimestampsById_.insert(id, candidate);
+        }
+    };
 
-    // MVP uses flat `ids` array for simplicity and low maintenance cost.
-    // We also accept `items[].id` for forward/backward compatibility.
+    // Unified schema writes both `ids` and `items` (with timestamps).
+    // Keep compatibility with legacy files containing either side.
     const QJsonArray idsArray = root.value(QStringLiteral("ids")).toArray();
     for (const QJsonValue& value : idsArray) {
         appendIfUnique(value.toString());
@@ -76,7 +134,13 @@ bool FavoritesRepository::load()
 
     const QJsonArray itemsArray = root.value(QStringLiteral("items")).toArray();
     for (const QJsonValue& value : itemsArray) {
-        appendIfUnique(value.toObject().value(QStringLiteral("id")).toString());
+        if (!value.isObject()) {
+            continue;
+        }
+        const QJsonObject itemObject = value.toObject();
+        const QString id = itemObject.value(QStringLiteral("id")).toString();
+        appendIfUnique(id);
+        mergeTimestampIfNeeded(normalizeId(id), parseFavoriteTimestamp(itemObject));
     }
 
     return true;
@@ -85,13 +149,25 @@ bool FavoritesRepository::load()
 bool FavoritesRepository::save()
 {
     QJsonArray idsArray;
+    QJsonArray itemsArray;
     for (const QString& id : favoriteIds_) {
         idsArray.push_back(id);
+
+        QJsonObject itemObject;
+        itemObject.insert(QStringLiteral("id"), id);
+        const auto timestampIt = favoriteTimestampsById_.constFind(id);
+        if (timestampIt != favoriteTimestampsById_.constEnd() && timestampIt.value().isValid()) {
+            const QString timestamp = toStorageTimestamp(timestampIt.value());
+            itemObject.insert(QStringLiteral("favoritedAt"), timestamp);
+            itemObject.insert(QStringLiteral("updatedAt"), timestamp);
+        }
+        itemsArray.push_back(itemObject);
     }
 
     QJsonObject root;
     root.insert(QStringLiteral("version"), kFavoritesSchemaVersion);
     root.insert(QStringLiteral("ids"), idsArray);
+    root.insert(QStringLiteral("items"), itemsArray);
     return storageService_->writeJsonFileAtomically(storageService_->favoritesFilePath(), QJsonDocument(root));
 }
 
@@ -109,6 +185,7 @@ void FavoritesRepository::add(const QString& conclusionId)
     }
 
     favoriteIds_.push_back(id);
+    favoriteTimestampsById_.insert(id, QDateTime::currentDateTimeUtc());
     persistIfNeeded();
 }
 
@@ -123,6 +200,7 @@ void FavoritesRepository::remove(const QString& conclusionId)
         return;
     }
 
+    favoriteTimestampsById_.remove(id);
     persistIfNeeded();
 }
 
@@ -151,6 +229,7 @@ void FavoritesRepository::clear()
         return;
     }
     favoriteIds_.clear();
+    favoriteTimestampsById_.clear();
     persistIfNeeded();
 }
 
