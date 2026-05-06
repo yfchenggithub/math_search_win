@@ -62,8 +62,8 @@ powershell .\run-debug.ps1
 - UI 入口在 `SearchPage`：
   - 输入变化：`onQueryTextChanged()` -> `runSuggest()`
   - 执行搜索：`onQueryReturnPressed/onSearchButtonClicked/onSuggestionClicked` -> `runSearch()`
-  - 结果摘要：`updateResultSummary()`（普通模式显示“找到 X 条 / 关键词 / 筛选 / 排序”，开发模式保留 `query/elapsed`）
-  - 结果卡片：`buildResultCard()` + `highlightKeyword()`
+  - 结果摘要：`updateResultSummary()`（普通模式显示“已显示 X / 共 Y 条 / 关键词 / 筛选 / 排序”，开发模式保留 `query/shown/total/elapsed`）
+  - 结果卡片：`buildResultCard()` + `highlightKeyword()`；标题后追加 `(当前条目/当前列表总条数)`
   - 快速筛选：仅 `module` 筛选 + `sort` 排序在左栏快速筛选卡，`clearFiltersButton_` 负责一键重置筛选条件
 - 算法在 `SearchService::search()`：
   - `termIndex + prefixIndex` 合并评分

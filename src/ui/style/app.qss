@@ -953,7 +953,7 @@ QListWidget#resultList::item:hover {
 QListWidget#resultList::item:selected {
     border-color: #77a4dd;
     background-color: #eaf3ff;
-    color: #1e2832;
+    color: #0F3E73;
 }
 
 QWidget#searchResultCard {
@@ -961,9 +961,17 @@ QWidget#searchResultCard {
 }
 
 QLabel#searchResultCardTitle {
-    color: #1f2b37;
+    color: #163B66;
     font-size: 15px;
     font-weight: 630;
+}
+
+QListWidget#resultList::item:hover QLabel#searchResultCardTitle {
+    color: #1E4F88;
+}
+
+QListWidget#resultList::item:selected QLabel#searchResultCardTitle {
+    color: #0F3E73;
 }
 
 QLabel#searchResultCardFormula {

@@ -164,10 +164,16 @@ private:
     void runSuggest(const QString& query);
     void runSearch(const QString& query, const QString& triggerSource);
     void clearSuggestions();
-    void updateResultSummary(const QString& query, int total, qint64 elapsedMs, bool hasResults);
+    void updateResultSummary(const QString& query,
+                             int displayedCount,
+                             int totalCount,
+                             qint64 elapsedMs,
+                             bool hasResults);
     void renderResults(const QVector<domain::models::SearchHit>& hits);
     QWidget* buildResultCard(const domain::models::SearchHit& hit,
                              const QStringList& highlightTerms,
+                             int displayIndex,
+                             int totalCount,
                              QWidget* parent) const;
     QString highlightKeyword(const QString& text, const QStringList& terms) const;
     void enqueueDetailRenderRequest(const QString& docId);

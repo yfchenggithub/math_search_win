@@ -281,6 +281,7 @@ private slots:
     void detailFontButton_cyclesLevels();
     void detailCtrlWheel_adjustsContinuousZoom();
     void filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels();
+    void resultCards_showRankFractionInTitle();
     void detailPdfExportHelper_reportsStatuses();
 };
 
@@ -788,6 +789,47 @@ void SearchPageRound5UiTest::filterPanel_keepsModuleAndSortOnly_andLocalizesModu
         }
     }
     QVERIFY(foundLocalizedModuleItem);
+}
+
+void SearchPageRound5UiTest::resultCards_showRankFractionInTitle()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    auto* queryInput = page.findChild<QLineEdit*>(QStringLiteral("searchInput"));
+    auto* searchButton = page.findChild<QPushButton*>(QStringLiteral("searchButton"));
+    auto* resultList = page.findChild<QListWidget*>(QStringLiteral("resultList"));
+    QVERIFY(queryInput != nullptr);
+    QVERIFY(searchButton != nullptr);
+    QVERIFY(resultList != nullptr);
+
+    queryInput->setText(QStringLiteral("exact term"));
+    QTest::mouseClick(searchButton, Qt::LeftButton);
+
+    QTRY_VERIFY(resultList->count() > 0);
+    const int totalCount = resultList->count();
+
+    for (int i = 0; i < totalCount; ++i) {
+        QListWidgetItem* item = resultList->item(i);
+        QVERIFY(item != nullptr);
+        QWidget* cardWidget = resultList->itemWidget(item);
+        QVERIFY(cardWidget != nullptr);
+        QLabel* titleLabel = cardWidget->findChild<QLabel*>(QStringLiteral("searchResultCardTitle"));
+        QVERIFY(titleLabel != nullptr);
+
+        const QString expectedFraction = QStringLiteral("(%1/%2)").arg(i + 1).arg(totalCount);
+        QVERIFY2(titleLabel->text().contains(expectedFraction),
+                 qPrintable(QStringLiteral("title should contain rank fraction %1, actual=%2")
+                                .arg(expectedFraction, titleLabel->text())));
+    }
 }
 
 void SearchPageRound5UiTest::detailPdfExportHelper_reportsStatuses()

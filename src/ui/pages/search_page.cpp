@@ -2102,7 +2102,7 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
     const int displayedCount = resultList_ == nullptr ? currentHits_.size() : resultList_->count();
 
     if (currentHits_.isEmpty()) {
-        updateResultSummary(normalizedQuery, 0, elapsedMs, false);
+        updateResultSummary(normalizedQuery, 0, 0, elapsedMs, false);
         updateResultEmptyState(QStringLiteral("没有找到相关结论"),
                                QStringLiteral("可以尝试搜索：不等式、导数、椭圆、数列求和、柯西、均值。"));
         setDetailEmptyState(QStringLiteral("请先在左侧搜索并选择一个结论。\n"
@@ -2116,19 +2116,15 @@ void SearchPage::runSearch(const QString& query, const QString& triggerSource)
         return;
     }
 
-    updateResultSummary(normalizedQuery, displayedCount, elapsedMs, true);
+    const int totalCount = std::max(displayedCount, std::max(rawHitCount, result.total));
+    updateResultSummary(normalizedQuery, displayedCount, totalCount, elapsedMs, true);
 
     if (!fullSearchEnabled) {
         const QString reason = featureDisabledReason(license::Feature::FullSearch);
-        if (isDevMode()) {
-            updateStatusLine(
-                QStringLiteral("体验版仅展示前 %1 条结果（命中 %2 条）。").arg(kTrialPreviewLimit).arg(rawHitCount),
-                reason.isEmpty() ? QStringLiteral("正式版解锁完整搜索。") : reason);
-        } else {
-            updateStatusLine(QStringLiteral("找到 %1 条相关结论（体验版最多显示 %2 条）。")
-                                 .arg(displayedCount)
-                                 .arg(kTrialPreviewLimit),
-                             reason.isEmpty() ? QStringLiteral("正式版可查看全部命中结果。") : reason);
+        if (summaryLabel_ != nullptr) {
+            const QString hint = reason.isEmpty() ? QStringLiteral("体验版最多显示前 %1 条结果。").arg(kTrialPreviewLimit)
+                                                  : reason;
+            summaryLabel_->setText(QStringLiteral("%1\n提示：%2").arg(summaryLabel_->text(), hint));
         }
     }
     updateResultEmptyState(QString(), QString());
@@ -2154,19 +2150,26 @@ void SearchPage::clearSuggestions()
     suggestionList_->setVisible(false);
 }
 
-void SearchPage::updateResultSummary(const QString& query, int total, qint64 elapsedMs, bool hasResults)
+void SearchPage::updateResultSummary(const QString& query,
+                                     int displayedCount,
+                                     int totalCount,
+                                     qint64 elapsedMs,
+                                     bool hasResults)
 {
     const QString normalizedQuery = query.trimmed();
     const QString moduleFilter = selectedModuleFilter();
     const QString moduleText = moduleFilter.isEmpty() ? QStringLiteral("全部模块") : moduleDisplayName(moduleFilter);
     const QString sortText =
         sortCombo_ == nullptr ? QStringLiteral("按相关度") : sortCombo_->currentText().trimmed();
+    const int safeDisplayed = std::max(0, displayedCount);
+    const int safeTotal = std::max(safeDisplayed, std::max(0, totalCount));
 
     if (isDevMode()) {
         updateStatusLine(hasResults ? QStringLiteral("搜索完成。") : QStringLiteral("没有找到相关结论。"),
-                         QStringLiteral("query=%1 | total=%2 | elapsed=%3ms | module=%4 | sort=%5")
+                         QStringLiteral("query=%1 | shown=%2 | total=%3 | elapsed=%4ms | module=%5 | sort=%6")
                              .arg(normalizedQuery.isEmpty() ? QStringLiteral("<empty>") : normalizedQuery)
-                             .arg(total)
+                             .arg(safeDisplayed)
+                             .arg(safeTotal)
                              .arg(elapsedMs)
                              .arg(moduleText)
                              .arg(sortText.isEmpty() ? QStringLiteral("按相关度") : sortText));
@@ -2179,13 +2182,13 @@ void SearchPage::updateResultSummary(const QString& query, int total, qint64 ela
         return;
     }
 
-    if (!hasResults || total <= 0) {
+    if (!hasResults || safeTotal <= 0) {
         updateStatusLine(QStringLiteral("没有找到相关结论"),
                          QStringLiteral("可以尝试搜索：不等式、导数、椭圆、数列求和、柯西、均值。"));
         return;
     }
 
-    updateStatusLine(QStringLiteral("找到 %1 条相关结论").arg(total),
+    updateStatusLine(QStringLiteral("已显示 %1 / 共 %2 条相关结论").arg(safeDisplayed).arg(safeTotal),
                      QStringLiteral("关键词：%1\n筛选：%2\n排序：%3")
                          .arg(normalizedQuery)
                          .arg(moduleText)
@@ -2261,6 +2264,8 @@ QString SearchPage::highlightKeyword(const QString& text, const QStringList& ter
 
 QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
                                      const QStringList& highlightTerms,
+                                     int displayIndex,
+                                     int totalCount,
                                      QWidget* parent) const
 {
     domain::adapters::ConclusionCardViewData cardView;
@@ -2307,7 +2312,15 @@ QWidget* SearchPage::buildResultCard(const domain::models::SearchHit& hit,
     titleLabel->setObjectName(QStringLiteral("searchResultCardTitle"));
     titleLabel->setWordWrap(true);
     titleLabel->setTextFormat(Qt::RichText);
-    titleLabel->setText(QStringLiteral("%1  %2").arg(cardId.toHtmlEscaped(), highlightKeyword(titleText, highlightTerms)));
+    const int safeIndex = std::max(1, displayIndex);
+    const int safeTotal = std::max(safeIndex, totalCount);
+    const QString rankSuffix = safeTotal > 0
+                                   ? QStringLiteral(" <span style=\"color:#6B7A90;font-weight:500;\">(%1/%2)</span>")
+                                         .arg(safeIndex)
+                                         .arg(safeTotal)
+                                   : QString();
+    titleLabel->setText(QStringLiteral("%1  %2%3")
+                            .arg(cardId.toHtmlEscaped(), highlightKeyword(titleText, highlightTerms), rankSuffix));
 
     auto* summaryLabel = new QLabel(card);
     summaryLabel->setObjectName(QStringLiteral("searchResultCardFormula"));
@@ -2364,10 +2377,12 @@ void SearchPage::renderResults(const QVector<domain::models::SearchHit>& hits)
     }
 
     const QStringList highlightTerms = extractHighlightTerms(lastSearchQuery_);
-    for (const domain::models::SearchHit& hit : hits) {
+    const int totalCount = hits.size();
+    for (int i = 0; i < hits.size(); ++i) {
+        const domain::models::SearchHit& hit = hits.at(i);
         auto* item = new QListWidgetItem();
         item->setData(kResultItemDocIdRole, hit.docId);
-        QWidget* cardWidget = buildResultCard(hit, highlightTerms, resultList_);
+        QWidget* cardWidget = buildResultCard(hit, highlightTerms, i + 1, totalCount, resultList_);
         const int preferredWidth = std::max(360, resultList_->viewport()->width() - 24);
         cardWidget->setMinimumWidth(preferredWidth);
         cardWidget->adjustSize();

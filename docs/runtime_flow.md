@@ -90,9 +90,9 @@ sequenceDiagram
 - `runSearch()` 先做门控检查：
   - 必须至少启用 `BasicSearchPreview` 或 `FullSearch`。
 - 结果摘要 UI：
-  - 普通模式显示“找到 X 条相关结论 / 关键词 / 筛选 / 排序”
-  - 开发模式保留 `query/total/elapsed` 等调试字段
-- 结果列表 UI：`renderResults()` 以多行卡片呈现（标题、摘要、模块/分类/难度、标签、适用场景），并在标题/摘要/标签做关键词高亮（仅展示层，不改原始数据）。
+  - 普通模式显示“已显示 X / 共 Y 条相关结论 / 关键词 / 筛选 / 排序”
+  - 开发模式保留 `query/shown/total/elapsed` 等调试字段
+- 结果列表 UI：`renderResults()` 以多行卡片呈现（标题、摘要、模块/分类/难度、标签、适用场景），并在标题后追加序号 `(当前条目/当前列表总条数)`，标题/摘要/标签支持关键词高亮（仅展示层，不改原始数据）。
 - `SearchService::search()` 评分补充：
   - `fieldMaskWeight` 支持 `intent/usage/knowledge_node`（bit 存在时才生效）
   - `enableIntentCrossBoost=true` 时，`intent` 与 `title/alias/keyword` 共命中文档会追加交叉加分
