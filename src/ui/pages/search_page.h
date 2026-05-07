@@ -102,7 +102,6 @@ private slots:
     void onSortChanged();
     void onClearFiltersClicked();
     void onFavoriteButtonClicked();
-    void onDetailFontButtonClicked();
     void onDetailFullscreenButtonClicked();
     void onPdfPrevPageClicked();
     void onPdfNextPageClicked();
@@ -311,7 +310,6 @@ private:
     QSplitter* searchWorkbenchSplitter_ = nullptr;
     QWidget* searchLeftColumn_ = nullptr;
     QWidget* detailShell_ = nullptr;
-    QPushButton* detailFontButton_ = nullptr;
     QPushButton* detailFullscreenButton_ = nullptr;
     QPushButton* detailPdfPrevButton_ = nullptr;
     QPushButton* detailPdfNextButton_ = nullptr;

@@ -15,14 +15,14 @@
 - 搜索结果展示：左侧结果区已改为紧凑多行卡片（标题 / 模块分类难度 / 标签 / 适用场景），标题后追加 `(当前条目/当前列表总条数)`，标签与适用默认最多展示 3 项（超出显示 `+N`），并支持关键词高亮。
 - Suggest 链路：输入联想建议、点击建议触发搜索。
 - 详情链路：结果选中 -> 详情数据映射 -> PDF/WebEngine 渲染（默认 PDF，可配置切换）；并提供文本回退模式。
-- PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），详情头部提供“上一页/下一页/页码/适合宽度/导出PDF”等控件；PDF 成功加载后默认执行一次 `FitToWidth`。
+- PDF 详情体验：`QPdfView` 已启用多页连续模式（`MultiPage`），详情头部提供“上一页/下一页/页码/适合宽度/导出PDF”等控件；PDF 成功加载后默认执行一次宽度贴合。当前实现会按多页最大页宽与视口 DPI 计算贴合基准，并在应用后对横向溢出做二次收敛以减少横向滚动条。
 - 详情状态一致性：未选中结果时详情工具栏按钮统一禁用，页码显示 `PDF --/--`；选中但当前非 PDF 时页码显示 `PDF 暂不可用`。
 - 详情全屏体验：详情头部已接入“右侧详情区全屏模式”切换按钮；`F11` 可切换，`Esc` 可退出；进入时隐藏搜索页顶部栏和左侧结果栏，退出时恢复。
 - 收藏链路：搜索页收藏/取消收藏、收藏页展示、收藏页一键清空、收藏页回跳搜索页打开详情。
 - 历史链路：搜索触发写入历史、历史页重搜/删除/清空。
 - 授权状态驱动功能门控（FeatureGate），可实时影响搜索/详情/收藏/筛选能力。
 - 设置页日志入口：已支持展示日志目录并在“日志操作”中打开日志目录。
-- 搜索页阅读体验增强：详情区字体默认由全屏状态驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮支持三档循环（`2 -> 1 -> 0 -> 2`）；并支持在详情区使用 `Ctrl + 鼠标滚轮` 连续缩放（非三档限制）；状态会回写 `cache/settings.json`。
+- 搜索页阅读体验增强：详情区字体默认由全屏状态驱动（全屏自动大档、非全屏自动小档）；并支持在详情区使用 `Ctrl + 鼠标滚轮` 连续缩放；状态会回写 `cache/settings.json`。
 - 搜索输入框已启用右侧清空按钮（`QLineEdit::setClearButtonEnabled(true)`）。
 - 应用启动后主窗口默认最大化显示（`showMaximized()`）。
 - 本地持久化底座：`cache/favorites.json`、`cache/history.json`、`cache/settings.json` 原子写盘。
@@ -270,7 +270,7 @@ flowchart TD
 - `SearchPage`：筛选区 UI 已收敛为双列快速筛选布局（仅模块 + 排序），`clearFiltersButton_` 以顶部“重置”弱操作呈现，业务逻辑不变。
 - `SearchPage`：结果区摘要在普通模式显示“已显示 X / 共 Y 条相关结论 / 关键词 / 筛选 / 排序”；开发模式（`APP_ENV=dev/debug/development`）保留 `query/shown/total/elapsed` 调试字段。
 - `SearchPage`：结果列表由纯文本切换为卡片化渲染（`buildResultCard()`），并通过 `highlightKeyword()` 在标题/标签/适用中做高亮展示。
-- `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；`Aa` 按钮可循环切换三档；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
+- `SearchPage`：详情字体默认由模式驱动（全屏自动大档、非全屏自动小档）；详情区 `Ctrl + 鼠标滚轮` 为连续缩放；实时影响 Web/PDF 缩放与 fallback 文本字号。
 - `SearchPage`：详情头部已接入 PDF 导航控件（上一页/下一页/页码/适合宽度）与导出按钮，状态由 `updatePdfPageNavigationUi()` 与 `QPdfPageNavigator` 联动刷新。
 - `SearchPage`：详情头部已接入详情区全屏切换（按钮/F11/Esc），通过 `onDetailFullscreenButtonClicked()`、`enterDetailFullscreen()`、`leaveDetailFullscreen()` 控制页面壳层显隐与恢复。
 - `MainWindow`：底部状态栏支持普通/开发两种展示，默认普通文案；`APP_ENV=dev/debug/development` 时显示原始调试状态串。
@@ -389,7 +389,7 @@ flowchart TD
 
 - 现状：
   - `SettingsRepository` + `AppSettings` 有完整读写与默认值体系。
-  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（全屏默认档位与按钮三档循环）、`detail_font_wheel_ticks`（`Ctrl + 鼠标滚轮` 连续缩放偏移）、`detail_render_mode`（`pdf/web/auto`）。
+  - `SearchPage` 已接线 `SettingsRepository`，持久化键：`detail_font_scale_level`（全屏默认档位）、`detail_font_wheel_ticks`（`Ctrl + 鼠标滚轮` 连续缩放偏移）、`detail_render_mode`（`pdf/web/auto`）。
   - `SettingsPage` 仍主要是状态展示（license/data/log/help/feedback），未提供通用设置编辑流程。
   - `SettingsPage::buildDataInfoSection()` 已接入 `openLogDirButton_`，路径来自 `logging::Logger::instance().logDirectory()`。
 - 当前状态：部分实现（已有单项设置接线，未形成完整设置中心）。

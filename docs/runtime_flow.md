@@ -127,14 +127,14 @@ flowchart TD
 - PDF 映射来源：`data/conclusion_pdf_map.json`（仅扁平对象格式，如 `{"I028":"I028.pdf"}`），PDF 根目录 `data/conclusion_pdfs/`。
 - PDF 视图初始化：`buildUi()` 中 `QPdfView::setPageMode(QPdfView::PageMode::MultiPage)`，支持连续多页滚动。
 - PDF 头部导航：`onPdfPrevPageClicked()/onPdfNextPageClicked()` -> `jumpToPdfPage()`，并由 `updatePdfPageNavigationUi()` 基于 `QPdfPageNavigator` + `QPdfDocument::pageCount` 刷新按钮与页码。
-- PDF 适合宽度：新增 `onPdfFitWidthClicked()` -> `applyPdfFitToWidth()`；在 `renderDetailInPdfView()` 成功后默认执行一次 `FitToWidth`。
+- PDF 适合宽度：`onPdfFitWidthClicked()` -> `applyPdfFitToWidth()`；在 `renderDetailInPdfView()` 成功后默认执行一次。`applyPdfFitToWidth()` 基于“多页最大页宽 + 视口 DPI + 文档边距”计算基准缩放，并在应用后做横向溢出收敛（必要时小幅回退 zoom）以减少横向滚动条。
 - 详情工具栏状态一致性：
-  - 未选中结果：`Aa- / 全屏 / 上一页 / 下一页 / 适合宽度 / 导出PDF / 收藏当前结论` 均禁用，页码固定 `PDF --/--`。
+  - 未选中结果：`全屏 / 上一页 / 下一页 / 适合宽度 / 导出PDF / 收藏当前结论` 均禁用，页码固定 `PDF --/--`。
   - 选中结果但当前非 PDF：页码显示 `PDF 暂不可用`。
   - 选中结果且 PDF 可用：页码显示 `PDF 当前页/总页数`。
 - PDF 导出：`onPdfExportButtonClicked()` 读取当前展示的 PDF 源路径（`currentDetailPdfPath_`），内部通过 `exportPdfToPath()` 统一处理“缺源文件 / 同路径 / 覆盖失败 / 复制失败 / 成功”分支；成功后更新状态栏并弹出成功提示框，弹框提供“打开导出目录”按钮。
 - 详情字体调节：
-  - `Aa` 按钮通过 `onDetailFontButtonClicked()` 做三档循环（`2 -> 1 -> 0 -> 2`），同时清零滚轮连续缩放偏移。
+  - 详情区不再提供 `Aa` 按钮；字体相关调整保留全屏默认档位切换与 `Ctrl + 鼠标滚轮` 连续缩放。
   - 详情区视图（`QPdfView/QWebEngineView/QTextBrowser`）通过 `eventFilter()` 捕获 `Ctrl + 鼠标滚轮`，调用 `tryAdjustDetailFontScaleByWheelDelta()` 做连续缩放并持久化偏移。
 - 详情全屏：`onDetailFullscreenButtonClicked()` 切换 Search 页“右侧详情区全屏模式”；进入后隐藏顶部搜索栏与左侧结果栏，仅保留 `detailShell`，`F11` 绑定同一入口切换，`Esc` 调用 `leaveDetailFullscreen()` 退出并恢复 splitter 尺寸。
 - 授权分支：
@@ -260,7 +260,7 @@ sequenceDiagram
 
 - `SettingsRepository` 和 `AppSettings` 已实现读写默认值、落盘 `cache/settings.json`。
 - `SearchPage` 已接入 `SettingsRepository`：
-  - `loadDetailFontScaleSetting()` 读取 `detail_font_scale_level` 与 `detail_font_wheel_ticks`；运行时默认由详情全屏状态驱动（全屏强制大档、非全屏强制小档），`Aa` 按钮支持三档循环，详情区 `Ctrl + 鼠标滚轮` 支持连续缩放，并通过 `persistDetailFontScaleSetting()` 回写。
+  - `loadDetailFontScaleSetting()` 读取 `detail_font_scale_level` 与 `detail_font_wheel_ticks`；运行时默认由详情全屏状态驱动（全屏强制大档、非全屏强制小档），详情区 `Ctrl + 鼠标滚轮` 支持连续缩放，并通过 `persistDetailFontScaleSetting()` 回写。
   - `loadDetailRenderModeSetting()` 读取 `detail_render_mode`（且允许环境变量覆盖）。
 - `SettingsPage` 仍未接入通用设置编辑流程。
 - 当前 `SettingsPage::reloadData()` 展示应用、授权、数据目录、日志目录与帮助信息。

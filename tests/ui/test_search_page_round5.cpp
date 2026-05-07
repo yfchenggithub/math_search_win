@@ -278,7 +278,7 @@ private slots:
     void detailPdfPathResolution_prefersMapThenAssetThenId();
     void detailPdfViewer_usesMultiPageModeAndNavStartsDisabled();
     void detailFullscreenButton_togglesDetailPaneFocusMode();
-    void detailFontButton_cyclesLevels();
+    void detailFontButton_removedFromToolbar();
     void detailCtrlWheel_adjustsContinuousZoom();
     void filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels();
     void resultCards_showRankFractionInTitle();
@@ -581,7 +581,6 @@ void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabl
     QVERIFY(page.detailPdfNextButton_ != nullptr);
     QVERIFY(page.detailPdfFitWidthButton_ != nullptr);
     QVERIFY(page.detailPdfExportButton_ != nullptr);
-    QVERIFY(page.detailFontButton_ != nullptr);
     QVERIFY(page.detailFullscreenButton_ != nullptr);
     QVERIFY(page.favoriteButton_ != nullptr);
     QVERIFY(page.detailPdfPageLabel_ != nullptr);
@@ -589,7 +588,6 @@ void SearchPageRound5UiTest::detailPdfViewer_usesMultiPageModeAndNavStartsDisabl
     QVERIFY(!page.detailPdfNextButton_->isEnabled());
     QVERIFY(!page.detailPdfFitWidthButton_->isEnabled());
     QVERIFY(!page.detailPdfExportButton_->isEnabled());
-    QVERIFY(!page.detailFontButton_->isEnabled());
     QVERIFY(!page.detailFullscreenButton_->isEnabled());
     QVERIFY(!page.favoriteButton_->isEnabled());
     QCOMPARE(page.detailPdfPageLabel_->text(), QStringLiteral("PDF --/--"));
@@ -654,7 +652,7 @@ void SearchPageRound5UiTest::detailFullscreenButton_togglesDetailPaneFocusMode()
     QTRY_COMPARE(page.detailFullscreenButton_->text(), QStringLiteral("全屏"));
 }
 
-void SearchPageRound5UiTest::detailFontButton_cyclesLevels()
+void SearchPageRound5UiTest::detailFontButton_removedFromToolbar()
 {
     ScopedSandboxRoot sandbox;
     QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
@@ -669,27 +667,15 @@ void SearchPageRound5UiTest::detailFontButton_cyclesLevels()
     domain::services::SuggestService suggestService(&indexRepository);
     SearchPage page(&searchService, &suggestService, &contentRepository, &indexRepository, nullptr, nullptr, nullptr);
 
-    QVERIFY(page.detailFontButton_ != nullptr);
-    QVERIFY(page.queryInput_ != nullptr);
-    QVERIFY(page.searchButton_ != nullptr);
-    QVERIFY(page.resultList_ != nullptr);
-    QCOMPARE(page.detailFontScaleLevel_, 0);
-    QVERIFY(!page.detailFontButton_->isEnabled());
+    auto* removedButton = page.findChild<QPushButton*>(QStringLiteral("detailFontSizeButton"));
+    QVERIFY(removedButton == nullptr);
 
-    page.queryInput_->setText(QStringLiteral("exact term"));
-    QTest::mouseClick(page.searchButton_, Qt::LeftButton);
-    QTRY_VERIFY(page.resultList_->count() > 0);
-    QTRY_COMPARE(page.resultList_->currentRow(), 0);
-    QTRY_VERIFY(page.detailFontButton_->isEnabled());
-
-    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
-    QCOMPARE(page.detailFontScaleLevel_, 2);
-
-    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
-    QCOMPARE(page.detailFontScaleLevel_, 1);
-
-    QTest::mouseClick(page.detailFontButton_, Qt::LeftButton);
-    QCOMPARE(page.detailFontScaleLevel_, 0);
+    QVERIFY(page.detailFullscreenButton_ != nullptr);
+    QVERIFY(page.detailPdfPrevButton_ != nullptr);
+    QVERIFY(page.detailPdfNextButton_ != nullptr);
+    QVERIFY(page.detailPdfFitWidthButton_ != nullptr);
+    QVERIFY(page.detailPdfExportButton_ != nullptr);
+    QVERIFY(page.favoriteButton_ != nullptr);
 }
 
 void SearchPageRound5UiTest::detailCtrlWheel_adjustsContinuousZoom()

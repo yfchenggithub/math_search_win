@@ -263,18 +263,6 @@ QString detailFontScaleTokenForLevel(int level)
     }
 }
 
-QString detailFontButtonTextForLevel(int level)
-{
-    switch (clampDetailFontScaleLevel(level)) {
-    case 0:
-        return QStringLiteral("Aa-");
-    case 2:
-        return QStringLiteral("Aa+");
-    default:
-        return QStringLiteral("Aa");
-    }
-}
-
 DetailZoomSnapshot computeDetailZoomSnapshot(int detailFontScaleLevel, int detailFontWheelTicks)
 {
     DetailZoomSnapshot snapshot;
@@ -291,27 +279,9 @@ DetailZoomSnapshot computeDetailZoomSnapshot(int detailFontScaleLevel, int detai
     return snapshot;
 }
 
-QString detailFontButtonTipForLevel(int level)
-{
-    switch (clampDetailFontScaleLevel(level)) {
-    case 0:
-        return QStringLiteral("详情字体：小（非全屏默认，Ctrl+滚轮连续缩放）");
-    case 2:
-        return QStringLiteral("详情字体：大（全屏默认，Ctrl+滚轮连续缩放）");
-    default:
-        return QStringLiteral("详情字体：中（Ctrl+滚轮连续缩放）");
-    }
-}
-
 int detailFontScaleLevelForFullscreen(bool fullscreen)
 {
     return fullscreen ? kDetailFontScaleMaxLevel : kDetailFontScaleMinLevel;
-}
-
-int nextDetailFontScaleLevelByCycle(int currentLevel)
-{
-    const int clampedLevel = clampDetailFontScaleLevel(currentLevel);
-    return clampedLevel <= kDetailFontScaleMinLevel ? kDetailFontScaleMaxLevel : (clampedLevel - 1);
 }
 
 int findComboDataIndex(const QComboBox* combo, const QString& value)
@@ -965,14 +935,6 @@ void SearchPage::onFavoriteButtonClicked()
     emit favoritesChanged();
 }
 
-void SearchPage::onDetailFontButtonClicked()
-{
-    detailFontScaleLevel_ = nextDetailFontScaleLevelByCycle(detailFontScaleLevel_);
-    resetDetailWheelZoom();
-    applyDetailFontScale();
-    persistDetailFontScaleSetting();
-}
-
 bool SearchPage::tryAdjustDetailFontScaleByWheelDelta(int deltaY, Qt::KeyboardModifiers modifiers)
 {
     if (!modifiers.testFlag(Qt::ControlModifier) || deltaY == 0) {
@@ -1040,6 +1002,9 @@ void SearchPage::enterDetailFullscreen()
     detailFontScaleLevel_ = detailFontScaleLevelForFullscreen(true);
     resetDetailWheelZoom();
     applyDetailFontScale();
+    if (detailPdfView_ != nullptr && detailPdfView_->isVisible()) {
+        QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
+    }
     persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
     LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen entered"));
@@ -1088,6 +1053,9 @@ void SearchPage::leaveDetailFullscreen()
     detailFontScaleLevel_ = detailFontScaleLevelForFullscreen(false);
     resetDetailWheelZoom();
     applyDetailFontScale();
+    if (detailPdfView_ != nullptr && detailPdfView_->isVisible()) {
+        QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
+    }
     persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
     LOG_INFO(LogCategory::DetailRender, QStringLiteral("detail pane fullscreen exited"));
@@ -1330,25 +1298,80 @@ qreal computePdfFitWidthZoomFactor(const QPdfDocument* document, const QPdfView*
         return 1.0;
     }
 
-    int pageIndex = 0;
-    if (view->pageNavigator() != nullptr) {
-        pageIndex = std::clamp(view->pageNavigator()->currentPage(), 0, document->pageCount() - 1);
+    qreal referencePageWidthPt = 0.0;
+    if (view->pageMode() == QPdfView::PageMode::SinglePage) {
+        int pageIndex = 0;
+        if (view->pageNavigator() != nullptr) {
+            pageIndex = std::clamp(view->pageNavigator()->currentPage(), 0, document->pageCount() - 1);
+        }
+        referencePageWidthPt = document->pagePointSize(pageIndex).width();
+    } else {
+        const int pageCount = document->pageCount();
+        for (int i = 0; i < pageCount; ++i) {
+            referencePageWidthPt = std::max(referencePageWidthPt, document->pagePointSize(i).width());
+        }
     }
 
-    const QSizeF pageSizePt = document->pagePointSize(pageIndex);
-    const qreal pageWidthPt = pageSizePt.width();
+    const qreal pageWidthPt = referencePageWidthPt;
     if (pageWidthPt <= 0.0) {
         return 1.0;
     }
 
     const QMargins margins = view->documentMargins();
     const int viewportWidth = view->viewport()->width();
-    const int availableWidth = viewportWidth - margins.left() - margins.right();
+    constexpr int kFitWidthSafetyPaddingPx = 4;
+    const int availableWidth = viewportWidth - margins.left() - margins.right() - kFitWidthSafetyPaddingPx;
     if (availableWidth <= 0) {
         return 1.0;
     }
 
-    return static_cast<qreal>(availableWidth) / pageWidthPt;
+    const qreal logicalDpiX = std::max<qreal>(72.0, view->logicalDpiX());
+    const qreal pointsToPixelsAt100Percent = logicalDpiX / 72.0;
+    const qreal pageWidthPxAtUnitZoom = pageWidthPt * pointsToPixelsAt100Percent;
+    if (pageWidthPxAtUnitZoom <= 0.0) {
+        return 1.0;
+    }
+
+    return static_cast<qreal>(availableWidth) / pageWidthPxAtUnitZoom;
+}
+
+qreal applyPdfZoomWithoutHorizontalOverflow(QPdfView* view, qreal targetZoom)
+{
+    if (view == nullptr) {
+        return targetZoom;
+    }
+
+    qreal adjustedZoom = std::clamp(targetZoom, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+    view->setZoomMode(QPdfView::ZoomMode::Custom);
+    view->setZoomFactor(adjustedZoom);
+
+    if (view->viewport() == nullptr) {
+        return adjustedZoom;
+    }
+
+    QScrollBar* horizontalBar = view->horizontalScrollBar();
+    if (horizontalBar == nullptr) {
+        return adjustedZoom;
+    }
+
+    // QPdfView updates layout asynchronously; one fit pass may still leave a tiny horizontal overflow.
+    // We conservatively shrink zoom in a few short iterations to keep the preview inside the viewport.
+    constexpr int kOverflowTolerancePx = 1;
+    for (int guard = 0; guard < 3; ++guard) {
+        const int overflowPx = horizontalBar->maximum();
+        const int viewportWidth = view->viewport()->width();
+        if (overflowPx <= kOverflowTolerancePx || viewportWidth <= 1) {
+            break;
+        }
+
+        const qreal keepRatio = static_cast<qreal>(std::max(1, viewportWidth - overflowPx - 2))
+                                / static_cast<qreal>(viewportWidth);
+        adjustedZoom = std::clamp(adjustedZoom * keepRatio * 0.995, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
+        view->setZoomMode(QPdfView::ZoomMode::Custom);
+        view->setZoomFactor(adjustedZoom);
+    }
+
+    return adjustedZoom;
 }
 
 void SearchPage::applyDetailFontScale()
@@ -1368,8 +1391,7 @@ void SearchPage::applyDetailFontScale()
             const qreal fitBase = std::clamp(detailPdfFitWidthBaseZoom_, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
             targetPdfZoom = std::clamp(fitBase * zoomSnapshot.pdfZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
         }
-        detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
-        detailPdfView_->setZoomFactor(targetPdfZoom);
+        applyPdfZoomWithoutHorizontalOverflow(detailPdfView_, targetPdfZoom);
     }
 
     if (detailWebView_ != nullptr) {
@@ -1390,12 +1412,6 @@ void SearchPage::applyDetailFontScale()
         }
     }
 
-    if (detailFontButton_ != nullptr) {
-        detailFontButton_->setProperty("fontScale", zoomSnapshot.fontScaleToken);
-        detailFontButton_->setText(detailFontButtonTextForLevel(detailFontScaleLevel_));
-        detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
-        repolishWidget(detailFontButton_);
-    }
 }
 
 void SearchPage::persistDetailFontScaleSetting()
@@ -1634,12 +1650,6 @@ void SearchPage::buildUi()
     detailTimingLabel_->setObjectName(QStringLiteral("detailPerfLabel"));
     detailTimingLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     detailTimingLabel_->setProperty("timingState", QStringLiteral("idle"));
-    detailFontButton_ = new QPushButton(detailHeader);
-    detailFontButton_->setObjectName(QStringLiteral("detailFontSizeButton"));
-    detailFontButton_->setCursor(Qt::PointingHandCursor);
-    detailFontButton_->setText(detailFontButtonTextForLevel(detailFontScaleLevel_));
-    detailFontButton_->setToolTip(detailFontButtonTipForLevel(detailFontScaleLevel_));
-    detailFontButton_->setProperty("fontScale", detailFontScaleTokenForLevel(detailFontScaleLevel_));
 
     detailFullscreenButton_ = new QPushButton(kDetailFullscreenEnterText, detailHeader);
     detailFullscreenButton_->setObjectName(QStringLiteral("detailPdfNavButton"));
@@ -1687,7 +1697,6 @@ void SearchPage::buildUi()
     auto* detailActionRow = new QHBoxLayout();
     detailActionRow->setContentsMargins(0, 0, 0, 0);
     detailActionRow->setSpacing(6);
-    detailActionRow->addWidget(detailFontButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailFullscreenButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPrevButton_, 0, Qt::AlignVCenter);
     detailActionRow->addWidget(detailPdfPageLabel_, 0, Qt::AlignVCenter);
@@ -1812,7 +1821,6 @@ void SearchPage::connectSignals()
     connect(sortCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SearchPage::onSortChanged);
     connect(clearFiltersButton_, &QPushButton::clicked, this, &SearchPage::onClearFiltersClicked);
     connect(favoriteButton_, &QPushButton::clicked, this, &SearchPage::onFavoriteButtonClicked);
-    connect(detailFontButton_, &QPushButton::clicked, this, &SearchPage::onDetailFontButtonClicked);
     connect(detailFullscreenButton_, &QPushButton::clicked, this, &SearchPage::onDetailFullscreenButtonClicked);
     connect(detailPdfPrevButton_, &QPushButton::clicked, this, &SearchPage::onPdfPrevPageClicked);
     connect(detailPdfNextButton_, &QPushButton::clicked, this, &SearchPage::onPdfNextPageClicked);
@@ -2872,27 +2880,29 @@ void SearchPage::applyPdfFitToWidth(bool silentStatus)
 
     if (detailPdfView_->viewport() != nullptr && detailPdfView_->viewport()->width() <= 0) {
         QTimer::singleShot(0, this, [this]() { applyPdfFitToWidth(true); });
+        return;
     }
 
     const qreal fitZoom = computePdfFitWidthZoomFactor(detailPdfDocument_, detailPdfView_);
     detailPdfFitWidthBaseZoom_ =
         std::clamp(fitZoom > 0.0 ? fitZoom : 1.0, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
-    detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
-    detailPdfView_->setZoomFactor(detailPdfFitWidthBaseZoom_);
+    detailPdfFitWidthBaseZoom_ = applyPdfZoomWithoutHorizontalOverflow(detailPdfView_, detailPdfFitWidthBaseZoom_);
+    if (detailPdfView_->horizontalScrollBar() != nullptr) {
+        detailPdfView_->horizontalScrollBar()->setValue(0);
+    }
     if (!silentStatus) {
         updateStatusLine(QStringLiteral("PDF 已切换为适合宽度。"),
                          isDevMode() ? QStringLiteral("zoom_mode=custom_from_fit_width")
                                      : QStringLiteral("预览宽度已匹配详情区域。"));
     }
+
+    QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
 }
 
 void SearchPage::updateDetailToolbarState()
 {
     const bool hasSelection = !currentDetailDocId_.trimmed().isEmpty();
 
-    if (detailFontButton_ != nullptr) {
-        detailFontButton_->setEnabled(hasSelection);
-    }
     if (detailFullscreenButton_ != nullptr) {
         detailFullscreenButton_->setEnabled(hasSelection);
     }
