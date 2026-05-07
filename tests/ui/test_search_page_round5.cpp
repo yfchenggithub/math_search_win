@@ -280,6 +280,7 @@ private slots:
     void detailFullscreenButton_togglesDetailPaneFocusMode();
     void detailFontButton_removedFromToolbar();
     void detailCtrlWheel_adjustsContinuousZoom();
+    void detailCtrlWheel_monotonicDirection_noWrapAround();
     void filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels();
     void resultCards_showRankFractionInTitle();
     void detailPdfExportHelper_reportsStatuses();
@@ -742,6 +743,66 @@ void SearchPageRound5UiTest::detailCtrlWheel_adjustsContinuousZoom()
     QCOMPARE(page.detailFontScaleLevel_, 0);
     QCOMPARE(page.detailFontWheelTicks_, 0);
     QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - initialZoom) < 1e-6);
+}
+
+void SearchPageRound5UiTest::detailCtrlWheel_monotonicDirection_noWrapAround()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    SearchPage page(&searchService, &suggestService, nullptr, &indexRepository, nullptr, nullptr, nullptr);
+
+    QVERIFY(page.detailBrowser_ != nullptr);
+    QWidget* wheelTarget = page.detailBrowser_->viewport();
+    QVERIFY(wheelTarget != nullptr);
+
+    auto sendWheel = [&](int angleDeltaY, Qt::KeyboardModifiers modifiers) {
+        QWheelEvent wheelEvent(QPointF(8.0, 8.0),
+                               QPointF(8.0, 8.0),
+                               QPoint(),
+                               QPoint(0, angleDeltaY),
+                               Qt::NoButton,
+                               modifiers,
+                               Qt::ScrollUpdate,
+                               false);
+        return QCoreApplication::sendEvent(wheelTarget, &wheelEvent);
+    };
+
+    QVERIFY(page.detailPdfView_ != nullptr);
+    int previousTicks = page.detailFontWheelTicks_;
+    qreal previousZoom = page.detailPdfView_->zoomFactor();
+
+    constexpr int kUpSteps = 240;
+    for (int i = 0; i < kUpSteps; ++i) {
+        QVERIFY(sendWheel(120, Qt::ControlModifier));
+        QVERIFY(page.detailFontWheelTicks_ > previousTicks);
+        const qreal currentZoom = page.detailPdfView_->zoomFactor();
+        QVERIFY(currentZoom >= previousZoom);
+        previousTicks = page.detailFontWheelTicks_;
+        previousZoom = currentZoom;
+    }
+
+    constexpr int kDownSteps = 300;
+    for (int i = 0; i < kDownSteps; ++i) {
+        QVERIFY(sendWheel(-120, Qt::ControlModifier));
+        QVERIFY(page.detailFontWheelTicks_ < previousTicks);
+        const qreal currentZoom = page.detailPdfView_->zoomFactor();
+        QVERIFY(currentZoom <= previousZoom);
+        previousTicks = page.detailFontWheelTicks_;
+        previousZoom = currentZoom;
+    }
+
+    const int ticksBeforeNoCtrl = page.detailFontWheelTicks_;
+    const qreal zoomBeforeNoCtrl = page.detailPdfView_->zoomFactor();
+    QVERIFY(sendWheel(120, Qt::NoModifier));
+    QCOMPARE(page.detailFontWheelTicks_, ticksBeforeNoCtrl);
+    QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - zoomBeforeNoCtrl) < 1e-6);
 }
 
 void SearchPageRound5UiTest::filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels()

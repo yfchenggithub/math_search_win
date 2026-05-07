@@ -77,8 +77,8 @@ constexpr int kDetailFontScaleMaxLevel = 2;
 constexpr int kDetailFontWheelTicksDefault = 0;
 constexpr int kDetailWheelDeltaUnit = 120;
 constexpr qreal kDetailWheelZoomStepRatio = 1.08;
-constexpr qreal kDetailPdfZoomMinFactor = 0.08;
-constexpr qreal kDetailPdfZoomMaxFactor = 32.0;
+constexpr qreal kDetailPdfZoomMinFactor = 0.01;
+constexpr qreal kDetailPdfZoomMaxFactor = 512.0;
 constexpr qreal kDetailWebZoomMinFactor = 0.25;
 constexpr qreal kDetailWebZoomMaxFactor = 5.0;
 const QString kDetailFullscreenEnterText = QStringLiteral("全屏");
@@ -241,13 +241,13 @@ qreal detailZoomFactorForLevel(int level)
 {
     switch (clampDetailFontScaleLevel(level)) {
     case 0:
-        return 1.14;
+        return 1.0;
     case 1:
-        return 1.30;
+        return 1.16;
     case 2:
-        return 1.46;
+        return 1.32;
     default:
-        return 1.30;
+        return 1.16;
     }
 }
 
@@ -1391,7 +1391,10 @@ void SearchPage::applyDetailFontScale()
             const qreal fitBase = std::clamp(detailPdfFitWidthBaseZoom_, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
             targetPdfZoom = std::clamp(fitBase * zoomSnapshot.pdfZoomFactor, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor);
         }
-        applyPdfZoomWithoutHorizontalOverflow(detailPdfView_, targetPdfZoom);
+        // Ctrl+滚轮缩放应保持单向连续变化；这里直接应用目标缩放，
+        // 避免“防横向溢出”修正把超大缩放回压成更小值，造成反向跳变体验。
+        detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+        detailPdfView_->setZoomFactor(std::clamp(targetPdfZoom, kDetailPdfZoomMinFactor, kDetailPdfZoomMaxFactor));
     }
 
     if (detailWebView_ != nullptr) {
