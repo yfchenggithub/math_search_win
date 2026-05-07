@@ -191,7 +191,7 @@ private:
     void updateDetailToolbarState();
     void setDetailEmptyState(const QString& message);
     void setDetailReadyState();
-    void applyPdfFitToWidth(bool silentStatus = false);
+    void applyPdfFitToWidth(bool silentStatus = false, bool resetWheelZoom = false);
     void resetWebDetailViewportToTop();
     void resetPdfDetailViewportToTop();
     void resetFallbackDetailViewportToTop();

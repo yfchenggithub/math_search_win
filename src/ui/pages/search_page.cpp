@@ -1081,7 +1081,7 @@ void SearchPage::onPdfNextPageClicked()
 
 void SearchPage::onPdfFitWidthClicked()
 {
-    applyPdfFitToWidth(false);
+    applyPdfFitToWidth(false, true);
 }
 
 SearchPage::PdfExportCopyStatus SearchPage::exportPdfToPath(const QString& rawTargetPath, QString* normalizedTargetPath)
@@ -2817,7 +2817,7 @@ bool SearchPage::renderDetailInPdfView(const QString& docId,
 
     currentDetailPdfPath_ = pdfInfo.absoluteFilePath();
     jumpToPdfPage(0);
-    applyPdfFitToWidth(true);
+    applyPdfFitToWidth(true, true);
     resetPdfDetailViewportToTop();
     updatePdfPageNavigationUi();
     updateDetailShellMeta(QStringLiteral("PDF 详情预览"), QStringLiteral("neutral"));
@@ -2869,7 +2869,7 @@ void SearchPage::jumpToPdfPage(int pageIndex)
     updatePdfPageNavigationUi();
 }
 
-void SearchPage::applyPdfFitToWidth(bool silentStatus)
+void SearchPage::applyPdfFitToWidth(bool silentStatus, bool resetWheelZoom)
 {
     const bool viewReady =
         (detailPdfDocument_ != nullptr && detailPdfView_ != nullptr && detailPdfView_->pageNavigator() != nullptr);
@@ -2882,8 +2882,14 @@ void SearchPage::applyPdfFitToWidth(bool silentStatus)
     }
 
     if (detailPdfView_->viewport() != nullptr && detailPdfView_->viewport()->width() <= 0) {
-        QTimer::singleShot(0, this, [this]() { applyPdfFitToWidth(true); });
+        QTimer::singleShot(0, this, [this, resetWheelZoom]() { applyPdfFitToWidth(true, resetWheelZoom); });
         return;
+    }
+
+    if (resetWheelZoom) {
+        detailFontWheelTicks_ = kDetailFontWheelTicksDefault;
+        detailBrowserAppliedWheelTicks_ = detailFontWheelTicks_;
+        persistDetailFontScaleSetting();
     }
 
     const qreal fitZoom = computePdfFitWidthZoomFactor(detailPdfDocument_, detailPdfView_);
@@ -2898,8 +2904,6 @@ void SearchPage::applyPdfFitToWidth(bool silentStatus)
                          isDevMode() ? QStringLiteral("zoom_mode=custom_from_fit_width")
                                      : QStringLiteral("预览宽度已匹配详情区域。"));
     }
-
-    QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
 }
 
 void SearchPage::updateDetailToolbarState()
