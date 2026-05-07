@@ -2267,8 +2267,7 @@ QString SearchPage::highlightKeyword(const QString& text, const QStringList& ter
             highlighted.append(text.mid(cursor, range.first - cursor).toHtmlEscaped());
         }
         const QString matched = text.mid(range.first, range.second - range.first).toHtmlEscaped();
-        highlighted.append(
-            QStringLiteral("<span style=\"background:#fff2a8;color:#1d3557;font-weight:600;\">%1</span>").arg(matched));
+        highlighted.append(QStringLiteral("<span style=\"color:#c62828;font-weight:700;\">%1</span>").arg(matched));
         cursor = range.second;
     }
     if (cursor < text.size()) {

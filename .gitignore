@@ -13,3 +13,6 @@
 
 .DS_Store
 Thumbs.db
+/dist/
+*.zip
+*.tar.gz
