@@ -281,6 +281,8 @@ private slots:
     void detailFontButton_removedFromToolbar();
     void detailCtrlWheel_adjustsContinuousZoom();
     void detailCtrlWheel_monotonicDirection_noWrapAround();
+    void detailPdfFirstOpen_resetsWheelAndAppliesFitWidth();
+    void detailFullscreenToggle_resetsWheelAndAppliesFitWidth();
     void detailPdfFitWidth_restoresFromExtremeZoom();
     void filterPanel_keepsModuleAndSortOnly_andLocalizesModuleLabels();
     void resultCards_showRankFractionInTitle();
@@ -804,6 +806,131 @@ void SearchPageRound5UiTest::detailCtrlWheel_monotonicDirection_noWrapAround()
     QVERIFY(sendWheel(120, Qt::NoModifier));
     QCOMPARE(page.detailFontWheelTicks_, ticksBeforeNoCtrl);
     QVERIFY(std::fabs(page.detailPdfView_->zoomFactor() - zoomBeforeNoCtrl) < 1e-6);
+}
+
+void SearchPageRound5UiTest::detailPdfFirstOpen_resetsWheelAndAppliesFitWidth()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    const QString sourcePdfPath =
+        QDir(testsSourceDir()).filePath(QStringLiteral("../data/conclusion_pdfs/C001_Circle_Ellipse_Distance_Extremum.pdf"));
+    const QString targetPdfPath = sandbox.path(QStringLiteral("data/conclusion_pdfs/X001.pdf"));
+    QVERIFY2(copyFileStrict(sourcePdfPath, targetPdfPath), "sample pdf should be copied to sandbox");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    infrastructure::data::ConclusionContentRepository contentRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    QVERIFY(contentRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    // Keep this page alive until process exit to avoid Qt PDF teardown flakiness in CI/headless environments.
+    SearchPage* page =
+        new SearchPage(&searchService, &suggestService, &contentRepository, &indexRepository, nullptr, nullptr, nullptr);
+    QVERIFY(page != nullptr);
+
+    QVERIFY(page->queryInput_ != nullptr);
+    QVERIFY(page->searchButton_ != nullptr);
+    QVERIFY(page->resultList_ != nullptr);
+    QVERIFY(page->detailPdfView_ != nullptr);
+    QVERIFY(page->detailPdfFitWidthButton_ != nullptr);
+    page->show();
+    QTRY_VERIFY(page->isVisible());
+
+    page->detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+    page->detailPdfView_->setZoomFactor(9.0);
+    page->detailFontWheelTicks_ = 160;
+
+    page->queryInput_->setText(QStringLiteral("exact term"));
+    QTest::mouseClick(page->searchButton_, Qt::LeftButton);
+    QTRY_VERIFY(page->resultList_->count() > 0);
+    QTRY_COMPARE(page->resultList_->currentRow(), 0);
+    QTRY_VERIFY(page->detailPdfFitWidthButton_->isEnabled());
+    QTRY_COMPARE(page->detailFontWheelTicks_, 0);
+
+    const qreal zoomAfterFirstOpen = page->detailPdfView_->zoomFactor();
+    QVERIFY(zoomAfterFirstOpen > 0.0);
+    QVERIFY(zoomAfterFirstOpen < 9.0);
+
+    QTest::mouseClick(page->detailPdfFitWidthButton_, Qt::LeftButton);
+    const qreal zoomAfterManualFit = page->detailPdfView_->zoomFactor();
+    QVERIFY(std::fabs(zoomAfterManualFit - zoomAfterFirstOpen) <= std::max<qreal>(0.02, zoomAfterFirstOpen * 0.15));
+}
+
+void SearchPageRound5UiTest::detailFullscreenToggle_resetsWheelAndAppliesFitWidth()
+{
+    ScopedSandboxRoot sandbox;
+    QVERIFY2(sandbox.isValid(), "temporary sandbox should be available");
+    QVERIFY2(sandbox.installRound2IndexFixture(), "round2 index fixture should be copied into sandbox");
+    QVERIFY2(sandbox.writeCanonicalContentFixture(), "canonical content fixture should be written");
+
+    const QString sourcePdfPath =
+        QDir(testsSourceDir()).filePath(QStringLiteral("../data/conclusion_pdfs/C001_Circle_Ellipse_Distance_Extremum.pdf"));
+    const QString targetPdfPath = sandbox.path(QStringLiteral("data/conclusion_pdfs/X001.pdf"));
+    QVERIFY2(copyFileStrict(sourcePdfPath, targetPdfPath), "sample pdf should be copied to sandbox");
+
+    infrastructure::data::ConclusionIndexRepository indexRepository;
+    infrastructure::data::ConclusionContentRepository contentRepository;
+    QVERIFY(indexRepository.loadFromFile());
+    QVERIFY(contentRepository.loadFromFile());
+    domain::services::SearchService searchService(&indexRepository);
+    domain::services::SuggestService suggestService(&indexRepository);
+    // Keep this page alive until process exit to avoid Qt PDF teardown flakiness in CI/headless environments.
+    SearchPage* page =
+        new SearchPage(&searchService, &suggestService, &contentRepository, &indexRepository, nullptr, nullptr, nullptr);
+    QVERIFY(page != nullptr);
+
+    QVERIFY(page->queryInput_ != nullptr);
+    QVERIFY(page->searchButton_ != nullptr);
+    QVERIFY(page->resultList_ != nullptr);
+    QVERIFY(page->detailPdfView_ != nullptr);
+    QVERIFY(page->detailPdfFitWidthButton_ != nullptr);
+    QVERIFY(page->detailFullscreenButton_ != nullptr);
+    page->show();
+    QTRY_VERIFY(page->isVisible());
+
+    page->queryInput_->setText(QStringLiteral("exact term"));
+    QTest::mouseClick(page->searchButton_, Qt::LeftButton);
+    QTRY_VERIFY(page->resultList_->count() > 0);
+    QTRY_COMPARE(page->resultList_->currentRow(), 0);
+    QTRY_VERIFY(page->detailPdfFitWidthButton_->isEnabled());
+    QTRY_VERIFY(page->detailFullscreenButton_->isEnabled());
+
+    QTest::mouseClick(page->detailPdfFitWidthButton_, Qt::LeftButton);
+    const qreal baselineNormalFitZoom = page->detailPdfView_->zoomFactor();
+    QVERIFY(baselineNormalFitZoom > 0.0);
+
+    page->detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+    page->detailPdfView_->setZoomFactor(std::max<qreal>(baselineNormalFitZoom * 6.0, baselineNormalFitZoom + 0.5));
+    const qreal hugeZoom = page->detailPdfView_->zoomFactor();
+    QVERIFY(hugeZoom > baselineNormalFitZoom);
+    page->detailFontWheelTicks_ = 220;
+
+    QTest::mouseClick(page->detailFullscreenButton_, Qt::LeftButton);
+    QTRY_VERIFY(page->detailPaneFullscreen_);
+    QTRY_COMPARE(page->detailFontWheelTicks_, 0);
+    const qreal zoomAfterEnterFullscreen = page->detailPdfView_->zoomFactor();
+    QVERIFY(zoomAfterEnterFullscreen < hugeZoom);
+    QVERIFY(zoomAfterEnterFullscreen > 0.0);
+    QTRY_VERIFY(page->detailPdfView_->horizontalScrollBar() == nullptr
+                || page->detailPdfView_->horizontalScrollBar()->maximum() <= 1);
+
+    page->detailPdfView_->setZoomMode(QPdfView::ZoomMode::Custom);
+    page->detailPdfView_->setZoomFactor(std::max<qreal>(0.01, zoomAfterEnterFullscreen * 0.08));
+    const qreal tinyZoom = page->detailPdfView_->zoomFactor();
+    QVERIFY(tinyZoom < zoomAfterEnterFullscreen);
+    page->detailFontWheelTicks_ = -220;
+
+    QTest::mouseClick(page->detailFullscreenButton_, Qt::LeftButton);
+    QTRY_VERIFY(!page->detailPaneFullscreen_);
+    QTRY_COMPARE(page->detailFontWheelTicks_, 0);
+    const qreal zoomAfterExitFullscreen = page->detailPdfView_->zoomFactor();
+    QVERIFY(zoomAfterExitFullscreen > tinyZoom);
+    QVERIFY(zoomAfterExitFullscreen > 0.0);
+    QTRY_VERIFY(page->detailPdfView_->horizontalScrollBar() == nullptr
+                || page->detailPdfView_->horizontalScrollBar()->maximum() <= 1);
 }
 
 void SearchPageRound5UiTest::detailPdfFitWidth_restoresFromExtremeZoom()

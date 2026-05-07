@@ -1003,7 +1003,9 @@ void SearchPage::enterDetailFullscreen()
     resetDetailWheelZoom();
     applyDetailFontScale();
     if (detailPdfView_ != nullptr && detailPdfView_->isVisible()) {
-        QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
+        // Splitter 布局切换后，下一帧再做一次“重置+适合宽度”，
+        // 避免保留极端缩放导致全屏首屏过大/过小或出现横向溢出。
+        QTimer::singleShot(0, this, [this]() { applyPdfFitToWidth(true, true); });
     }
     persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
@@ -1054,7 +1056,9 @@ void SearchPage::leaveDetailFullscreen()
     resetDetailWheelZoom();
     applyDetailFontScale();
     if (detailPdfView_ != nullptr && detailPdfView_->isVisible()) {
-        QTimer::singleShot(0, this, [this]() { applyDetailFontScale(); });
+        // 退出全屏后同样在下一帧执行一次“重置+适合宽度”，
+        // 保证回到常规布局时 PDF 仍然贴合可视宽度。
+        QTimer::singleShot(0, this, [this]() { applyPdfFitToWidth(true, true); });
     }
     persistDetailFontScaleSetting();
     syncDetailFullscreenButtonState();
