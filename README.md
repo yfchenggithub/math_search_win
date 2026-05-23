@@ -11,7 +11,25 @@ The core flow is:
 
 This repository targets MVP release hardening: runnability, packageability, and handoff readiness.
 
-## 2. Directory Structure
+## 2. Technical Highlights
+
+**Tech Stack:** Qt 6.11 (Widgets + WebEngine + Pdf) · C++17 · MSVC 2026 · CMake 3.21+ · KaTeX
+
+**Architecture:** 4-layer DDD — UI (6 pages, QStackedWidget) → Domain Services → Repositories → Infrastructure
+
+**Key Features:**
+- Custom search engine: term inverted index + prefix trie, field-mask weighted scoring, cross-field intent boost — no external DB
+- Suggest system: 3 candidate sources (curated seeds + domain/topic expansion + prefix/term fallback) with quality gating
+- Detail rendering: 4-path auto-fallback (QPdfView MultiPage → QWebEngineView + KaTeX → QTextBrowser → Trial preview)
+- License system: activation code → device fingerprint binding → FeatureGate (5 feature flags)
+- Atomic persistence: QSaveFile-based JSON writes (favorites/history/settings)
+- Unified logging: 18 categories, dual-channel (console + file)
+- 15 CTest automated test cases covering search, suggest, persistence, license, and detail rendering
+- One-command release packaging: `python release_tool.py --windeployqt <path> all`
+
+**Lines of Code:** ~50+ C++ source files, 30+ classes, 6 UI pages
+
+## 3. Directory Structure
 
 ```text
 math_search_win/
@@ -38,7 +56,7 @@ math_search_win/
   run-release.ps1
 ```
 
-## 3. Development Startup Flow
+## 4. Development Startup Flow
 
 ```powershell
 cmake --preset msvc-debug
@@ -57,7 +75,7 @@ At startup the app now performs runtime layout checks for:
 
 Results are written to logs and reflected in UI status text.
 
-## 4. Release Runtime Layout Contract
+## 5. Release Runtime Layout Contract
 
 Runtime paths are resolved from app root (`AppPaths`) with stable folder contracts:
 
@@ -69,7 +87,7 @@ Runtime paths are resolved from app root (`AppPaths`) with stable folder contrac
 If `cache/` is missing, the app tries to create it.
 If `data/` or `app_resources/` is missing, startup status and page-level messages show explicit errors.
 
-## 5. `data` Folder
+## 6. `data` Folder
 
 - Contains search index and canonical content.
 - Current files:
@@ -77,13 +95,13 @@ If `data/` or `app_resources/` is missing, startup status and page-level message
   - `data/canonical_content_v2.json`
 - Must not include web static resources, license files, or runtime user cache.
 
-## 6. `license` Folder
+## 7. `license` Folder
 
 - Contains local license files (`license.dat`).
 - Missing `license/` or missing `license.dat` falls back to trial mode with clear status text.
 - Invalid/expired/unreadable license also falls back to trial mode with diagnostics.
 
-## 7. `cache` Folder
+## 8. `cache` Folder
 
 - Runtime writable data:
   - `favorites.json`
@@ -93,7 +111,7 @@ If `data/` or `app_resources/` is missing, startup status and page-level message
 - Safe to recreate.
 - Must not store read-only static assets.
 
-## 8. `app_resources` Folder
+## 9. `app_resources` Folder
 
 - Read-only static assets.
 - Current critical assets:
@@ -101,7 +119,7 @@ If `data/` or `app_resources/` is missing, startup status and page-level message
   - `app_resources/katex/*`
 - Runtime user data must not be written here.
 
-## 9. WebEngine Local Resource Notes
+## 10. WebEngine Local Resource Notes
 
 Detail page is loaded as local file:
 
@@ -118,7 +136,7 @@ Hardening behavior:
 - load/render failure triggers fallback mode
 - fallback status is visible in page UI, not only in logs
 
-## 10. KaTeX Local Resource Notes
+## 11. KaTeX Local Resource Notes
 
 Detail math rendering depends on local KaTeX:
 
@@ -129,7 +147,7 @@ Detail math rendering depends on local KaTeX:
 
 **Hard requirement: KaTeX is local-only; do not use CDN.**
 
-## 11. Release Dependency Checklist
+## 12. Release Dependency Checklist
 
 Release delivery must include:
 
@@ -153,7 +171,7 @@ Depending on Qt setup, include needed plugin folders such as:
 
 **Hard requirement: deploy `QtWebEngineProcess` and related WebEngine resources.**
 
-## 12. Recommended Packaging Entry (`release_tool.py`)
+## 13. Recommended Packaging Entry (`release_tool.py`)
 
 **Hard requirement: use `windeployqt` with the same Qt version used to build.**
 
@@ -192,7 +210,7 @@ Useful options:
 - `--dry-run`, `--verbose`
 - `--skip-windeployqt` (troubleshooting only)
 
-## 13. Recommended Release Folder Tree
+## 14. Recommended Release Folder Tree
 
 ```text
 MyApp/
@@ -230,7 +248,7 @@ MyApp/
   docs/                           # optional, enabled by default in release_tool.py
 ```
 
-## 14. Manual Verification and Troubleshooting
+## 15. Manual Verification and Troubleshooting
 
 Minimum manual checks before shipment:
 
